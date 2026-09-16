@@ -76,7 +76,7 @@ The backend writes `backend/src/docs/openapi.json` from the YAML spec in non-pro
 
 ## 🔒 Required PR CI Gates
 
-Amana enforces stack-level CI gates on pull requests through `.github/workflows/ci.yml`.
+`.github/workflows/ci.yml` enforces stack-level CI gates on every pull request.
 
 - **Frontend Required Gate**: `npm ci`, `npm run lint`, `npm run build`, `npm test` in `frontend/`
 - **Backend Required Gate**: `npm ci`, `npm run build`, `npm test` in `backend/`

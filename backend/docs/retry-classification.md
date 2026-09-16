@@ -1,4 +1,4 @@
-# Retry Classification Rules — EziAgric Backend
+# Retry Classification Rules — EliteWork Backend
 
 Issue #220 introduces a shared retry wrapper (`src/lib/retry.ts`) with
 exponential backoff + full jitter, explicit error classification, and

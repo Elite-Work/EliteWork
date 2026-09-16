@@ -23,7 +23,6 @@ import {
   getCacheUsageBytes,
   TTL_MS,
   QUOTA_BYTES,
-  type CacheDomain,
 } from "../offlineCache";
 
 // ─── Helpers ───────────────────────────────────────────────────────────────

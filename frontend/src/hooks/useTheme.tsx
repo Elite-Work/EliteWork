@@ -34,20 +34,20 @@ function resolveTheme(pref: Theme): "light" | "dark" {
   return pref === "system" ? getSystemPreference() : pref;
 }
 
-export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [themePreference, setThemePreference] = useState<Theme>("system");
-  const [resolvedTheme, setResolvedTheme] = useState<"light" | "dark">("dark");
-  const [mounted, setMounted] = useState(false);
+function getStoredPreference(): Theme {
+  if (typeof window === "undefined") return "system";
+  return (localStorage.getItem(STORAGE_KEY) as Theme | null) ?? "system";
+}
 
-  // Read persisted preference and apply it (no flash — applied before paint via
-  // the inline script in <head> below).
-  useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY) as Theme | null;
-    const pref = stored ?? "system";
-    setThemePreference(pref);
-    setResolvedTheme(resolveTheme(pref));
-    setMounted(true);
-  }, []);
+export function ThemeProvider({ children }: { children: React.ReactNode }) {
+  // Lazily initialized from localStorage so the correct theme is applied on
+  // the first render (no flash — also applied before paint via the inline
+  // script in <head> below).
+  const [themePreference, setThemePreference] =
+    useState<Theme>(getStoredPreference);
+  const [resolvedTheme, setResolvedTheme] = useState<"light" | "dark">(() =>
+    resolveTheme(getStoredPreference()),
+  );
 
   // Apply the `dark` class to <html> whenever resolvedTheme changes.
   useEffect(() => {

@@ -1,4 +1,4 @@
-# Health Probe Semantics — EziAgric Backend
+# Health Probe Semantics — EliteWork Backend
 
 Issue #224 introduces three distinct probe tiers to prevent self-inflicted outages
 during third-party dependency brownouts (e.g. Stellar RPC slowness).
@@ -113,7 +113,7 @@ Returns `200` for `healthy` and `degraded`; `503` for `unhealthy`.
 # deployment.yaml (backend)
 containers:
   - name: backend
-    image: eziagric/backend:latest
+    image: elitework/backend:latest
     ports:
       - containerPort: 4000
 

@@ -33,6 +33,9 @@ describe("StreamClawbackForm", () => {
       toasts: [],
       addToast: mockAddToast,
       removeToast: jest.fn(),
+      addToastWithCorrelation: jest.fn(),
+      updateToast: jest.fn(),
+      dismissByCorrelation: jest.fn(),
     });
   });
 

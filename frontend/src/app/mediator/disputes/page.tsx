@@ -76,9 +76,13 @@ export default function MediatorDisputesPage() {
     }
   }, [token, isAuthenticated, isMediator, activeFilter, page]);
 
+  // Fetch on mount / when filters or auth change; setState happens inside
+  // fetchDisputes's async body, not synchronously in the effect.
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     fetchDisputes();
   }, [fetchDisputes]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   function handleFilter(value: DisputeStatus | "all") {
     setActiveFilter(value);

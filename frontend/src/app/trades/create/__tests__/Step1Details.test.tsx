@@ -21,6 +21,12 @@ const renderWithProvider = () => {
 };
 
 describe('Step1Details', () => {
+    beforeEach(() => {
+        // TradeContext persists drafts to localStorage and lazily reads them
+        // back on mount — clear so each test starts from real defaults.
+        localStorage.clear();
+    });
+
     describe('commodity dropdown', () => {
         it('should render commodity select with default option', () => {
             renderWithProvider();

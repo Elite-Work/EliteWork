@@ -192,7 +192,7 @@ points at the route's guards rather than at Prisma or Soroban RPC.
 
 For infrastructure operators and security compliance, refer to the following policies:
 
-1. **[Admin Secret Rotation Policy](file:///home/kaycee/Desktop/OS/EziAgric/docs/admin-secret-rotation.md)**: Zero-downtime key rotation procedure, validation (`scripts/validate-admin-secret.sh`), and rollback steps.
-2. **[Admin Network Isolation Policy](file:///home/kaycee/Desktop/OS/EziAgric/docs/admin-network-isolation.md)**: Network topology, Kubernetes `NetworkPolicy`, internal Ingress rules, and AWS Security Group policies.
-3. **[Staging Smoke Testing Policy](file:///home/kaycee/Desktop/OS/EziAgric/docs/staging-smoke-testing.md)**: Automated staging deployment validation (`scripts/staging-admin-smoke-test.sh`), response assertions (401/403/200), and alert notifications.
-4. **[CI Admin Regression Test Policy](file:///home/kaycee/Desktop/OS/EziAgric/docs/admin-ci-policy.md)**: CI gate enforcing mandatory unit/integration test coverage for PRs modifying admin endpoints.
+1. **[Admin Secret Rotation Policy](./admin-secret-rotation.md)**: Zero-downtime key rotation procedure, validation (`scripts/validate-admin-secret.sh`), and rollback steps.
+2. **[Admin Network Isolation Policy](./admin-network-isolation.md)**: Network topology, Kubernetes `NetworkPolicy`, internal Ingress rules, and AWS Security Group policies.
+3. **[Staging Smoke Testing Policy](./staging-smoke-testing.md)**: Automated staging deployment validation (`scripts/staging-admin-smoke-test.sh`), response assertions (401/403/200), and alert notifications.
+4. **[CI Admin Regression Test Policy](./admin-ci-policy.md)**: CI gate enforcing mandatory unit/integration test coverage for PRs modifying admin endpoints.

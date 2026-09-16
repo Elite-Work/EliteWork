@@ -1,5 +1,5 @@
 import { act } from "@testing-library/react";
-import { useOfflineQueueStore } from "@/stores/offlineQueueStore";
+import { useOfflineQueueStore, type QueuedAction } from "@/stores/offlineQueueStore";
 import { generateIdempotencyKey } from "@/lib/idempotency";
 
 describe("Offline queue — draft trades survive refresh/restart and send after reconnect", () => {
@@ -26,7 +26,7 @@ describe("Offline queue — draft trades survive refresh/restart and send after 
 
   it("duplicate-send prevented by key reuse (backend #3 dependency honored) — replay reuses same key", async () => {
     const firstKey = generateIdempotencyKey();
-    const enqueued = useOfflineQueueStore.getState().enqueue({
+    useOfflineQueueStore.getState().enqueue({
       type: "create-trade",
       endpoint: "/trades",
       method: "POST",
@@ -36,7 +36,7 @@ describe("Offline queue — draft trades survive refresh/restart and send after 
     });
 
     const seenKeys: string[] = [];
-    const executor = jest.fn(async (a: any) => {
+    const executor = jest.fn(async (a: QueuedAction) => {
       seenKeys.push(a.idempotencyKey);
     });
 
@@ -77,7 +77,7 @@ describe("Offline queue — draft trades survive refresh/restart and send after 
 
     // Online: replay
     useOfflineQueueStore.getState().setOnline(true);
-    const executor = jest.fn(async (a: any) => {
+    const executor = jest.fn(async (a: QueuedAction) => {
       expect(a.idempotencyKey).toBe(draft.idempotencyKey);
       // Simulate backend honoring idempotency — second call with same key would return cached response
     });

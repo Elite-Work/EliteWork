@@ -133,7 +133,7 @@ For the protected branch (`main`), set these required status checks:
 
 ## 🔍 Distributed Tracing
 
-Amana includes comprehensive distributed tracing with OpenTelemetry for end-to-end request visibility and faster incident triage.
+EliteWork uses OpenTelemetry for end-to-end request visibility and faster incident triage.
 
 ### Features
 

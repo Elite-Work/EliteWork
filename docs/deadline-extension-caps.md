@@ -1,6 +1,6 @@
 # Deadline extension caps
 
-Tracking issue: [#194](https://github.com/EziAgric/EziAgric/issues/194)
+Tracking issue: [#194](https://github.com/Elite-Work/EliteWork/issues/194)
 
 ## Why
 

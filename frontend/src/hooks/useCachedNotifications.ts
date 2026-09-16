@@ -21,7 +21,7 @@ import {
 
 const DOMAIN = "notifications" as const;
 
-export interface UseCachedNotificationsOptions<T> {
+export interface UseCachedNotificationsOptions {
   /** API endpoint to fetch, e.g. "/notifications/preferences". */
   endpoint: string;
   /** Cache key — defaults to endpoint. */
@@ -39,7 +39,7 @@ export interface UseCachedNotificationsResult<T> {
 }
 
 export function useCachedNotifications<T>(
-  options: UseCachedNotificationsOptions<T>,
+  options: UseCachedNotificationsOptions,
 ): UseCachedNotificationsResult<T> {
   const { endpoint, cacheKey = endpoint } = options;
   const { isOffline } = useOffline();
@@ -83,6 +83,10 @@ export function useCachedNotifications<T>(
     }
   }, [isAuthenticated, token, isOffline, endpoint, cacheKey]);
 
+  // Re-read cache when cacheKey changes, and background revalidation whose
+  // setState calls happen inside fetchFresh's async body — not synchronously
+  // in the effect.
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     const read = cacheRead<T>(DOMAIN, cacheKey);
     if (read.entry) {
@@ -100,6 +104,7 @@ export function useCachedNotifications<T>(
       void fetchFresh();
     }
   }, [isOffline, isAuthenticated, token, fetchFresh]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const refetch = useCallback(() => void fetchFresh(), [fetchFresh]);
 

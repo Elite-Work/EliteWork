@@ -17,7 +17,6 @@ export async function POST(request: NextRequest) {
 
     for (const report of reports) {
       const violation = report["csp-report"] ?? report.body ?? report;
-      // eslint-disable-next-line no-console -- intentional: this is the CSP violation sink
       console.warn("[csp-violation]", JSON.stringify(violation));
     }
   } catch {

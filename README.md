@@ -4,15 +4,15 @@
 ![Soroban](<https://img.shields.io/badge/Contracts-Soroban%20(Rust)-orange?style=for-the-badge>)
 ![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)
 
-**EliteWork** is a decentralized escrow protocol designed to secure agricultural trade across different regions. By leveraging **Soroban Smart Contracts**, Amana eliminates the "Trust Gap" between buyers and sellers, ensuring fair trade even when parties are hundreds of miles apart.
+**EliteWork** is a decentralized escrow protocol that secures agricultural trade across regions. Its **Amana** smart contract, built on **Soroban**, closes the "Trust Gap" between buyers and sellers so fair trade can happen even when the parties are hundreds of miles apart.
 
-This is the main repository containing the smart contracts and orchestration logic. Backend, frontend, and mobile applications are maintained in this monorepo for simpler development and unified deployment.
+This repository is the EliteWork monorepo: smart contracts, orchestration logic, backend, frontend, and mobile all live here for simpler development and a unified deployment pipeline.
 
 ---
 
 ## 🚀 The Mission
 
-To provide a programmable safety net for regional commodity trading. Amana ensures that the risk of "sending first" is eliminated, replaced by a secure, neutral vault that only releases funds when delivery is verified.
+Give regional commodity trading a programmable safety net. Instead of one party bearing the risk of "sending first," funds sit in a secure, neutral vault and release only once delivery is verified through the Amana contract.
 
 ## 🛠 Features
 

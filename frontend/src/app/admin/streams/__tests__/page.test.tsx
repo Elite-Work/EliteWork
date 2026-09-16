@@ -63,6 +63,9 @@ describe("AdminStreamsPage", () => {
       toasts: [],
       addToast: jest.fn(),
       removeToast: jest.fn(),
+      addToastWithCorrelation: jest.fn(),
+      updateToast: jest.fn(),
+      dismissByCorrelation: jest.fn(),
     });
   });
 

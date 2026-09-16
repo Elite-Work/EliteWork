@@ -3,8 +3,22 @@ import userEvent from '@testing-library/user-event';
 import React from 'react';
 import Step3Review from '../steps/Step3Review';
 import { TradeProvider, useTrade, TradeData } from '../TradeContext';
+import { ToastProvider } from '@/hooks/useToast';
+import { _clearAllForTests } from '@/lib/actionDedup';
 import { api } from '@/lib/api';
 import { signTransaction } from '@stellar/freighter-api';
+
+// Mock useOffline so the offline health probe (which does a real fetch() and
+// always resolves "offline" in jsdom) doesn't route submissions into the
+// offline-queue branch during tests.
+jest.mock('@/hooks/useOffline', () => ({
+    useOffline: () => ({
+        isOffline: false,
+        wasOffline: false,
+        isOnline: true,
+        retryOnline: jest.fn(),
+    }),
+}));
 
 // Mock @stellar/stellar-sdk to simplify address validation in tests
 jest.mock('@stellar/stellar-sdk', () => ({
@@ -16,7 +30,13 @@ jest.mock('@stellar/stellar-sdk', () => ({
 }));
 
 // Mutable mock object for useAuth
-const mockUseAuth = {
+const mockUseAuth: {
+    token: string | null;
+    isAuthenticated: boolean;
+    connectWallet: jest.Mock;
+    authenticate: jest.Mock;
+    isWalletConnected: boolean;
+} = {
     token: 'mock-token',
     isAuthenticated: true,
     connectWallet: jest.fn(),
@@ -82,16 +102,25 @@ const TestWrapper = ({ initialData, children }: { initialData?: Partial<TradeDat
 
 const renderWithProvider = (initialData?: Partial<TradeData>) => {
     return render(
-        <TradeProvider>
-            <TestWrapper initialData={initialData}>
-                <Step3Review />
-            </TestWrapper>
-        </TradeProvider>
+        <ToastProvider>
+            <TradeProvider>
+                <TestWrapper initialData={initialData}>
+                    <Step3Review />
+                </TestWrapper>
+            </TradeProvider>
+        </ToastProvider>
     );
 };
 
 describe('Step3Review', () => {
     beforeEach(() => {
+        // TradeContext persists drafts to localStorage and lazily reads them
+        // back on mount — clear so each test starts from real defaults.
+        localStorage.clear();
+        // Reset the submit action de-dup window so identical validData across
+        // tests isn't treated as a rapid double-submit of a prior test's action.
+        _clearAllForTests();
+
         mockUseAuth.token = 'mock-token';
         mockUseAuth.isAuthenticated = true;
         mockUseAuth.isWalletConnected = true;

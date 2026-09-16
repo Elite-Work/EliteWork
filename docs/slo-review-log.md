@@ -44,7 +44,7 @@ Open actions:
   alerts could never have fired. Added them to
   `infra/prometheus/slo-recording-rules.yml` and validated with a new
   dependency guard (see below).
-- Landed [`scripts/slo-fault-test.sh`](https://github.com/anomalyco/EziAgric/blob/main/scripts/slo-fault-test.sh):
+- Landed [`scripts/slo-fault-test.sh`](https://github.com/anomalyco/EliteWork/blob/main/scripts/slo-fault-test.sh):
   rule-only lint + full fault round-trip harness that asserts all 8 burn
   alerts (4 fast/page + 4 slow/ticket) have their input series defined and
   fire under staged faults. Wired into CI on SLO rule changes

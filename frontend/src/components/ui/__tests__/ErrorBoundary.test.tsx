@@ -193,7 +193,11 @@ describe("ErrorBoundary", () => {
         </ErrorBoundary>,
       );
 
-      expect(renderFn).toHaveBeenCalledTimes(1);
+      // React's development build re-invokes render() an extra time after
+      // catching an error (to produce a clean component stack for the
+      // console), so the render-prop fallback is called twice here even
+      // though componentDidCatch/onError fires once.
+      expect(renderFn).toHaveBeenCalledTimes(2);
       expect(screen.getByTestId("rp-message")).toHaveTextContent(
         "render-prop crash",
       );

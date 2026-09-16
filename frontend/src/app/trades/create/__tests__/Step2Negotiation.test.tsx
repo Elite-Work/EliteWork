@@ -12,6 +12,12 @@ const renderWithProvider = () => {
 };
 
 describe('Step2Negotiation', () => {
+    beforeEach(() => {
+        // TradeContext persists drafts to localStorage and lazily reads them
+        // back on mount — clear so each test starts from real defaults.
+        localStorage.clear();
+    });
+
     describe('loss ratio slider', () => {
         it('should render loss ratio slider', () => {
             renderWithProvider();

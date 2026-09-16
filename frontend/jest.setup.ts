@@ -15,3 +15,25 @@ if (typeof globalThis.TextEncoder === 'undefined') {
   globalThis.TextDecoder = util.TextDecoder;
 }
 
+if (typeof globalThis.ResizeObserver === 'undefined') {
+  class ResizeObserverMock {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+  globalThis.ResizeObserver = ResizeObserverMock as unknown as typeof ResizeObserver;
+}
+
+// jsdom performs no layout, so elements always report zero size. Libraries
+// that measure their container (e.g. @tanstack/react-virtual, used by
+// VirtualizedList) see a zero-height viewport and never render any rows.
+// Give elements a plausible size so virtualized lists render in tests.
+Object.defineProperty(HTMLElement.prototype, 'offsetHeight', {
+  configurable: true,
+  value: 600,
+});
+Object.defineProperty(HTMLElement.prototype, 'clientHeight', {
+  configurable: true,
+  value: 600,
+});
+

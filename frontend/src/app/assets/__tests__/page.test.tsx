@@ -4,6 +4,7 @@ describe("Asset page history mapping", () => {
   const sampleEvent = {
     eventType: "trade_funded",
     timestamp: "2024-01-02T12:00:00.000Z",
+    actor: "",
     metadata: { amount: 1000 },
   } as const;
 

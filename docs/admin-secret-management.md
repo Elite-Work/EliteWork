@@ -1,7 +1,7 @@
 # ADMIN_SECRET_KEY Management
 
 This document describes how `ADMIN_SECRET_KEY` is provisioned, consumed, and rotated
-in the EziAgric backend infrastructure.
+in the EliteWork backend infrastructure.
 
 ## Overview
 

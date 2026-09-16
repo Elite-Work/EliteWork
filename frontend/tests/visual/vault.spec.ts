@@ -33,8 +33,7 @@ test.describe('Vault Overview — unauthenticated', () => {
     await page.goto('/vault');
     await waitForStable(page);
 
-    const body = page.locator('body');
-    await expect(body).toHaveScreenshot('vault-public-full.png', { fullPage: true });
+    await expect(page).toHaveScreenshot('vault-public-full.png', { fullPage: true });
   });
 });
 

@@ -41,7 +41,18 @@ const TradeContext = createContext<TradeContextType>({} as TradeContextType);
 const STORAGE_KEY = "amana:draft-trade";
 
 export function TradeProvider({ children }: { children: React.ReactNode }) {
-  const [step, setStep] = useState(1);
+  const [step, setStep] = useState(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed.step) return parsed.step;
+        }
+      } catch {}
+    }
+    return 1;
+  });
   const [data, setData] = useState<TradeData>(() => {
     if (typeof window !== "undefined") {
       try {
@@ -61,17 +72,6 @@ export function TradeProvider({ children }: { children: React.ReactNode }) {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({ data, step, savedAt: new Date().toISOString() }));
     } catch {}
   }, [data, step]);
-
-  // Restore step on mount
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (parsed.step) setStep(parsed.step);
-      }
-    } catch {}
-  }, []);
 
   const update = (partial: Partial<TradeData>) =>
     setData((prev) => ({ ...prev, ...partial }));

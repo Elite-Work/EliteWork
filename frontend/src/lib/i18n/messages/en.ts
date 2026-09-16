@@ -29,7 +29,7 @@ const messages = {
     rejectedBody: "You dismissed the Freighter popup. Try again when you're ready.",
     rejectedCta: "Try again",
     wrongNetworkTitle: "Wrong network selected",
-    wrongNetworkBody: "Switch Freighter to {expected} to use EziAgric.",
+    wrongNetworkBody: "Switch Freighter to {expected} to use EliteWork.",
     wrongNetworkCta: "Switch to {expected}",
     timeoutTitle: "Freighter didn't respond",
     timeoutBody: "The extension took too long to answer. Reload and try again.",

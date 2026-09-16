@@ -11,7 +11,7 @@ describe("useRetry", () => {
   });
 
   it("executes function successfully on first attempt", async () => {
-    const fn = jest.fn().mockResolvedValue("success");
+    const fn = jest.fn<Promise<string>, []>().mockResolvedValue("success");
     const { result } = renderHook(() => useRetry(fn));
 
     let data: string | null = null;
@@ -57,8 +57,8 @@ describe("useRetry", () => {
   });
 
   it("does not retry non-retryable status", async () => {
-    const error = new Error("bad request");
-    (error as { status: number }).status = 400;
+    const error = new Error("bad request") as Error & { status: number };
+    error.status = 400;
     const fn = jest.fn().mockRejectedValue(error);
     const { result } = renderHook(() =>
       useRetry(fn, { retryableStatuses: [500, 503] })
@@ -70,7 +70,7 @@ describe("useRetry", () => {
 
     expect(fn).toHaveBeenCalledTimes(1);
     expect(result.current.state.error).toBeDefined();
-    const err = result.current.state.error as { status: number };
+    const err = result.current.state.error as Error & { status: number };
     expect(err.status).toBe(400);
   });
 

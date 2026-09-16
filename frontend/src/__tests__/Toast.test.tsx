@@ -91,12 +91,7 @@ describe("Toast component", () => {
     await waitFor(() => expect(onClose).toHaveBeenCalledWith("1"));
   });
 
-  it.each([
-    ["success", "success"],
-    ["error", "error"],
-    ["warning", "warning"],
-    ["info", "info"],
-  ] as const)("renders %s variant", (type) => {
+  it.each(["success", "error", "warning", "info"] as const)("renders %s variant", (type) => {
     const { container } = render(
       <Toast id="1" type={type} message="msg" onClose={onClose} />
     );

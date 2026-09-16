@@ -14,6 +14,10 @@
  *   test('vault header matches snapshot', async ({ authenticatedPage }) => { ... });
  */
 
+/* eslint-disable react-hooks/rules-of-hooks -- this is a Playwright fixtures
+ * file with no React code; the `use` fixture callback below is Playwright's
+ * convention, not the React `use` hook, and isn't subject to hook rules. */
+
 import { test as base, type Page } from '@playwright/test';
 
 // ---------------------------------------------------------------------------

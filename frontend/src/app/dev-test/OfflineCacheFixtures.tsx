@@ -18,6 +18,9 @@ import {
   QUOTA_BYTES,
 } from "@/lib/offlineCache";
 
+// Computed once at module load so the fixture badges render deterministically.
+const NOW = Date.now();
+
 export function OfflineCacheFixtures() {
   const [readResult, setReadResult] = useState<string>("—");
   const [usageBytes, setUsageBytes] = useState(0);
@@ -104,7 +107,7 @@ export function OfflineCacheFixtures() {
           <div className="flex flex-col gap-3">
             <div className="flex items-center gap-3">
               <span className="text-xs text-text-muted w-24">Fresh:</span>
-              <StalenessIndicator isStale={false} isOffline={false} cachedAt={Date.now()} />
+              <StalenessIndicator isStale={false} isOffline={false} cachedAt={NOW} />
               <span className="text-xs text-text-muted italic">(no badge rendered)</span>
             </div>
             <div className="flex items-center gap-3">
@@ -112,7 +115,7 @@ export function OfflineCacheFixtures() {
               <StalenessIndicator
                 isStale={true}
                 isOffline={false}
-                cachedAt={Date.now() - 8 * 60 * 1000}
+                cachedAt={NOW - 8 * 60 * 1000}
               />
             </div>
             <div className="flex items-center gap-3">
@@ -120,7 +123,7 @@ export function OfflineCacheFixtures() {
               <StalenessIndicator
                 isStale={true}
                 isOffline={true}
-                cachedAt={Date.now() - 12 * 60 * 1000}
+                cachedAt={NOW - 12 * 60 * 1000}
               />
             </div>
           </div>

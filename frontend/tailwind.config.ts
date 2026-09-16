@@ -90,8 +90,8 @@ const config: Config = {
         // Legacy aliases
         card: "var(--shadow-elev-1)",
         "card-hover": "var(--shadow-elev-2)",
-        "glow-gold": "0 0 20px rgba(212,168,83,0.2)",
-        "glow-emerald": "0 0 20px rgba(52,211,153,0.15)",
+        "glow-gold": "0 0 20px rgba(251,191,36,0.2)",
+        "glow-emerald": "0 0 20px rgba(74,222,128,0.15)",
         modal: "var(--shadow-elev-3)",
       },
       spacing: {

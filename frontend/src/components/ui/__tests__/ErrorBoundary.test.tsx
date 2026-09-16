@@ -37,7 +37,7 @@ afterAll(() => {
 
 // ─── Helper: a component that always throws ─────────────────────────────────
 
-function Bomb({ message = "Test explosion" }: { message?: string }) {
+function Bomb({ message = "Test explosion" }: { message?: string }): never {
   throw new Error(message);
 }
 
@@ -245,7 +245,7 @@ describe("ErrorBoundary", () => {
 
   describe("backend correlation ID propagation", () => {
     it("uses backend correlationId when present on the error object", () => {
-      function BombWithBackendId() {
+      function BombWithBackendId(): never {
         const err = new Error("backend id test") as Error & {
           backendError?: Record<string, string>;
         };

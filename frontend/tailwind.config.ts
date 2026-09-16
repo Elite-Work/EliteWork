@@ -158,7 +158,7 @@ const config: Config = {
         "gradient-gold-cta":
           "linear-gradient(135deg, var(--gold) 0%, var(--gold-hover) 100%)",
         "gradient-card-glow":
-          "linear-gradient(135deg, rgba(52,211,153,0.05) 0%, rgba(212,168,83,0.05) 100%)",
+          "linear-gradient(135deg, rgba(74,222,128,0.05) 0%, rgba(251,191,36,0.05) 100%)",
       },
       animation: {
         "slide-up": "slide-up 0.3s ease-out",

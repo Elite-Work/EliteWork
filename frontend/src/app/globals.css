@@ -93,11 +93,11 @@
   --surface-3: rgba(11, 26, 20, 0.85);
 
   /* ── Brand ────────────────────────────────────────────────────────────── */
-  --gold: #D4A853;
-  --gold-hover: #E0BA6A;
-  --gold-muted: rgba(212, 168, 83, 0.15);
-  --emerald: #34D399;
-  --emerald-muted: rgba(52, 211, 153, 0.15);
+  --gold: #FBBF24;
+  --gold-hover: #FFD873;
+  --gold-muted: rgba(251, 191, 36, 0.18);
+  --emerald: #4ADE80;
+  --emerald-muted: rgba(74, 222, 128, 0.18);
 
   /* ── Text ─────────────────────────────────────────────────────────────── */
   --text-primary: #F0F5F1;
@@ -106,11 +106,11 @@
   --text-inverse: #0B1A14;
 
   /* ── Status ───────────────────────────────────────────────────────────── */
-  --status-success: #34D399;
-  --status-warning: #F59E0B;
-  --status-danger: #EF4444;
-  --status-info: #3B82F6;
-  --status-locked: #D4A853;
+  --status-success: #4ADE80;
+  --status-warning: #FBBF24;
+  --status-danger: #F87171;
+  --status-info: #60A5FA;
+  --status-locked: #FBBF24;
   --status-draft: #6B7280;
 
   /* ── Border ───────────────────────────────────────────────────────────── */
@@ -118,7 +118,7 @@
   --border-default: rgba(139, 168, 154, 0.2);
   --border-raised: rgba(139, 168, 154, 0.32);
   --border-hover: rgba(139, 168, 154, 0.4);
-  --border-focus: rgba(212, 168, 83, 0.6);
+  --border-focus: rgba(251, 191, 36, 0.6);
 
   /* ── Shadow ───────────────────────────────────────────────────────────── */
   --shadow-elev-1: 0 1px 4px rgba(0,0,0,0.25), 0 4px 24px rgba(0,0,0,0.3);

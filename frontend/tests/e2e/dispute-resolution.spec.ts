@@ -30,7 +30,7 @@ async function seedMediatorWallet(page: Page) {
       };
       Object.assign(window, { freighter, freighterApi: freighter });
     },
-    { token: testJwt(addr), addr: MEDIATOR_ADDRESS },
+    { token: testJwt(MEDIATOR_ADDRESS), addr: MEDIATOR_ADDRESS },
   );
 }
 

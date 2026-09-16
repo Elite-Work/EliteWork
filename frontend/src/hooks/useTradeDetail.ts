@@ -40,9 +40,13 @@ export function useTradeDetail(tradeId: string): UseTradeDetailResult {
     }
   }, [token, isAuthenticated, tradeId]);
 
+  // Fetch on mount / when tradeId or auth changes; setState happens inside
+  // fetchTrade's async body, not synchronously in the effect.
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     void fetchTrade();
   }, [fetchTrade]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   return { trade, loading, error, refetch: fetchTrade };
 }

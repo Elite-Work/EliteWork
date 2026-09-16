@@ -1,7 +1,7 @@
 import { PactV3, MatchersV3 } from '@pact-foundation/pact';
 import { tradesApi } from '@/lib/api/trades';
 
-const { like, eachLike, term, datetime } = MatchersV3;
+const { like, eachLike, regex, datetime } = MatchersV3;
 
 describe('Trades API Pact Consumer Tests', () => {
   const provider = new PactV3({
@@ -35,14 +35,8 @@ describe('Trades API Pact Consumer Tests', () => {
           status: 201,
           headers: { 'Content-Type': 'application/json' },
           body: {
-            tradeId: term({
-              matcher: '\\d+',
-              generate: '4294967297',
-            }),
-            unsignedXdr: term({
-              matcher: '[A-Za-z0-9+/=]+',
-              generate: 'AAAAAXNvbWUtY3JlYXRlLXRyYWRlLXhkcg==',
-            }),
+            tradeId: regex('\\d+', '4294967297'),
+            unsignedXdr: regex('[A-Za-z0-9+/=]+', 'AAAAAXNvbWUtY3JlYXRlLXRyYWRlLXhkcg=='),
           },
         });
 
@@ -87,10 +81,7 @@ describe('Trades API Pact Consumer Tests', () => {
           status: 200,
           headers: { 'Content-Type': 'application/json' },
           body: {
-            unsignedXdr: term({
-              matcher: '[A-Za-z0-9+/=]+',
-              generate: 'AAAAAXNvbWUtZGVwb3NpdC10eC14ZHI=',
-            }),
+            unsignedXdr: regex('[A-Za-z0-9+/=]+', 'AAAAAXNvbWUtZGVwb3NpdC10eC14ZHI='),
           },
         });
 
@@ -128,10 +119,7 @@ describe('Trades API Pact Consumer Tests', () => {
           status: 200,
           headers: { 'Content-Type': 'application/json' },
           body: {
-            unsignedXdr: term({
-              matcher: '[A-Za-z0-9+/=]+',
-              generate: 'AAAAAXNvbWUtY29uZmlybS14ZHI=',
-            }),
+            unsignedXdr: regex('[A-Za-z0-9+/=]+', 'AAAAAXNvbWUtY29uZmlybS14ZHI='),
           },
         });
 
@@ -169,10 +157,7 @@ describe('Trades API Pact Consumer Tests', () => {
           status: 200,
           headers: { 'Content-Type': 'application/json' },
           body: {
-            unsignedXdr: term({
-              matcher: '[A-Za-z0-9+/=]+',
-              generate: 'AAAAAXNvbWUtcmVsZWFzZS14ZHI=',
-            }),
+            unsignedXdr: regex('[A-Za-z0-9+/=]+', 'AAAAAXNvbWUtcmVsZWFzZS14ZHI='),
           },
         });
 
@@ -213,10 +198,7 @@ describe('Trades API Pact Consumer Tests', () => {
           status: 200,
           headers: { 'Content-Type': 'application/json' },
           body: {
-            unsignedXdr: term({
-              matcher: '[A-Za-z0-9+/=]+',
-              generate: 'AAAAAXNvbWUtZGlzcHV0ZS14ZHI=',
-            }),
+            unsignedXdr: regex('[A-Za-z0-9+/=]+', 'AAAAAXNvbWUtZGlzcHV0ZS14ZHI='),
           },
         });
 

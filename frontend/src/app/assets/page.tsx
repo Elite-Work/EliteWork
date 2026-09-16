@@ -517,14 +517,14 @@ export default function AssetsPage() {
     }
   }, [token]);
 
+  // Fetch on mount / when auth changes; setState happens inside fetchData's
+  // async body, not synchronously in the effect.
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (isAuthenticated && token) void fetchData();
   }, [isAuthenticated, token, fetchData]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
-  // Reset to page 1 when filters change
-  useEffect(() => {
-    setPage(1);
-  }, [search, statusFilter]);
   // Filter trades client-side
   const filteredTrades = useMemo(() => {
     let result = allTrades;
@@ -667,9 +667,15 @@ export default function AssetsPage() {
               totalPages={totalPages}
               onPageChange={setPage}
               search={search}
-              onSearchChange={setSearch}
+              onSearchChange={(value) => {
+                setSearch(value);
+                setPage(1);
+              }}
               statusFilter={statusFilter}
-              onStatusFilterChange={setStatusFilter}
+              onStatusFilterChange={(value) => {
+                setStatusFilter(value);
+                setPage(1);
+              }}
               onRefresh={fetchData}
             />
 

@@ -42,6 +42,9 @@ export function useFeatureFlags(): UseFeatureFlagsResult {
     });
   }, []);
 
+  // Kick off the initial server fetch on mount; setState happens inside
+  // load()'s async continuation, not synchronously in the effect.
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     mountedRef.current = true;
     load();
@@ -49,6 +52,7 @@ export function useFeatureFlags(): UseFeatureFlagsResult {
       mountedRef.current = false;
     };
   }, [load]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const isFeatureEnabled = useCallback(
     (feature: FlagName) => flags[feature],

@@ -207,6 +207,8 @@ describe("StreamDetailPage", () => {
 
       mockUseAdmin.mockReturnValue({
         isAdmin: false,
+        isAdminUIEnabled: true,
+        canAccessAdmin: false,
         adminAddresses: ["GADMIN123"],
       });
     });
@@ -255,6 +257,8 @@ describe("StreamDetailPage", () => {
 
       mockUseAdmin.mockReturnValue({
         isAdmin: false,
+        isAdminUIEnabled: true,
+        canAccessAdmin: false,
         adminAddresses: ["GADMIN123"],
       });
 

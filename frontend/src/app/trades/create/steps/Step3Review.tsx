@@ -11,7 +11,7 @@ import Link from "next/link";
 import { LegalDisclaimerModal } from "@/components/ui/LegalDisclaimerModal";
 import { useOffline } from "@/hooks/useOffline";
 import { useOfflineQueueStore } from "@/stores/offlineQueueStore";
-import { useToast, TOAST_CONTRACT } from "@/hooks/useToast";
+import { useToast } from "@/hooks/useToast";
 import { shouldDedup, registerAction } from "@/lib/actionDedup";
 import { generateIdempotencyKey } from "@/lib/idempotency";
 
@@ -33,7 +33,7 @@ export default function Step3Review() {
   const { isOffline } = useOffline();
   const enqueue = useOfflineQueueStore((s) => s.enqueue);
   const pendingCount = useOfflineQueueStore((s) => s.queue.length);
-  const { addToast, addToastWithCorrelation, updateToast } = useToast();
+  const { addToastWithCorrelation, updateToast } = useToast();
   const [loading, setLoading] = useState(false);
   const submittingRef = useRef(false);
   const [txHash, setTxHash] = useState<string | null>(null);

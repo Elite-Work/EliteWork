@@ -95,8 +95,6 @@ For the protected branch (`main`), set these required status checks:
 
 ---
 
----
-
 ## 🔄 How It Works (The Amana Flow)
 
 1. **Initiate:** The Seller lists products. The Buyer initiates a trade, depositing funds that are converted to cNGN via a Stellar Path Payment.

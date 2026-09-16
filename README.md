@@ -97,12 +97,13 @@ For the protected branch (`main`), set these required status checks:
 
 ## 🔄 How It Works (The Amana Flow)
 
-1. **Initiate:** The Seller lists products. The Buyer initiates a trade, depositing funds that are converted to cNGN via a Stellar Path Payment.
-2. **Lock:** The Smart Contract locks the funds and stores the agreed-upon `Loss_Ratio`.
-3. **Dispatch:** The Seller provides the driver's name, phone number, and vehicle manifest.
-4. **Verification:** - **Success:** Buyer receives goods and uploads a confirmation video. Funds release to Seller.
-   - **Dispute:** Buyer uploads a video of loss/damage with driver affirmation. A mediator reviews the evidence.
-5. **Settlement:** Based on the outcome, funds are distributed (either 100% to one party or split via the `Loss_Ratio`).
+1. **Initiate:** The seller lists products. The buyer starts a trade by depositing funds, which convert to cNGN via a Stellar Path Payment.
+2. **Lock:** The smart contract locks the funds and records the agreed `Loss_Ratio`.
+3. **Dispatch:** The seller provides the driver's name, phone number, and vehicle manifest.
+4. **Verify:**
+   - **Success:** The buyer receives the goods, uploads a confirmation video, and funds release to the seller.
+   - **Dispute:** The buyer uploads video evidence of loss or damage, with driver affirmation, for a mediator to review.
+5. **Settle:** Funds are distributed based on the outcome — either 100% to one party or split via the `Loss_Ratio`.
 
 ---
 

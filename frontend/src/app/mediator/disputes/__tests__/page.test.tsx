@@ -4,6 +4,7 @@ import MediatorDisputesPage from "../page";
 import { useAuth } from "@/hooks/useAuth";
 import { useFreighterIdentity } from "@/hooks/useFreighterIdentity";
 import { api, ApiError } from "@/lib/api";
+import type { DisputeResponse } from "@/lib/api/types";
 
 jest.mock("@/hooks/useAuth");
 jest.mock("@/hooks/useFreighterIdentity");
@@ -33,13 +34,15 @@ const mockList = api.disputes.list as jest.MockedFunction<typeof api.disputes.li
 
 const MEDIATOR_ADDRESS = "GEXAMPLEMEDIATORPUBLICKEY1";
 
-function makeDispute(overrides = {}) {
+function makeDispute(overrides: Partial<DisputeResponse> = {}): DisputeResponse {
   return {
-    id: "dispute-1",
+    id: 1,
     tradeId: "trade-1",
     status: "OPEN",
     initiator: "GBUYER1234567890",
+    reason: "Goods not delivered",
     createdAt: "2026-01-01T00:00:00Z",
+    updatedAt: "2026-01-01T00:00:00Z",
     trade: {
       buyerAddress: "GBUYER1234567890",
       sellerAddress: "GSELLER1234567890",
@@ -86,7 +89,7 @@ describe("MediatorDisputesPage", () => {
       .mockRejectedValueOnce(new ApiError(500, "Failed to reach disputes service"))
       .mockResolvedValueOnce({
         items: [makeDispute()],
-        pagination: { totalPages: 1 },
+        pagination: { page: 1, limit: 20, total: 1, totalPages: 1 },
       });
 
     render(<MediatorDisputesPage />);
@@ -104,7 +107,7 @@ describe("MediatorDisputesPage", () => {
   });
 
   it("renders status filters as the shared Tabs component", async () => {
-    mockList.mockResolvedValue({ items: [], pagination: { totalPages: 1 } });
+    mockList.mockResolvedValue({ items: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 1 } });
 
     render(<MediatorDisputesPage />);
 

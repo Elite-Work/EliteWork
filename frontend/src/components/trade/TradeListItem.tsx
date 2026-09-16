@@ -47,16 +47,7 @@ export function TradeListItem({
   return (
     <div
       onClick={onView}
-      role="button"
-      tabIndex={0}
-      aria-label={`View trade ${tradeId} — ${commodity} ${amountCngn} cNGN, status ${status}`}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          onView();
-        }
-      }}
-      className="flex items-center justify-between p-4 bg-card border border-border-default rounded-lg mb-3 hover:border-gold/30 hover:bg-elevated transition-colors cursor-pointer group focus-visible:outline-2 focus-visible:outline-gold focus-visible:outline-offset-2"
+      className="flex items-center justify-between p-4 bg-card border border-border-default rounded-lg mb-3 hover:border-gold/30 hover:bg-elevated transition-colors cursor-pointer group"
     >
       {/* Left — commodity + meta */}
       <div className="flex flex-col gap-1 min-w-0">

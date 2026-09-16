@@ -83,7 +83,7 @@ describe("Money-action flows — axe WCAG 2.1 AA", () => {
   });
 
   describe("TradeListItem — keyboard accessible", () => {
-    it("outer div has role=button, tabIndex=0, and aria-label", async () => {
+    it("exposes a focusable, labeled 'View trade' button rather than a nested-interactive row", async () => {
       const { TradeListItem } = await import("@/components/trade/TradeListItem");
       const { container } = render(
         <TradeListItem
@@ -97,10 +97,12 @@ describe("Money-action flows — axe WCAG 2.1 AA", () => {
           onDeposit={() => {}}
         />
       );
-      const card = container.querySelector('[role="button"]') as HTMLElement;
-      expect(card).toBeTruthy();
-      expect(card.getAttribute("tabIndex")).toBe("0");
-      expect(card.getAttribute("aria-label")).toMatch(/View trade t-1/);
+      // The row itself is not role="button" — it already contains real,
+      // individually-focusable buttons, and nesting an interactive role
+      // around interactive descendants is an axe "nested-interactive"
+      // violation. Keyboard/AT users use the explicit View/Deposit buttons.
+      const viewBtn = container.querySelector('button[aria-label*="View trade t-1"]');
+      expect(viewBtn).toBeTruthy();
       const depositBtn = container.querySelector('button[aria-label*="Deposit"]');
       expect(depositBtn).toBeTruthy();
       expect(await axe(container)).toHaveNoViolations();

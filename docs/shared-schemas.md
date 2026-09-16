@@ -66,7 +66,7 @@ The fuzz parity test runs as part of `cd frontend && pnpm test`.
 
 **Promotion milestone (after form 3):** extract
 `frontend/src/lib/domain-schemas/` to `packages/domain-schemas`
-(`@eziagric/domain-schemas`), add `pnpm-workspace.yaml`, wire
+(`@elitework/domain-schemas`), add `pnpm-workspace.yaml`, wire
 `transpilePackages` + tsconfig paths, delete the mirror file and the diff
 script. Track bundle impact then; today the shared schema adds ~1.2 KB min+gz
 to the frontend (zod is already bundled).

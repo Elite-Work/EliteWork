@@ -40,9 +40,13 @@ export function useWallet(): UseWalletResult {
     }
   }, [token, isAuthenticated]);
 
+  // Fetch on mount / when auth changes; setState happens inside
+  // fetchBalance's async body, not synchronously in the effect.
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     void fetchBalance();
   }, [fetchBalance]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   return { balance, asset, loading, error, refetch: fetchBalance };
 }

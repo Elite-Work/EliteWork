@@ -66,11 +66,11 @@ describe("Money-action flows — axe WCAG 2.1 AA", () => {
     it("has no axe violations — danger variant", async () => {
       const { container } = render(
         <ConfirmActionModal
-          isOpen={true}
-          onClose={() => {}}
+          open={true}
+          onOpenChange={() => {}}
           onConfirm={() => {}}
           title="Confirm clawback"
-          description="This will claw back 100 cNGN irreversibly."
+          message="This will claw back 100 cNGN irreversibly."
           variant="danger"
           confirmLabel="Confirm Clawback"
         />

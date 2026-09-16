@@ -38,6 +38,10 @@ export function StalenessIndicator({
 }: StalenessIndicatorProps) {
   if (!isStale && !isOffline) return null;
 
+  // Reads the current time to render a "how long ago" label; this component
+  // doesn't need to live-tick, so an approximate value from render time is
+  // intentional here.
+  // eslint-disable-next-line react-hooks/purity
   const elapsed = cachedAt ? Date.now() - cachedAt : null;
   const label = isOffline ? "Offline" : "Stale";
   const timeLabel = elapsed !== null ? formatElapsed(elapsed) : null;

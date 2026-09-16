@@ -19,7 +19,7 @@ STATUS_FILE="${STATUS_FILE:-backend/scripts/secrets-rotation-status.json}"
 WARN_WINDOW_DAYS="${WARN_WINDOW_DAYS:-14}"
 
 echo "==============================================================="
-echo "  EziAgric — Secrets Rotation Verification"
+echo "  EliteWork — Secrets Rotation Verification"
 echo "==============================================================="
 
 if [[ ! -f "$STATUS_FILE" ]]; then

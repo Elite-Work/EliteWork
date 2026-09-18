@@ -204,7 +204,6 @@ export default function TradeDetailPage() {
   }, [token, tradeId]);
 
   // Fetch on mount / when auth changes, or clear loading when unauthenticated.
-  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (isAuthenticated && token) {
       void fetchTrade();
@@ -212,7 +211,6 @@ export default function TradeDetailPage() {
       setLoading(false);
     }
   }, [isAuthenticated, token, fetchTrade]);
-  /* eslint-enable react-hooks/set-state-in-effect */
 
   if (authLoading) {
     return <LoadingState />;

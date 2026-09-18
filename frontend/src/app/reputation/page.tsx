@@ -117,13 +117,11 @@ export default function ReputationPage() {
 
   // Fetch on mount / when auth changes; setState happens inside
   // fetchReputation's async body, not synchronously in the effect.
-  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (isAuthenticated && token) {
       fetchReputation();
     }
   }, [isAuthenticated, token, fetchReputation]);
-  /* eslint-enable react-hooks/set-state-in-effect */
 
   const isPageLoading = authLoading || (isAuthenticated && loading);
 

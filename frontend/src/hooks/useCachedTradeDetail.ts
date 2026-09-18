@@ -78,7 +78,6 @@ export function useCachedTradeDetail(
   // Re-read cache when tradeId changes. Intentional imperative sync with an
   // external cache, and background revalidation whose setState calls happen
   // inside fetchFresh's async body — not synchronously in the effect.
-  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     const read = cacheRead<TradeResponse>(DOMAIN, tradeId);
     if (read.entry) {
@@ -96,7 +95,6 @@ export function useCachedTradeDetail(
       void fetchFresh();
     }
   }, [isOffline, isAuthenticated, token, fetchFresh]);
-  /* eslint-enable react-hooks/set-state-in-effect */
 
   const refetch = useCallback(() => void fetchFresh(), [fetchFresh]);
 

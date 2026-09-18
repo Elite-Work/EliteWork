@@ -86,7 +86,6 @@ export function useCachedNotifications<T>(
   // Re-read cache when cacheKey changes, and background revalidation whose
   // setState calls happen inside fetchFresh's async body — not synchronously
   // in the effect.
-  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     const read = cacheRead<T>(DOMAIN, cacheKey);
     if (read.entry) {
@@ -104,7 +103,6 @@ export function useCachedNotifications<T>(
       void fetchFresh();
     }
   }, [isOffline, isAuthenticated, token, fetchFresh]);
-  /* eslint-enable react-hooks/set-state-in-effect */
 
   const refetch = useCallback(() => void fetchFresh(), [fetchFresh]);
 

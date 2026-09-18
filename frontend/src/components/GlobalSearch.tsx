@@ -88,7 +88,6 @@ export function GlobalSearch({ onClose }: GlobalSearchProps) {
 
   // Debounced search — synchronizes with an external timer/API, clearing
   // results synchronously when the query is emptied.
-  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (!isOpen) return;
 
@@ -125,7 +124,6 @@ export function GlobalSearch({ onClose }: GlobalSearchProps) {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
   }, [query, isOpen, token]);
-  /* eslint-enable react-hooks/set-state-in-effect */
 
   function handleSelect(item: SearchResultItem & { category: keyof GroupedResults }) {
     router.push(`${CATEGORY_PATHS[item.category]}/${item.id}`);

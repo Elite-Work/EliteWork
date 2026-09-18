@@ -64,11 +64,9 @@ export default function AdminStreamsPage() {
 
   // Fetch on mount / when page or auth changes; setState happens inside
   // fetchStreams's async body, not synchronously in the effect.
-  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     fetchStreams();
   }, [fetchStreams]);
-  /* eslint-enable react-hooks/set-state-in-effect */
 
   const handleClawbackSuccess = useCallback(() => {
     setActiveStreamId(null);

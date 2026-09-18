@@ -105,7 +105,6 @@ export function useCachedTrades(
   // Re-read cache when params change. Intentional imperative sync with an
   // external cache keyed by a derived value, not expressible as render-time
   // state derivation.
-  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     const read = cacheRead<TradeListResponse>(DOMAIN, cacheKey);
     if (read.entry) {
@@ -117,17 +116,14 @@ export function useCachedTrades(
       setIsLoading(true);
     }
   }, [cacheKey]);
-  /* eslint-enable react-hooks/set-state-in-effect */
 
   // Trigger background revalidation when online. setState happens inside
   // fetchFresh's async body, not synchronously in the effect.
-  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (!isOffline && isAuthenticated && token) {
       void fetchFresh();
     }
   }, [isOffline, isAuthenticated, token, fetchFresh]);
-  /* eslint-enable react-hooks/set-state-in-effect */
 
   const refetch = useCallback(() => {
     void fetchFresh();

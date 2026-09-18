@@ -519,11 +519,9 @@ export default function AssetsPage() {
 
   // Fetch on mount / when auth changes; setState happens inside fetchData's
   // async body, not synchronously in the effect.
-  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (isAuthenticated && token) void fetchData();
   }, [isAuthenticated, token, fetchData]);
-  /* eslint-enable react-hooks/set-state-in-effect */
 
   // Filter trades client-side
   const filteredTrades = useMemo(() => {

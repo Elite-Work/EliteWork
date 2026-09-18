@@ -53,7 +53,6 @@ export function DisputeVerificationModal({
   // Reset state when modal opens. The modal instance persists across opens
   // (see tests toggling `isOpen` via rerender), so this can't be expressed
   // as a lazy initializer or a remount key.
-  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (isOpen) {
       setStep("upload");
@@ -62,7 +61,6 @@ export function DisputeVerificationModal({
       setErrorMsg(null);
     }
   }, [isOpen]);
-  /* eslint-enable react-hooks/set-state-in-effect */
 
   // Lock body scroll when open
   useEffect(() => {

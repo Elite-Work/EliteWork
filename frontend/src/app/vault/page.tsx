@@ -91,13 +91,11 @@ export default function VaultPage() {
 
   // Fetch on mount / when auth changes; setState happens inside
   // fetchVaultData's async body, not synchronously in the effect.
-  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (isAuthenticated && token) {
       void fetchVaultData();
     }
   }, [isAuthenticated, token, fetchVaultData]);
-  /* eslint-enable react-hooks/set-state-in-effect */
 
   const walletStatus = authLoading
     ? "Checking wallet"

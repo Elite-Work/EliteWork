@@ -248,7 +248,6 @@ export default function MediatorPanelClient({ disputeId }: Props) {
   // Reset video playback state whenever the resolved evidence CID changes.
   // resolvedCid is written from several branches of an async effect above,
   // so centralizing the reset here avoids duplicating it at each call site.
-  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (!resolvedCid) {
       return;
@@ -257,7 +256,6 @@ export default function MediatorPanelClient({ disputeId }: Props) {
     setActiveGatewayIndex(0);
     setVideoLoadState("loading");
   }, [resolvedCid]);
-  /* eslint-enable react-hooks/set-state-in-effect */
 
   function handleVideoError() {
     const nextIndex = activeGatewayIndex + 1;

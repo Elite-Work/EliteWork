@@ -71,7 +71,7 @@ function buildCsp(nonce: string): string {
     .join("; ");
 }
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const nonce = Buffer.from(crypto.randomUUID().replace(/-/g, "")).toString("base64");
   const csp = buildCsp(nonce);
   const enforce = process.env.CSP_ENFORCE === "true";

@@ -6,7 +6,7 @@ import { NextRequest, NextResponse } from "next/server";
  * The browser POSTs a violation report here (either the legacy
  * `application/csp-report` shape from `report-uri`, or the newer Reporting
  * API `application/reports+json` shape) whenever a request violates the
- * Content-Security-Policy set in `src/middleware.ts`. Reports are logged
+ * Content-Security-Policy set in `src/proxy.ts`. Reports are logged
  * server-side so violation volume/severity can be reviewed during the
  * report-only burn-in period before CSP_ENFORCE is flipped to `true`.
  */

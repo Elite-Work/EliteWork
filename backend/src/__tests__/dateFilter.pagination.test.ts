@@ -120,9 +120,10 @@ describe("Date Filtering & Pagination Logic", () => {
         const after = parseIsoDate("2026-06-22T00:00:00Z");
         const before = parseIsoDate("2026-06-26T00:00:00Z");
         const result = filterByDateRange(events, after, before);
-        expect(result.length).toBe(3); // ids 2, 3, 4
+        // id 4 is at 2026-06-26T10:00:00Z, which is past the 00:00:00Z boundary
+        expect(result.length).toBe(2); // ids 2, 3
         expect(result[0].id).toBe(2);
-        expect(result[result.length - 1].id).toBe(4);
+        expect(result[result.length - 1].id).toBe(3);
       });
 
       it("should return all events when no date filter provided", () => {
@@ -236,8 +237,9 @@ describe("Date Filtering & Pagination Logic", () => {
       });
 
       it("should handle partial last page", () => {
-        const result = paginate(items, 5, 25);
-        expect(result.data.length).toBe(25);
+        // 100 items at 30/page: pages 1-3 are full, page 4 has the remaining 10.
+        const result = paginate(items, 4, 30);
+        expect(result.data.length).toBe(10);
         expect(result.pagination.totalPages).toBe(4);
         expect(result.pagination.hasNextPage).toBe(false);
       });
@@ -394,7 +396,7 @@ describe("Date Filtering & Pagination Logic", () => {
       },
     ) => {
       // Apply filters
-      let result = trades.filter((t) => {
+      const result = trades.filter((t) => {
         if (filters.status && t.status !== filters.status) return false;
         if (filters.after && t.createdAt < filters.after) return false;
         if (filters.before && t.createdAt > filters.before) return false;

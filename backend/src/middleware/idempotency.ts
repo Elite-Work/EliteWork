@@ -74,6 +74,9 @@ export const idempotencyMiddleware = async (
       return res.status(status).json(body);
     }
 
+    // Redis's SET accepts [NX|XX] before [EX seconds|...] per its own docs, but
+    // ioredis's generated overloads only cover the EX-before-NX ordering.
+    // @ts-expect-error - valid Redis SET argument order; not in ioredis's overload set
     const lock = await redis.set(lockKey, "1", "NX", "EX", IDEMPOTENCY_LOCK_TTL);
 
     if (lock !== "OK") {

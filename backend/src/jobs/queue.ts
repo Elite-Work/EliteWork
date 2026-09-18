@@ -12,7 +12,6 @@ const queueConnections: IORedis[] = [];
  * workers re-attach. See docs/redis-resilience.md#queue-consumers
  */
 export function createQueueConnection(): IORedis {
-  // @ts-expect-error - ioredis URL+options constructor is valid at runtime
   const conn: IORedis = new IORedis(REDIS_URL, {
     maxRetriesPerRequest: null,
     enableReadyCheck: false,
@@ -26,18 +25,18 @@ export function createQueueConnection(): IORedis {
       appLogger.warn({ times, delay }, "Queue Redis reconnecting");
       return delay;
     },
-  } as any);
+  });
 
-  (conn as any).on("error", (err: Error) => {
+  conn.on("error", (err: Error) => {
     appLogger.error({ err: err.message }, "Queue Redis connection error");
   });
-  (conn as any).on("close", () => {
+  conn.on("close", () => {
     appLogger.warn("Queue Redis connection closed — will reconnect");
   });
-  (conn as any).on("reconnecting", () => {
+  conn.on("reconnecting", () => {
     appLogger.info("Queue Redis reconnecting");
   });
-  (conn as any).on("ready", () => {
+  conn.on("ready", () => {
     appLogger.info("Queue Redis ready — consumers will resume");
   });
 

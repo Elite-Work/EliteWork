@@ -50,6 +50,7 @@ export class StreamClawbackService {
     // If Redis SET fails due to race (NX fails), we keep lock and treat as success since in-memory already protects this pod.
     // If Redis op errors, we remain holding in-memory and log; the lock will be released via TTL + release()
     void redis
+      // @ts-expect-error - valid Redis SET argument order ([NX|XX] before [EX...]); not in ioredis's overload set
       .set(redisKey(streamId), "1", "NX", "EX", REDIS_CLAWBACK_TTL_SECONDS)
       .then((result) => {
         if (result !== "OK") {
@@ -79,6 +80,7 @@ export class StreamClawbackService {
       );
     }
     try {
+      // @ts-expect-error - valid Redis SET argument order ([NX|XX] before [EX...]); not in ioredis's overload set
       const result = await redis.set(redisKey(streamId), "1", "NX", "EX", REDIS_CLAWBACK_TTL_SECONDS);
       if (result !== "OK") {
         throw new AppError(

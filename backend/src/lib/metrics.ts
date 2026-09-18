@@ -572,7 +572,9 @@ function getEventListenerLagHistogram(): Histogram {
           "Seconds since the most recently processed escrow event was recorded. " +
           "Drives the event-processing-lag SLO (p95 < 5 min).",
         unit: "seconds",
-        explicitBucketBoundaries: [1, 5, 15, 60, 120, 300, 600, 1800, 3600],
+        advice: {
+          explicitBucketBoundaries: [1, 5, 15, 60, 120, 300, 600, 1800, 3600],
+        },
       },
     );
   }

@@ -1,5 +1,5 @@
 // src/app/layout.tsx
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Manrope } from "next/font/google";
 
 import "./globals.css";
@@ -34,7 +34,6 @@ export const metadata: Metadata = {
   title: "Amana — Secure Agricultural Escrow",
   description: "Blockchain-powered agricultural trade settlement",
   manifest: "/manifest.json",
-  themeColor: "#1a3a1a",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
@@ -45,6 +44,10 @@ export const metadata: Metadata = {
     "apple-mobile-web-app-capable": "yes",
     "apple-mobile-web-app-status-bar-style": "black-translucent",
   },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#0B1A14",
 };
 
 /**

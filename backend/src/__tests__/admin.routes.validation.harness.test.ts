@@ -38,7 +38,6 @@ import { ContractService } from "../services/contract.service";
 jest.mock("../services/auth.service", () => ({
   AuthService: {
     validateToken: jest.fn(async (token: string) => {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
       const jsonwebtoken = require("jsonwebtoken");
       return jsonwebtoken.decode(token);
     }),
@@ -177,8 +176,7 @@ describe("admin route validation harness (#23)", () => {
     });
 
     it.each(ADMIN_ENDPOINTS)("$name returns 401 for a malformed bearer token", async (route) => {
-      const res = await request(app)
-        [route.method](route.path)
+      const res = await request(app)[route.method](route.path)
         .set("Authorization", "Bearer not-a-jwt")
         .send(route.body);
       expect(res.status).toBe(401);
@@ -199,8 +197,7 @@ describe("admin route validation harness (#23)", () => {
 
   describe("non-admin auth", () => {
     it.each(ADMIN_ENDPOINTS)("$name returns 403 for an authenticated outsider", async (route) => {
-      const res = await request(app)
-        [route.method](route.path)
+      const res = await request(app)[route.method](route.path)
         .set("Authorization", `Bearer ${outsiderToken}`)
         .send(route.body);
 

@@ -169,13 +169,24 @@ export default function TradeListScreen({ navigation }: Props) {
           )}
           ListEmptyComponent={
             <View style={styles.emptyState}>
-              <Text style={styles.emptyIcon}>📦</Text>
+              <View style={styles.emptyIllustration}>
+                <Text style={styles.emptyIcon}>🌾</Text>
+              </View>
               <Text style={styles.emptyTitle}>No trades found</Text>
               <Text style={styles.emptyBody}>
                 {activeFilter === 'ALL'
-                  ? 'You have no trades yet.'
+                  ? 'Your wallet has no trades yet. Create your first trade to get started.'
                   : `No trades with status "${activeFilter}".`}
               </Text>
+              {activeFilter === 'ALL' ? (
+                <TouchableOpacity
+                  style={styles.emptyCta}
+                  onPress={() => navigation.navigate('CreateTrade')}
+                  activeOpacity={0.75}
+                >
+                  <Text style={styles.emptyCtaText}>+ Create your first trade</Text>
+                </TouchableOpacity>
+              ) : null}
             </View>
           }
         />
@@ -223,9 +234,26 @@ const styles = StyleSheet.create({
   listContent: { padding: 16, gap: 12 },
   emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32 },
   emptyState: { alignItems: 'center' },
-  emptyIcon: { fontSize: 48, marginBottom: 12 },
+  emptyIllustration: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#e2efe2',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  emptyIcon: { fontSize: 40 },
   emptyTitle: { fontSize: 18, fontWeight: '600', color: '#1a3a1a', marginBottom: 8 },
-  emptyBody: { fontSize: 14, color: '#666', textAlign: 'center', lineHeight: 22 },
+  emptyBody: { fontSize: 14, color: '#666', textAlign: 'center', lineHeight: 22, maxWidth: 260 },
+  emptyCta: {
+    marginTop: 20,
+    backgroundColor: '#2d6a2d',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 24,
+  },
+  emptyCtaText: { color: '#fff', fontSize: 15, fontWeight: '700' },
   card: {
     backgroundColor: '#fff',
     borderRadius: 12,

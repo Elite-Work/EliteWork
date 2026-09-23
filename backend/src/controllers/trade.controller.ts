@@ -16,6 +16,15 @@ import {
 } from "../services/trade.service";
 import { AppError, ErrorCode } from "../errors/errorCodes";
 import { getMediatorAllowlist } from "../lib/accessControl";
+import {
+  getCooperativeAdmins,
+  getCooperativeMembers,
+} from "../lib/cooperativeAccess";
+import {
+  recordBulkImport,
+  recordCooperativeGmv,
+  recordCooperativeTradeEvent,
+} from "../lib/metrics";
 
 const AMOUNT_USDC_PATTERN = /^\d+(?:\.\d{1,7})?$/;
 
@@ -127,6 +136,152 @@ export class TradeController {
       );
     }
   };
+
+  /**
+   * Bulk trade creation for cooperative onboarding (issue #45).
+   *
+   * Same per-row semantics as `createTrade` (buyer is the authenticated
+   * caller, one unsigned XDR per row), but rows are independent: a failing
+   * row is reported in `failed` without aborting the rest of the batch.
+   * Always responds 200 with `{ created, failed }` so CSV importers can
+   * retry just the failed rows.
+   */
+  public createBulkTrades = async (
+    req: AuthRequest,
+    res: Response,
+    next: NextFunction,
+  ): Promise<Response | void> => {
+    try {
+      const buyerAddress = req.user?.walletAddress;
+      if (!buyerAddress) {
+        throw new AppError(ErrorCode.AUTH_ERROR, "Wallet address not found in token", 401);
+      }
+
+      if (!this.isValidPublicKey(buyerAddress)) {
+        throw new AppError(ErrorCode.VALIDATION_ERROR, "Invalid buyer wallet address", 400);
+      }
+
+      const { trades } = req.body as { trades: CreateTradeBody[] };
+      const { cooperativeId, region } = req.body as {
+        cooperativeId?: string;
+        region?: string;
+      };
+      const created: Array<{ index: number; tradeId: string; unsignedXdr: string }> = [];
+      const createdAmounts: string[] = [];
+      const failed: Array<{ index: number; error: string }> = [];
+
+      for (let index = 0; index < trades.length; index++) {
+        const row = trades[index];
+        try {
+          const prepared = this.prepareTradeRow(row);
+          const { tradeId, unsignedXdr } =
+            await this.contractService.buildCreateTradeTx({
+              buyerAddress,
+              sellerAddress: prepared.sellerAddress,
+              amountUsdc: prepared.amountUsdc,
+              buyerLossBps: prepared.buyerLossBps,
+              sellerLossBps: prepared.sellerLossBps,
+            });
+          await this.tradeService.createPendingTrade({
+            tradeId,
+            buyerAddress,
+            sellerAddress: prepared.sellerAddress,
+            amountUsdc: prepared.amountUsdc,
+            buyerLossBps: prepared.buyerLossBps,
+            sellerLossBps: prepared.sellerLossBps,
+          });
+          created.push({ index, tradeId, unsignedXdr });
+          createdAmounts.push(prepared.amountUsdc);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "Failed to create trade";
+          failed.push({ index, error: message });
+        }
+      }
+
+      recordBulkImport("succeeded", created.length);
+      recordBulkImport("failed", failed.length);
+      this.recordCooperativeBatch(cooperativeId, region, buyerAddress, createdAmounts);
+
+      return res.status(200).json({ created, failed });
+    } catch (error) {
+      if (error instanceof AppError) return next(error);
+      appLogger.error({ error }, "Bulk trade creation failed");
+      return next(
+        new AppError(ErrorCode.TRADE_BUILD_FAILED, "Failed to create trades", 500),
+      );
+    }
+  };
+
+  /**
+   * Pilot attribution for the dashboard (issue #46 / ADR-009). Records
+   * per-cooperative funnel/GMV metrics only when the caller verifiably
+   * belongs to the labelled cooperative (admin or member); otherwise the
+   * batch is left unattributed rather than mislabelled. Never throws —
+   * metrics must not break imports.
+   */
+  private recordCooperativeBatch(
+    cooperativeId: string | undefined,
+    region: string | undefined,
+    buyerAddress: string,
+    createdAmounts: string[],
+  ): void {
+    try {
+      if (!cooperativeId || createdAmounts.length === 0) return;
+      const caller = buyerAddress.toLowerCase();
+      const belongs =
+        getCooperativeAdmins(cooperativeId).has(caller) ||
+        getCooperativeMembers(cooperativeId).some((member) => member === caller);
+      if (!belongs) return;
+      const coop = cooperativeId.toLowerCase();
+      const resolvedRegion = (region ?? coop).toLowerCase();
+      for (const amountUsdc of createdAmounts) {
+        recordCooperativeTradeEvent(coop, resolvedRegion, "created");
+        recordCooperativeGmv(coop, resolvedRegion, amountUsdc);
+      }
+    } catch (error) {
+      appLogger.warn({ error }, "Cooperative batch attribution skipped");
+    }
+  }
+
+  /**
+   * Defensive per-row validation mirroring `createTrade`. The zod schema
+   * already validated shape; this guards the controller when called with
+   * rows that bypass route validation (and keeps the error contract stable).
+   */
+  private prepareTradeRow(row: CreateTradeBody): {
+    sellerAddress: string;
+    amountUsdc: string;
+    buyerLossBps: number;
+    sellerLossBps: number;
+  } {
+    if (!this.isValidPublicKey(row.sellerAddress)) {
+      throw new AppError(ErrorCode.VALIDATION_ERROR, "Invalid sellerAddress", 400);
+    }
+    const normalizedAmountUsdc = this.normalizeAmountUsdc(row.amountUsdc);
+    if (!normalizedAmountUsdc) {
+      throw new AppError(ErrorCode.VALIDATION_ERROR, "Invalid amountUsdc", 400);
+    }
+    if (!this.isValidLossBps(row.buyerLossBps) || !this.isValidLossBps(row.sellerLossBps)) {
+      throw new AppError(
+        ErrorCode.VALIDATION_ERROR,
+        "buyerLossBps and sellerLossBps must be integers between 0 and 10000",
+        400,
+      );
+    }
+    if (row.buyerLossBps + row.sellerLossBps !== 10000) {
+      throw new AppError(
+        ErrorCode.VALIDATION_ERROR,
+        "buyerLossBps and sellerLossBps must sum to 10000",
+        400,
+      );
+    }
+    return {
+      sellerAddress: row.sellerAddress,
+      amountUsdc: normalizedAmountUsdc,
+      buyerLossBps: row.buyerLossBps,
+      sellerLossBps: row.sellerLossBps,
+    };
+  }
 
   public buildDepositTx = async (
     req: AuthRequest,

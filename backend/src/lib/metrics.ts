@@ -592,3 +592,109 @@ export function recordEventListenerLag(seconds: number): void {
   const safeSeconds = Number.isFinite(seconds) && seconds > 0 ? seconds : 0;
   getEventListenerLagHistogram().record(safeSeconds);
 }
+
+// ---------------------------------------------------------------------------
+// Cooperative pilot metrics (#46)
+//
+// Per-cooperative / per-region / per-cohort labels for the pilot dashboard
+// (infra/grafana/dashboards/pilot-cohort.json). Cardinality is bounded: the
+// pilot cohort is a handful of cooperatives, and labels reuse the existing
+// low-cardinality funnel event names. See ADR-009.
+// ---------------------------------------------------------------------------
+
+export type BulkImportOutcome = "succeeded" | "failed";
+
+/** Injectable recorder for unit-testing pilot metric calls without OTel. */
+export interface PilotMetricsRecorder {
+  recordCooperativeTradeEvent(cooperative: string, region: string, event: TradeFunnelEvent): void;
+  recordCooperativeGmv(cooperative: string, region: string, amountUsdc: string): void;
+  recordBulkImport(outcome: BulkImportOutcome, count: number): void;
+}
+
+let customPilotRecorder: PilotMetricsRecorder | null = null;
+
+export function __setPilotRecorderForTests(recorder: PilotMetricsRecorder | null): void {
+  customPilotRecorder = recorder;
+}
+
+export function __resetPilotMetricsForTests(): void {
+  customPilotRecorder = null;
+  cooperativeTradesCounter = undefined;
+  cooperativeGmvHistogram = undefined;
+  bulkImportCounter = undefined;
+}
+
+let cooperativeTradesCounter: Counter | undefined;
+
+function getCooperativeTradesCounter(): Counter {
+  if (!cooperativeTradesCounter) {
+    cooperativeTradesCounter = getMeter().createCounter("amana_cooperative_trades_total", {
+      description:
+        "Pilot trade lifecycle transitions labelled by cooperative, region and event.",
+    });
+  }
+  return cooperativeTradesCounter;
+}
+
+/** Increment the per-cooperative funnel counter for one lifecycle event. */
+export function recordCooperativeTradeEvent(
+  cooperative: string,
+  region: string,
+  event: TradeFunnelEvent,
+): void {
+  if (customPilotRecorder) {
+    customPilotRecorder.recordCooperativeTradeEvent(cooperative, region, event);
+    return;
+  }
+  getCooperativeTradesCounter().add(1, { cooperative, region, event });
+}
+
+let cooperativeGmvHistogram: Histogram | undefined;
+
+function getCooperativeGmvHistogram(): Histogram {
+  if (!cooperativeGmvHistogram) {
+    cooperativeGmvHistogram = getMeter().createHistogram("amana_cooperative_gmv_usdc_cents", {
+      description:
+        "Pilot gross merchandise value per trade in USDC cents, labelled by cooperative and region.",
+      unit: "1",
+    });
+  }
+  return cooperativeGmvHistogram;
+}
+
+/** Record the value of one pilot trade for per-region GMV panels. */
+export function recordCooperativeGmv(
+  cooperative: string,
+  region: string,
+  amountUsdc: string,
+): void {
+  if (customPilotRecorder) {
+    customPilotRecorder.recordCooperativeGmv(cooperative, region, amountUsdc);
+    return;
+  }
+  const cents = Math.round(parseFloat(amountUsdc) * 100);
+  if (Number.isFinite(cents) && cents > 0) {
+    getCooperativeGmvHistogram().record(cents, { cooperative, region });
+  }
+}
+
+let bulkImportCounter: Counter | undefined;
+
+function getBulkImportCounter(): Counter {
+  if (!bulkImportCounter) {
+    bulkImportCounter = getMeter().createCounter("amana_bulk_import_total", {
+      description: "Bulk-import row outcomes for cooperative onboarding batches.",
+    });
+  }
+  return bulkImportCounter;
+}
+
+/** Record how many bulk-import rows succeeded or failed validation. */
+export function recordBulkImport(outcome: BulkImportOutcome, count: number): void {
+  if (count <= 0) return;
+  if (customPilotRecorder) {
+    customPilotRecorder.recordBulkImport(outcome, count);
+    return;
+  }
+  getBulkImportCounter().add(count, { outcome });
+}

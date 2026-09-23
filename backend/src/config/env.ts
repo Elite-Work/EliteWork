@@ -83,6 +83,11 @@ export const envSchema = z.object({
   // Access control
   ADMIN_STELLAR_PUBKEYS: z.string().default(''),
 
+  // Cooperative pilot (issues #43/#44): "coop-id:wallet,coop-id:wallet" pairs.
+  // Used until the ADR-006 Cooperative/CooperativeMember tables are migrated.
+  COOPERATIVE_ADMINS: z.string().default(''),
+  COOPERATIVE_MEMBERS: z.string().default(''),
+
   // Pinata / IPFS
   PINATA_API_KEY: z.string().optional(),
   PINATA_SECRET: z.string().optional(),

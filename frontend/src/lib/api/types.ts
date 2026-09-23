@@ -75,6 +75,12 @@ export interface CreateTradeResponse {
   unsignedXdr: string;
 }
 
+/** Per-row bulk-import result (issue #45): rows are independent. */
+export interface BulkCreateResponse {
+  created: Array<{ index: number; tradeId: string; unsignedXdr: string }>;
+  failed: Array<{ index: number; error: string }>;
+}
+
 export interface DepositResponse {
   unsignedXdr: string;
 }

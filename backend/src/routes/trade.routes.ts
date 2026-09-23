@@ -11,6 +11,7 @@ import { validateRequest } from "../middleware/validateRequest";
 import { idempotencyMiddleware } from "../middleware/idempotency";
 import { 
   createTradeSchema, 
+  bulkTradeBodySchema,
   tradeIdParamSchema, 
   listTradesQuerySchema, 
   initiateDisputeSchema 
@@ -39,6 +40,14 @@ export function createTradeRouter(prisma: PrismaClient = defaultPrisma) {
     idempotencyMiddleware,
     validateRequest({ body: createTradeSchema }),
     tradeController.createTrade
+  );
+
+  router.post(
+    "/bulk",
+    authMiddleware,
+    idempotencyMiddleware,
+    validateRequest({ body: bulkTradeBodySchema }),
+    tradeController.createBulkTrades
   );
 
   router.post(

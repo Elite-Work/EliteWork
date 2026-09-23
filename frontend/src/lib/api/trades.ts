@@ -1,5 +1,6 @@
 import { createQueryString, request, withIdempotency } from "./client";
 import type {
+  BulkCreateResponse,
   CreateTradeRequest,
   CreateTradeResponse,
   DepositResponse,
@@ -77,5 +78,22 @@ export const tradesApi = {
       token,
       headers: withIdempotency(undefined, opts),
       body: JSON.stringify({ reason, category }),
+    }),
+
+  /**
+   * Bulk creation for cooperative onboarding (issue #45). Same auth as the
+   * single-trade endpoint; the backend reports per-row results so the UI can
+   * retry just the failed rows.
+   */
+  bulkCreate: (
+    token: string,
+    data: { trades: CreateTradeRequest[] },
+    opts?: { idempotencyKey?: string; correlationId?: string },
+  ) =>
+    request<BulkCreateResponse>("/trades/bulk", {
+      method: "POST",
+      token,
+      headers: withIdempotency(undefined, opts),
+      body: JSON.stringify(data),
     }),
 };

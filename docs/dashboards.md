@@ -10,6 +10,14 @@ backend/infra signals instead.
 
 - [`infra/grafana/dashboards/golden-signals.json`](../infra/grafana/dashboards/golden-signals.json)
   — the dashboard definition itself.
+- [`infra/grafana/dashboards/pilot-cohort.json`](../infra/grafana/dashboards/pilot-cohort.json)
+  — pilot-cohort metrics for the cooperative program (issue #46): trades per
+  cooperative, GMV per region, dispute rate per cooperative, and bulk-import
+  row outcomes. Same provisioning as below — any JSON in the dashboards
+  directory is picked up automatically. Attribution flows from the
+  bulk-import path when the caller belongs to the labelled cooperative
+  (see [ADR-009](./adr/ADR-009-pilot-cohort-metrics.md)); panels read empty
+  until the first attributed batch lands.
 - [`infra/grafana/provisioning/dashboards/dashboards.yaml`](../infra/grafana/provisioning/dashboards/dashboards.yaml)
   and [`infra/grafana/provisioning/datasources/datasources.yaml`](../infra/grafana/provisioning/datasources/datasources.yaml)
   — Grafana's file-provisioning config, so the dashboard and its Prometheus

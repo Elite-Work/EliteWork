@@ -2,6 +2,7 @@ import { Router } from "express";
 import { authRoutes } from "./auth.routes";
 import { walletRoutes } from "./wallet.routes";
 import { createTradeRouter } from "./trade.routes";
+import { createCooperativeRouter } from "./cooperative.routes";
 import { createTradeTemplateRouter } from "./trade.template.routes";
 import { createTradeWatchlistRouter } from "./trade.watchlist.routes";
 import { createTradeEvidenceRouter } from "./trade.evidence.routes";
@@ -63,6 +64,9 @@ export function createPublicApiRouter(): Router {
   router.use("/users", reputationRoutes);
   router.use(createNotificationPreferencesRouter());
   router.use(createNotificationsRouter());
+
+  // Cooperatives (pilot): GET /cooperatives/:id/trades (read-only member view)
+  router.use("/cooperatives", createCooperativeRouter());
 
   // Trade lifecycle — literal sub-routes must precede the generic /:id router.
   router.use("/trades", createTradeExportRouter());

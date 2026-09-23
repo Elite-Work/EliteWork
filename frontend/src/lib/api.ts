@@ -18,6 +18,7 @@ export type {
   StreamClawbackPreviewResponse,
   StreamStatus,
   VestingState,
+  BulkCreateResponse,
   ChallengeResponse,
   CreateTradeRequest,
   CreateTradeResponse,

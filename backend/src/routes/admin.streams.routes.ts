@@ -34,6 +34,7 @@ import {
   streamValidationService,
 } from "../services/streamValidation.service";
 import {
+  StreamReconciliationService,
   streamReconciliationService,
 } from "../services/streamReconciliation.service";
 
@@ -95,6 +96,7 @@ export function createAdminStreamsRouter(
   lockService: StreamLockService = streamLockService,
   streamsService: AdminStreamsService = adminStreamsService,
   validationService: StreamValidationService = streamValidationService,
+  reconciliationService: StreamReconciliationService = streamReconciliationService,
 ) {
   const router = Router();
 
@@ -462,7 +464,7 @@ export function createAdminStreamsRouter(
       try {
         const { id: streamId } = req.params as { id: string };
 
-        const result = await streamReconciliationService.reconcile(streamId);
+        const result = await reconciliationService.reconcile(streamId);
 
         res.status(200).json(result);
       } catch (error) {

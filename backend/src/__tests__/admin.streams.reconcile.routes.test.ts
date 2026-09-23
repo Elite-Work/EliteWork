@@ -6,9 +6,15 @@
  * as a fake, so nothing here needs a database, an admin keypair or Redis.
  */
 
-jest.mock("../config/env", () => ({
-  env: { NODE_ENV: "test", JWT_SECRET: "test-jwt-secret-value-with-minimum-length-32" },
-}));
+jest.mock("../config/env", () => {
+  const actual = jest.requireActual("../config/env");
+  return {
+    ...actual,
+    env: { ...actual.env, NODE_ENV: "test", JWT_SECRET: "test-jwt-secret-value-with-minimum-length-32" },
+    runtimeEnvValue: (key: string) =>
+      key === "JWT_SECRET" ? "test-jwt-secret-value-with-minimum-length-32" : actual.runtimeEnvValue(key),
+  };
+});
 
 jest.mock("../config/rateLimit", () => ({
   RATE_LIMIT_CONFIG: {
@@ -42,6 +48,7 @@ import {
 } from "../services/streamTermination.service";
 import {
   StreamReconciliationService,
+  ReconciliationMismatch,
 } from "../services/streamReconciliation.service";
 import { errorHandler } from "../middleware/errorHandler";
 
@@ -135,7 +142,13 @@ function buildApp(
   app.use(express.json());
   app.use(
     "/api",
-    createAdminStreamsRouter(terminationService, reconciliationService),
+    createAdminStreamsRouter(
+      terminationService,
+      undefined,
+      undefined,
+      undefined,
+      reconciliationService,
+    ),
   );
   app.use(errorHandler);
   return app;
@@ -374,7 +387,7 @@ describe("POST /api/admin/streams/:id/reconcile", () => {
       expect(res.body.mismatches.length).toBeGreaterThanOrEqual(1);
 
       const pendingMismatch = res.body.mismatches.find(
-        (m: any) => m.field === "pendingClawback",
+        (m: ReconciliationMismatch) => m.field === "pendingClawback",
       );
       expect(pendingMismatch).toBeDefined();
       expect(pendingMismatch.expected).toBe("5000");
@@ -419,7 +432,7 @@ describe("POST /api/admin/streams/:id/reconcile", () => {
       expect(res.body.consistent).toBe(false);
 
       const unclaimedMismatch = res.body.mismatches.find(
-        (m: any) => m.field === "unclaimed",
+        (m: ReconciliationMismatch) => m.field === "unclaimed",
       );
       expect(unclaimedMismatch).toBeDefined();
       expect(unclaimedMismatch.expected).toBe("4000");
@@ -460,7 +473,7 @@ describe("POST /api/admin/streams/:id/reconcile", () => {
       expect(res.body.consistent).toBe(false);
 
       const statusMismatch = res.body.mismatches.find(
-        (m: any) => m.field === "status",
+        (m: ReconciliationMismatch) => m.field === "status",
       );
       expect(statusMismatch).toBeDefined();
       expect(statusMismatch.expected).toBe("TERMINATED");
@@ -496,7 +509,7 @@ describe("POST /api/admin/streams/:id/reconcile", () => {
       expect(res.body.consistent).toBe(false);
 
       const statusMismatch = res.body.mismatches.find(
-        (m: any) => m.field === "status",
+        (m: ReconciliationMismatch) => m.field === "status",
       );
       expect(statusMismatch).toBeDefined();
       expect(statusMismatch.expected).toContain("no terminate audit record");

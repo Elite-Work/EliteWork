@@ -1,3 +1,4 @@
+import { PrismaClient } from "@prisma/client";
 import { AdminAuditService } from "../services/adminAudit.service";
 import { encodeCursor } from "../lib/cursorPagination";
 
@@ -14,7 +15,7 @@ describe("AdminAuditService.list", () => {
         count: jest.fn().mockResolvedValue(0),
       },
     };
-    adminAuditService = new AdminAuditService(mockPrisma as any);
+    adminAuditService = new AdminAuditService(mockPrisma as unknown as Pick<PrismaClient, "adminActionAudit">);
   });
 
   it("defaults to cursor pagination ordered newest-first", async () => {

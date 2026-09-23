@@ -8,6 +8,7 @@
  * Issue #50
  */
 
+import { Response } from "express";
 import { adminMiddleware } from "../middleware/admin.middleware";
 import { AuthRequest } from "../services/auth.service";
 
@@ -43,11 +44,17 @@ jest.mock("@opentelemetry/api", () => ({
 
 const ADMIN_ADDRESS = "GADMINVALIDTESTACCOUNT000000000000000000000000000000";
 
+type MockResponse = {
+  status: jest.Mock;
+  json: jest.Mock;
+};
+
 function mockRes() {
-  return {
+  const res = {
     status: jest.fn().mockReturnThis(),
     json: jest.fn().mockReturnThis(),
   };
+  return res as unknown as Response & MockResponse;
 }
 
 function mockReq(overrides: Partial<AuthRequest["user"]> = {}, userUndefined = false): Partial<AuthRequest> {
@@ -57,6 +64,7 @@ function mockReq(overrides: Partial<AuthRequest["user"]> = {}, userUndefined = f
       walletAddress: ADMIN_ADDRESS,
       sub: "admin-sub",
       jti: "jti-123",
+      tv: 1,
       ...overrides,
     },
   };
@@ -81,7 +89,7 @@ describe("adminMiddleware — service-oriented unit tests", () => {
       (isMediatorAddress as jest.Mock).mockReturnValue(true);
       const req = mockReq();
 
-      await adminMiddleware(req as AuthRequest, res as any, next);
+      await adminMiddleware(req as AuthRequest, res, next);
 
       expect(next).toHaveBeenCalledTimes(1);
       expect(res.status).not.toHaveBeenCalled();
@@ -91,7 +99,7 @@ describe("adminMiddleware — service-oriented unit tests", () => {
       (isMediatorAddress as jest.Mock).mockReturnValue(true);
       const req = mockReq();
 
-      await adminMiddleware(req as AuthRequest, res as any, next);
+      await adminMiddleware(req as AuthRequest, res, next);
 
       expect(req.user?.isAdmin).toBe(true);
       expect(next).toHaveBeenCalled();
@@ -101,7 +109,7 @@ describe("adminMiddleware — service-oriented unit tests", () => {
       (isMediatorAddress as jest.Mock).mockReturnValue(true);
       const req = mockReq({ walletAddress: ADMIN_ADDRESS.toLowerCase(), sub: "test-sub", jti: "test-jti" });
 
-      await adminMiddleware(req as AuthRequest, res as any, next);
+      await adminMiddleware(req as AuthRequest, res, next);
 
       expect(req.user?.isAdmin).toBe(true);
       expect(req.user?.walletAddress).toBe(ADMIN_ADDRESS.toLowerCase());
@@ -113,7 +121,7 @@ describe("adminMiddleware — service-oriented unit tests", () => {
       (isMediatorAddress as jest.Mock).mockReturnValue(true);
       const req = mockReq({ walletAddress: `  ${ADMIN_ADDRESS}  ` });
 
-      await adminMiddleware(req as AuthRequest, res as any, next);
+      await adminMiddleware(req as AuthRequest, res, next);
 
       // isMediatorAddress should be called with the trimmed address
       expect(isMediatorAddress).toHaveBeenCalledWith(ADMIN_ADDRESS);
@@ -128,7 +136,7 @@ describe("adminMiddleware — service-oriented unit tests", () => {
       (isMediatorAddress as jest.Mock).mockReturnValue(false);
       const req = mockReq({}, true); // no user
 
-      await adminMiddleware(req as AuthRequest, res as any, next);
+      await adminMiddleware(req as AuthRequest, res, next);
 
       expect(res.status).toHaveBeenCalledWith(403);
       expect(res.json).toHaveBeenCalledWith({
@@ -139,9 +147,9 @@ describe("adminMiddleware — service-oriented unit tests", () => {
 
     it("returns 403 when req.user exists but walletAddress is undefined", async () => {
       (isMediatorAddress as jest.Mock).mockReturnValue(false);
-      const req = mockReq({ walletAddress: undefined as any });
+      const req = mockReq({ walletAddress: undefined as unknown as string });
 
-      await adminMiddleware(req as AuthRequest, res as any, next);
+      await adminMiddleware(req as AuthRequest, res, next);
 
       expect(res.status).toHaveBeenCalledWith(403);
       expect(next).not.toHaveBeenCalled();
@@ -151,7 +159,7 @@ describe("adminMiddleware — service-oriented unit tests", () => {
       (isMediatorAddress as jest.Mock).mockReturnValue(false);
       const req = mockReq({ walletAddress: "" });
 
-      await adminMiddleware(req as AuthRequest, res as any, next);
+      await adminMiddleware(req as AuthRequest, res, next);
 
       expect(res.status).toHaveBeenCalledWith(403);
       expect(next).not.toHaveBeenCalled();
@@ -161,7 +169,7 @@ describe("adminMiddleware — service-oriented unit tests", () => {
       (isMediatorAddress as jest.Mock).mockReturnValue(false);
       const req = mockReq({ walletAddress: "   " });
 
-      await adminMiddleware(req as AuthRequest, res as any, next);
+      await adminMiddleware(req as AuthRequest, res, next);
 
       expect(res.status).toHaveBeenCalledWith(403);
       expect(next).not.toHaveBeenCalled();
@@ -175,7 +183,7 @@ describe("adminMiddleware — service-oriented unit tests", () => {
       (isMediatorAddress as jest.Mock).mockReturnValue(false);
       const req = mockReq();
 
-      await adminMiddleware(req as AuthRequest, res as any, next);
+      await adminMiddleware(req as AuthRequest, res, next);
 
       expect(res.status).toHaveBeenCalledWith(403);
       expect(res.json).toHaveBeenCalledWith({
@@ -188,7 +196,7 @@ describe("adminMiddleware — service-oriented unit tests", () => {
       (isMediatorAddress as jest.Mock).mockReturnValue(false);
       const req = mockReq();
 
-      await adminMiddleware(req as AuthRequest, res as any, next);
+      await adminMiddleware(req as AuthRequest, res, next);
 
       expect(req.user?.isAdmin).toBeUndefined();
     });
@@ -197,7 +205,7 @@ describe("adminMiddleware — service-oriented unit tests", () => {
       (isMediatorAddress as jest.Mock).mockReturnValue(false);
       const req = mockReq({ walletAddress: "GNONADMINKEY12345678901234567890123456789012345678901234" });
 
-      await adminMiddleware(req as AuthRequest, res as any, next);
+      await adminMiddleware(req as AuthRequest, res, next);
 
       expect(isMediatorAddress).toHaveBeenCalledWith("GNONADMINKEY12345678901234567890123456789012345678901234");
       expect(res.status).toHaveBeenCalledWith(403);
@@ -211,9 +219,9 @@ describe("adminMiddleware — service-oriented unit tests", () => {
       (isMediatorAddress as jest.Mock).mockReturnValue(false);
       const req = mockReq();
 
-      await adminMiddleware(req as AuthRequest, res as any, next);
+      await adminMiddleware(req as AuthRequest, res, next);
 
-      const jsonArg = (res.json as jest.Mock).mock.calls[0][0];
+      const jsonArg = res.json.mock.calls[0][0];
       expect(jsonArg).toEqual({ error: "Forbidden: admin access required" });
       expect(jsonArg).toHaveProperty("error");
       expect(typeof jsonArg.error).toBe("string");
@@ -223,7 +231,7 @@ describe("adminMiddleware — service-oriented unit tests", () => {
       (isMediatorAddress as jest.Mock).mockReturnValue(false);
       const req = mockReq();
 
-      await adminMiddleware(req as AuthRequest, res as any, next);
+      await adminMiddleware(req as AuthRequest, res, next);
 
       expect(res.status).toHaveBeenCalledWith(403);
       expect(res.json).toHaveBeenCalledWith(
@@ -235,9 +243,9 @@ describe("adminMiddleware — service-oriented unit tests", () => {
       (isMediatorAddress as jest.Mock).mockReturnValue(false);
       const req = mockReq({ walletAddress: "ATTACKERKEY000000000000000000000000000000000000000000000000" });
 
-      await adminMiddleware(req as AuthRequest, res as any, next);
+      await adminMiddleware(req as AuthRequest, res, next);
 
-      const jsonArg = (res.json as jest.Mock).mock.calls[0][0];
+      const jsonArg = res.json.mock.calls[0][0];
       // The response should not expose the address or any allowlist details
       expect(JSON.stringify(jsonArg)).not.toContain("ATTACKERKEY");
       expect(JSON.stringify(jsonArg)).not.toContain("allowlist");
@@ -252,7 +260,7 @@ describe("adminMiddleware — service-oriented unit tests", () => {
       (isMediatorAddress as jest.Mock).mockReturnValue(false);
       const req = mockReq();
 
-      await adminMiddleware(req as AuthRequest, res as any, next);
+      await adminMiddleware(req as AuthRequest, res, next);
 
       expect(next).not.toHaveBeenCalled();
       expect(res.status).toHaveBeenCalledWith(403);
@@ -262,7 +270,7 @@ describe("adminMiddleware — service-oriented unit tests", () => {
       (isMediatorAddress as jest.Mock).mockReturnValue(true);
       const req = mockReq();
 
-      await adminMiddleware(req as AuthRequest, res as any, next);
+      await adminMiddleware(req as AuthRequest, res, next);
 
       expect(res.status).not.toHaveBeenCalled();
       expect(res.json).not.toHaveBeenCalled();

@@ -1,0 +1,92 @@
+{
+  "title": "Amana — Pilot Cohort",
+  "uid": "amana-pilot-cohort",
+  "tags": ["amana", "pilot", "stored-as-code"],
+  "timezone": "utc",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": true,
+  "refresh": "30s",
+  "time": { "from": "now-7d", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "datasource",
+        "type": "datasource",
+        "query": "prometheus",
+        "current": { "text": "Prometheus", "value": "Prometheus" }
+      }
+    ]
+  },
+  "annotations": {
+    "list": [
+      {
+        "name": "Deploys",
+        "datasource": "-- Grafana --",
+        "enable": true,
+        "iconColor": "rgba(255, 96, 96, 1)",
+        "tags": ["deploy"],
+        "type": "tags"
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Trades per cooperative",
+      "description": "Created-trade rate by cooperative (backend/src/lib/metrics.ts: amana_cooperative_trades_total{event=\"created\"}). Attributed on the bulk-import path when the caller belongs to the labelled cooperative — see ADR-009.",
+      "type": "timeseries",
+      "datasource": "${datasource}",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "expr": "sum by (cooperative) (rate(amana_cooperative_trades_total{event=\"created\"}[5m]))",
+          "legendFormat": "{{cooperative}}"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "GMV per region (USDC/hour)",
+      "description": "Gross merchandise value per region, derived from the amana_cooperative_gmv_usdc_cents histogram sum (backend/src/lib/metrics.ts), converted from USDC cents to USDC.",
+      "type": "timeseries",
+      "datasource": "${datasource}",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "targets": [
+        {
+          "expr": "sum by (region) (increase(amana_cooperative_gmv_usdc_cents_sum[1h])) / 100",
+          "legendFormat": "{{region}}"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Dispute rate per cooperative",
+      "description": "Share of created pilot trades that became disputed, by cooperative. Uses the same per-cooperative funnel counter as panel 1; compare against the global dispute-rate alert (amana_dispute_rate_anomalies_total).",
+      "type": "timeseries",
+      "datasource": "${datasource}",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "fieldConfig": { "defaults": { "unit": "percentunit", "min": 0, "max": 1 }, "overrides": [] },
+      "targets": [
+        {
+          "expr": "sum by (cooperative) (rate(amana_cooperative_trades_total{event=\"disputed\"}[5m])) / sum by (cooperative) (rate(amana_cooperative_trades_total{event=\"created\"}[5m]))",
+          "legendFormat": "{{cooperative}}"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Bulk import rows by outcome",
+      "description": "Row-level outcomes of POST /trades/bulk batches (backend/src/lib/metrics.ts: amana_bulk_import_total). A rising failed share means the import CSV (or the importer's wallet funding) needs attention, not the trade pipeline.",
+      "type": "timeseries",
+      "datasource": "${datasource}",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "targets": [
+        {
+          "expr": "sum by (outcome) (rate(amana_bulk_import_total[5m]))",
+          "legendFormat": "{{outcome}}"
+        }
+      ]
+    }
+  ]
+}

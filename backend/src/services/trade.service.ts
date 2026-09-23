@@ -366,4 +366,39 @@ export class TradeService {
 
   /** Alias for listUserTrades — used by trade.controller.test.ts */
   listTrades = this.listUserTrades.bind(this);
+
+  /**
+   * Read-only listing of every trade touching a cooperative's member wallets
+   * (issue #44). The caller is authorized by the route layer
+   * (`canViewCooperativeTrades`); this method only scopes the query.
+   */
+  async listCooperativeTrades(memberAddresses: string[], filters: TradeListFilters) {
+    const page = Math.max(1, filters.page ?? 1);
+    const limit = Math.min(100, Math.max(1, filters.limit ?? 20));
+    const skip = (page - 1) * limit;
+    const orderBy = this.parseSort(filters.sort);
+
+    const where: Prisma.TradeWhereInput = {
+      OR: [
+        { buyerAddress: { in: memberAddresses } },
+        { sellerAddress: { in: memberAddresses } },
+      ],
+      ...(filters.status ? { status: filters.status } : {}),
+    };
+
+    const [items, total] = await Promise.all([
+      this.prisma.trade.findMany({ where, orderBy, skip, take: limit }),
+      this.prisma.trade.count({ where }),
+    ]);
+
+    return {
+      items,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.max(1, Math.ceil(total / limit)),
+      },
+    };
+  }
 }

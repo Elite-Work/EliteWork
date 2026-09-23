@@ -55,6 +55,22 @@ export const tradeIdParamSchema = z.object({
   id: z.string().min(1, "Trade ID is required"),
 });
 
+/**
+ * Bulk-import envelope (issue #45). Each row reuses the single-trade schema
+ * so validation stays identical between the UI form and the CSV importer;
+ * the 50-row cap keeps one request from monopolizing contract-build RPCs.
+ * `cooperativeId`/`region` are optional pilot labels for metrics only — they
+ * are recorded when the caller belongs to that cooperative (see ADR-009).
+ */
+export const bulkTradeBodySchema = z.object({
+  trades: z
+    .array(createTradeSchema)
+    .min(1, "At least one trade is required")
+    .max(50, "Maximum 50 trades per request"),
+  cooperativeId: z.string().trim().toLowerCase().min(1).max(100).optional(),
+  region: z.string().trim().toLowerCase().min(1).max(100).optional(),
+});
+
 export const listTradesQuerySchema = z.object({
   status: z.nativeEnum(TradeStatus).optional(),
   page: z.preprocess((val: unknown) => val === undefined ? undefined : Number(val), z.number().int().min(1).default(1)),

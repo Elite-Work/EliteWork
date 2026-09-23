@@ -1,7 +1,16 @@
-import { trace } from "@opentelemetry/api";
+import { trace, Span } from "@opentelemetry/api";
+import { Response } from "express";
 import { adminMiddleware } from "../middleware/admin.middleware";
 import { getTraceContext } from "../middleware/tracing.middleware";
 import { AuthRequest } from "../services/auth.service";
+
+// Mock redis so tests never attempt network connections
+jest.mock("../lib/redis", () => ({
+  redis: {
+    exists: jest.fn().mockResolvedValue(0),
+    set: jest.fn().mockResolvedValue("OK"),
+  },
+}));
 
 // Mock accessControl to control admin allowlist
 jest.mock("../lib/accessControl", () => ({
@@ -31,11 +40,11 @@ const mockSpan = {
   isRecording: jest.fn().mockReturnValue(true),
 };
 
-jest.spyOn(trace, "getActiveSpan").mockReturnValue(mockSpan as any);
+jest.spyOn(trace, "getActiveSpan").mockReturnValue(mockSpan as unknown as Span);
 
 describe("adminMiddleware — tracing integration", () => {
   let mockReq: Partial<AuthRequest>;
-  let mockRes: any;
+  let mockRes: Partial<Response>;
   let mockNext: jest.Mock;
 
   beforeEach(() => {
@@ -44,6 +53,7 @@ describe("adminMiddleware — tracing integration", () => {
         walletAddress: "GADMINVALIDTESTACCOUNT000000000000000000000000000000",
         sub: "admin-test",
         jti: "admin-jti-123",
+        tv: 1,
       },
     };
     mockRes = {
@@ -61,7 +71,7 @@ describe("adminMiddleware — tracing integration", () => {
   it("calls next() when admin access is granted", async () => {
     (isMediatorAddress as jest.Mock).mockReturnValue(true);
 
-    await adminMiddleware(mockReq as AuthRequest, mockRes, mockNext);
+    await adminMiddleware(mockReq as AuthRequest, mockRes as Response, mockNext);
 
     expect(mockNext).toHaveBeenCalled();
     expect(mockRes.status).not.toHaveBeenCalled();
@@ -70,7 +80,7 @@ describe("adminMiddleware — tracing integration", () => {
   it("returns 403 when access is denied", async () => {
     (isMediatorAddress as jest.Mock).mockReturnValue(false);
 
-    await adminMiddleware(mockReq as AuthRequest, mockRes, mockNext);
+    await adminMiddleware(mockReq as AuthRequest, mockRes as Response, mockNext);
 
     expect(mockRes.status).toHaveBeenCalledWith(403);
     expect(mockRes.json).toHaveBeenCalledWith({ error: "Forbidden: admin access required" });
@@ -81,7 +91,7 @@ describe("adminMiddleware — tracing integration", () => {
     (isMediatorAddress as jest.Mock).mockReturnValue(true);
     mockReq.user = undefined;
 
-    await adminMiddleware(mockReq as AuthRequest, mockRes, mockNext);
+    await adminMiddleware(mockReq as AuthRequest, mockRes as Response, mockNext);
 
     expect(mockRes.status).toHaveBeenCalledWith(403);
     expect(mockNext).not.toHaveBeenCalled();
@@ -90,7 +100,7 @@ describe("adminMiddleware — tracing integration", () => {
   it("propagates isAdmin flag on user context when access is granted", async () => {
     (isMediatorAddress as jest.Mock).mockReturnValue(true);
 
-    await adminMiddleware(mockReq as AuthRequest, mockRes, mockNext);
+    await adminMiddleware(mockReq as AuthRequest, mockRes as Response, mockNext);
 
     expect(mockReq.user?.isAdmin).toBe(true);
     expect(mockNext).toHaveBeenCalled();
@@ -99,11 +109,11 @@ describe("adminMiddleware — tracing integration", () => {
   it("annotates the active span with admin identity when access is granted", async () => {
     (isMediatorAddress as jest.Mock).mockReturnValue(true);
 
-    await adminMiddleware(mockReq as AuthRequest, mockRes, mockNext);
+    await adminMiddleware(mockReq as AuthRequest, mockRes as Response, mockNext);
 
     expect(mockNext).toHaveBeenCalled();
     // Verify the span received admin attributes
-    const calls = mockSetAttributes.mock.calls.map((c: any) => JSON.stringify(c[0]));
+    const calls = mockSetAttributes.mock.calls.map((c: unknown[]) => JSON.stringify(c[0]));
     const hasAdminAttrs = calls.some((call: string) =>
       call.includes('"is_admin"') && call.includes('"admin.address"')
     );
@@ -113,10 +123,10 @@ describe("adminMiddleware — tracing integration", () => {
   it("annotates the active span with denial verdict when access is denied", async () => {
     (isMediatorAddress as jest.Mock).mockReturnValue(false);
 
-    await adminMiddleware(mockReq as AuthRequest, mockRes, mockNext);
+    await adminMiddleware(mockReq as AuthRequest, mockRes as Response, mockNext);
 
     expect(mockRes.status).toHaveBeenCalledWith(403);
-    const calls = mockSetAttributes.mock.calls.map((c: any) => JSON.stringify(c[0]));
+    const calls = mockSetAttributes.mock.calls.map((c: unknown[]) => JSON.stringify(c[0]));
     const hasDeniedAttrs = calls.some((call: string) =>
       call.includes('"admin.verdict"') && call.includes('"denied"')
     );

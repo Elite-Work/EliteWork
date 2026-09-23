@@ -16,7 +16,7 @@
  *  - Rate limiting         → 11th request in window rejected 429
  */
 
-import express, { Response } from "express";
+import express, { Request, Response, NextFunction } from "express";
 import request from "supertest";
 import jwt from "jsonwebtoken";
 import { Keypair } from "@stellar/stellar-sdk";
@@ -24,7 +24,7 @@ import { authMiddleware, AuthRequest } from "../middleware/auth.middleware";
 
 // ── Disable rate limiting for all tests (tested separately below) ─────────────
 jest.mock("express-rate-limit", () =>
-  jest.fn(() => (_req: any, _res: any, next: any) => next())
+  jest.fn(() => (_req: Request, _res: Response, next: NextFunction) => next())
 );
 
 // ── Redis mock (in-memory store, no real Redis needed) ────────────────────────
@@ -439,8 +439,8 @@ describe("POST /auth/logout", () => {
 
 describe("Rate limiting", () => {
   it("allows 10 requests and rejects the 11th with 429", async () => {
-    const { default: actualRateLimit } = jest.requireActual<any>("express-rate-limit");
-    const { RATE_LIMIT_CONFIG } = jest.requireActual<any>("../config/rateLimit");
+    const { default: actualRateLimit } = jest.requireActual<{ default: typeof import("express-rate-limit").default }>("express-rate-limit");
+    const { RATE_LIMIT_CONFIG } = jest.requireActual<typeof import("../config/rateLimit")>("../config/rateLimit");
 
     const limiter = actualRateLimit({
       windowMs: RATE_LIMIT_CONFIG.auth.windowMs,

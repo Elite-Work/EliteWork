@@ -4,7 +4,7 @@ import request from "supertest";
 import * as StellarSdk from "@stellar/stellar-sdk";
 
 import { adminMiddleware } from "../middleware/admin.middleware";
-import { authMiddleware } from "../middleware/auth.middleware";
+import { authMiddleware, AuthRequest } from "../middleware/auth.middleware";
 import { errorHandler } from "../middleware/errorHandler";
 
 jest.mock("../services/auth.service", () => {
@@ -104,9 +104,9 @@ describe("Admin route auth CI regression (#115)", () => {
     });
 
     it("returns 200 when wallet is in ADMIN_STELLAR_PUBKEYS", async () => {
-      let capturedReqUser: unknown = null;
+      let capturedReqUser: AuthRequest["user"];
       const app = buildAdminApp((req: Request, res: Response) => {
-        capturedReqUser = (req as any).user;
+        capturedReqUser = (req as AuthRequest).user;
         res.json({ ok: true });
       });
       const token = signToken(adminAddress);
@@ -115,7 +115,7 @@ describe("Admin route auth CI regression (#115)", () => {
         .set("Authorization", `Bearer ${token}`);
       expect(res.status).toBe(200);
       expect(capturedReqUser).toBeDefined();
-      expect((capturedReqUser as any).isAdmin).toBe(true);
+      expect(capturedReqUser?.isAdmin).toBe(true);
     });
 
     it("returns 403 when multiple admin pubkeys are set but caller is not among them", async () => {
@@ -132,9 +132,9 @@ describe("Admin route auth CI regression (#115)", () => {
     it("allows access when wallet is among multiple configured admin pubkeys", async () => {
       const secondAdmin = StellarSdk.Keypair.random().publicKey();
       process.env.ADMIN_STELLAR_PUBKEYS = `${adminAddress},${secondAdmin}`;
-      let capturedUser: unknown = null;
+      let capturedUser: AuthRequest["user"];
       const app = buildAdminApp((req: Request, res: Response) => {
-        capturedUser = (req as any).user;
+        capturedUser = (req as AuthRequest).user;
         res.json({ ok: true });
       });
       const token = signToken(secondAdmin);
@@ -142,13 +142,13 @@ describe("Admin route auth CI regression (#115)", () => {
         .get("/admin-test")
         .set("Authorization", `Bearer ${token}`);
       expect(res.status).toBe(200);
-      expect((capturedUser as any).isAdmin).toBe(true);
+      expect(capturedUser?.isAdmin).toBe(true);
     });
 
     it("propagates walletAddress and isAdmin through the middleware chain", async () => {
-      let capturedUser: unknown = null;
+      let capturedUser: AuthRequest["user"];
       const app = buildAdminApp((req: Request, res: Response) => {
-        capturedUser = (req as any).user;
+        capturedUser = (req as AuthRequest).user;
         res.json({ ok: true });
       });
       const token = signToken(adminAddress);
@@ -156,10 +156,10 @@ describe("Admin route auth CI regression (#115)", () => {
         .get("/admin-test")
         .set("Authorization", `Bearer ${token}`);
       expect(res.status).toBe(200);
-      const user = capturedUser as any;
-      expect(user.isAdmin).toBe(true);
-      expect(typeof user.walletAddress).toBe("string");
-      expect(user.walletAddress.length).toBeGreaterThan(0);
+      const user = capturedUser;
+      expect(user?.isAdmin).toBe(true);
+      expect(typeof user?.walletAddress).toBe("string");
+      expect((user?.walletAddress ?? "").length).toBeGreaterThan(0);
     });
   });
 

@@ -81,8 +81,13 @@ export default function TradeListScreen({ navigation }: Props) {
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await fetchTrades(activeFilter === 'ALL' ? undefined : { status: activeFilter });
-    setRefreshing(false);
+    try {
+      await fetchTrades(activeFilter === 'ALL' ? undefined : { status: activeFilter });
+    } finally {
+      // Guarantee the spinner is dismissed even if the fetch rejects or
+      // the store's error path changes behaviour in the future.
+      setRefreshing(false);
+    }
   }, [activeFilter, fetchTrades]);
 
   const handleFilterChange = (value: TradeStatus | 'ALL') => {

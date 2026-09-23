@@ -12,14 +12,13 @@ const preferencesSchema = z.record(
   z.array(notificationChannelSchema).max(3),
 );
 
-type Preferences = Record<string, Array<"email" | "push" | "in-app">>;
+// Derived from the schema so the event-key/channel shape has a single source
+// of truth and stays in sync with `preferencesSchema` automatically.
+type Preferences = z.infer<typeof preferencesSchema>;
 
-type PreferencePrisma = PrismaClient & {
-  notificationPreference?: {
-    findUnique: (args: any) => Promise<{ preferences: unknown } | null>;
-    upsert: (args: any) => Promise<{ preferences: unknown }>;
-  };
-};
+// Real Prisma delegate, so argument and result shapes are checked by the
+// compiler instead of being erased behind hand-written `any` signatures.
+type PreferencePrisma = Pick<PrismaClient, "notificationPreference">;
 
 function caller(req: AuthRequest, res: Response): string | null {
   const walletAddress = req.user?.walletAddress?.trim();
@@ -36,7 +35,7 @@ function normalizePreferences(value: unknown): Preferences {
 }
 
 export function createNotificationPreferencesRouter(
-  prisma: PreferencePrisma = defaultPrisma as PreferencePrisma,
+  prisma: PreferencePrisma = defaultPrisma,
 ) {
   const router = Router();
 
@@ -45,7 +44,7 @@ export function createNotificationPreferencesRouter(
       const walletAddress = caller(req, res);
       if (!walletAddress) return;
 
-      const record = await prisma.notificationPreference?.findUnique({
+      const record = await prisma.notificationPreference.findUnique({
         where: { userAddress: walletAddress },
       });
 
@@ -65,7 +64,7 @@ export function createNotificationPreferencesRouter(
         if (!walletAddress) return;
 
         const incoming = req.body as Preferences;
-        const existing = await prisma.notificationPreference?.findUnique({
+        const existing = await prisma.notificationPreference.findUnique({
           where: { userAddress: walletAddress },
         });
         const merged = {
@@ -73,13 +72,13 @@ export function createNotificationPreferencesRouter(
           ...incoming,
         };
 
-        const saved = await prisma.notificationPreference?.upsert({
+        const saved = await prisma.notificationPreference.upsert({
           where: { userAddress: walletAddress },
           create: { userAddress: walletAddress, preferences: merged },
           update: { preferences: merged },
         });
 
-        res.status(200).json({ preferences: normalizePreferences(saved?.preferences ?? merged) });
+        res.status(200).json({ preferences: normalizePreferences(saved.preferences ?? merged) });
       } catch (error) {
         next(error);
       }

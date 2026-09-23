@@ -1,3 +1,4 @@
+import { Horizon, NetworkError } from "@stellar/stellar-sdk";
 import { Router, Request, Response } from "express";
 import { horizonServer } from "../config/stellar";
 import { appLogger } from "../middleware/logger";
@@ -10,8 +11,8 @@ interface Balance {
   limit: string | null;
 }
 
-function parseBalances(rawBalances: any[]): Balance[] {
-  return rawBalances.map((b) => {
+function parseBalances(rawBalances: Horizon.HorizonApi.BalanceLine[]): Balance[] {
+  return rawBalances.map((b): Balance => {
     if (b.asset_type === "native") {
       return {
         assetType: "native",
@@ -21,14 +22,46 @@ function parseBalances(rawBalances: any[]): Balance[] {
         limit: null,
       };
     }
+    if (b.asset_type === "liquidity_pool_shares") {
+      // Pools have no asset code or issuing account; expose the pool id in
+      // place of the issuer so the row is still identifiable downstream.
+      return {
+        assetType: b.asset_type,
+        assetCode: "",
+        issuer: b.liquidity_pool_id,
+        balance: b.balance,
+        limit: b.limit,
+      };
+    }
     return {
       assetType: b.asset_type,
-      assetCode: b.asset_code ?? "",
-      issuer: b.asset_issuer ?? null,
+      assetCode: b.asset_code,
+      issuer: b.asset_issuer,
       balance: b.balance,
-      limit: b.limit ?? null,
+      limit: b.limit,
     };
   });
+}
+
+/** Structural shape of the Horizon/axios error carrying an HTTP status. */
+type NetworkErrorLike = { response?: { status?: unknown } };
+
+function isNetworkErrorLike(error: unknown): error is NetworkErrorLike {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "response" in error &&
+    typeof (error as NetworkErrorLike).response === "object"
+  );
+}
+
+function isAccountNotFoundError(error: unknown): boolean {
+  if (error instanceof NetworkError) {
+    return error.response.status === 404;
+  }
+  // Lightweight doubles (and some environments) may throw a bare
+  // { response: { status } } rather than a NetworkError instance.
+  return isNetworkErrorLike(error) && error.response?.status === 404;
 }
 
 export function createStellarAccountBalanceRouter(): Router {
@@ -36,7 +69,10 @@ export function createStellarAccountBalanceRouter(): Router {
 
   // GET /stellar/account/:address/balance
   router.get("/:address/balance", async (req: Request, res: Response) => {
-    const address = req.params.address as string;
+    // Express 5 types params values as `string | string[]` (repeated params);
+    // this route declares a single-value pattern, so take the first occurrence.
+    const raw = req.params.address;
+    const address = Array.isArray(raw) ? raw[0] : raw;
 
     if (!address || address.length !== 56 || !address.startsWith("G")) {
       res.status(400).json({ error: "Invalid Stellar account address" });
@@ -48,9 +84,9 @@ export function createStellarAccountBalanceRouter(): Router {
       const balances = parseBalances(account.balances);
 
       res.json({ address, balances });
-    } catch (error: any) {
-      if (error?.response?.status === 404) {
-        // Account exists on the Stellar network but is not funded
+    } catch (error: unknown) {
+      // Account exists on the Stellar network but is not funded
+      if (isAccountNotFoundError(error)) {
         res.json({ address, balances: [] });
         return;
       }

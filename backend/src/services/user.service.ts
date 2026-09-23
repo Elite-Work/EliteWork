@@ -83,8 +83,8 @@ export async function findOrCreateUser(address: string) {
     }
 
     return data;
-  } catch (error: any) {
-    if (error.name === 'AppError') throw error;
+  } catch (error: unknown) {
+    if (error instanceof AppError) throw error;
     throw new AppError(ErrorCode.INFRA_ERROR, 'User service dependency failure', 503);
   }
 }
@@ -137,8 +137,8 @@ export async function updateUser(address: string, input: UpdateProfileInput) {
     }
 
     return data;
-  } catch (error: any) {
-    if (error.name === 'AppError') throw error;
+  } catch (error: unknown) {
+    if (error instanceof AppError) throw error;
     throw new AppError(ErrorCode.INFRA_ERROR, 'User update failed', 503);
   }
 }
@@ -175,8 +175,8 @@ export async function getPublicProfile(address: string) {
     }
 
     return data;
-  } catch (error: any) {
-    if (error.name === 'AppError') throw error;
+  } catch (error: unknown) {
+    if (error instanceof AppError) throw error;
     throw new AppError(ErrorCode.INFRA_ERROR, 'User service dependency failure', 503);
   }
 }

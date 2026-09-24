@@ -1,4 +1,4 @@
-import { PrismaClient, TradeStatus } from "@prisma/client";
+import { EscrowReleaseMilestone, Prisma, PrismaClient, TradeStatus } from "@prisma/client";
 import { Response, Router } from "express";
 import { z } from "zod";
 import { prisma as defaultPrisma } from "../lib/db";
@@ -21,20 +21,16 @@ const createScheduleBodySchema = z.object({
   milestones: z.array(milestoneSchema).min(1).max(100),
 });
 
+interface EscrowReleaseMilestoneStore {
+  create: (args: Prisma.EscrowReleaseMilestoneCreateArgs) => Promise<EscrowReleaseMilestone>;
+  createMany: (args: Prisma.EscrowReleaseMilestoneCreateManyArgs) => Promise<Prisma.BatchPayload>;
+  findMany: (args?: Prisma.EscrowReleaseMilestoneFindManyArgs) => Promise<EscrowReleaseMilestone[]>;
+  deleteMany: (args?: Prisma.EscrowReleaseMilestoneDeleteManyArgs) => Promise<Prisma.BatchPayload>;
+  count: (args?: Prisma.EscrowReleaseMilestoneCountArgs) => Promise<number>;
+}
+
 type SchedulePrisma = PrismaClient & {
-  escrowReleaseMilestone?: {
-    create: (args: any) => Promise<any>;
-    createMany: (args: any) => Promise<any>;
-    findMany: (args: any) => Promise<Array<{
-      milestoneIndex: number;
-      amountUsdc: string;
-      dueAt: Date;
-      conditionHash: string | null;
-      releasedAt: Date | null;
-    }>>;
-    deleteMany: (args: any) => Promise<any>;
-    count: (args: any) => Promise<number>;
-  };
+  escrowReleaseMilestone?: EscrowReleaseMilestoneStore;
 };
 
 function caller(req: AuthRequest, res: Response): string | null {

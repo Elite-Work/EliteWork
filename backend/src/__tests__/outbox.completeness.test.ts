@@ -6,9 +6,11 @@
  */
 
 // ─── Mock prisma before any imports ────────────────────────────────────────
-const mockChainEventOutbox: any[] = [];
-const mockEscrowAudit: any[] = [];
-const mockTrade: any[] = [];
+import type { ChainEventOutbox, EscrowAudit, Trade } from "@prisma/client";
+
+const mockChainEventOutbox: ChainEventOutbox[] = [];
+const mockEscrowAudit: EscrowAudit[] = [];
+const mockTrade: Trade[] = [];
 
 jest.mock("../lib/db", () => ({
   prisma: {
@@ -17,12 +19,12 @@ jest.mock("../lib/db", () => ({
         mockChainEventOutbox.length = 0;
         return { count: 0 };
       }),
-      create: jest.fn().mockImplementation(async ({ data }: { data: any }) => {
-        const entry = { id: mockChainEventOutbox.length + 1, ...data };
+      create: jest.fn().mockImplementation(async ({ data }: { data: Partial<ChainEventOutbox> }) => {
+        const entry = { id: mockChainEventOutbox.length + 1, ...data } as ChainEventOutbox;
         mockChainEventOutbox.push(entry);
         return entry;
       }),
-      findMany: jest.fn().mockImplementation(async ({ where }: { where: any }) => {
+      findMany: jest.fn().mockImplementation(async ({ where }: { where?: { tradeId?: string; eventType?: string } }) => {
         return mockChainEventOutbox.filter((e) => {
           if (where?.tradeId && e.tradeId !== where.tradeId) return false;
           if (where?.eventType && e.eventType !== where.eventType) return false;
@@ -35,12 +37,12 @@ jest.mock("../lib/db", () => ({
         mockEscrowAudit.length = 0;
         return { count: 0 };
       }),
-      create: jest.fn().mockImplementation(async ({ data }: { data: any }) => {
-        const entry = { id: mockEscrowAudit.length + 1, createdAt: new Date(), ...data };
+      create: jest.fn().mockImplementation(async ({ data }: { data: Partial<EscrowAudit> }) => {
+        const entry = { id: mockEscrowAudit.length + 1, createdAt: new Date(), ...data } as EscrowAudit;
         mockEscrowAudit.push(entry);
         return entry;
       }),
-      findMany: jest.fn().mockImplementation(async ({ where }: { where: any }) => {
+      findMany: jest.fn().mockImplementation(async ({ where }: { where?: { tradeId?: string } }) => {
         return mockEscrowAudit.filter((a) => {
           if (where?.tradeId && a.tradeId !== where.tradeId) return false;
           return true;
@@ -52,23 +54,23 @@ jest.mock("../lib/db", () => ({
         mockTrade.length = 0;
         return { count: 0 };
       }),
-      create: jest.fn().mockImplementation(async ({ data }: { data: any }) => {
+      create: jest.fn().mockImplementation(async ({ data }: { data: Partial<Trade> }) => {
         const entry = {
           id: mockTrade.length + 1,
           version: 0,
           createdAt: new Date(),
           updatedAt: new Date(),
           ...data,
-        };
+        } as Trade;
         mockTrade.push(entry);
         return entry;
       }),
-      update: jest.fn().mockImplementation(async ({ where, data }: { where: any; data: any }) => {
+      update: jest.fn().mockImplementation(async ({ where, data }: { where: { id?: number; tradeId?: string }; data: Partial<Trade> }) => {
         const idx = mockTrade.findIndex((t) =>
           where.id ? t.id === where.id : t.tradeId === where.tradeId,
         );
         if (idx === -1) throw new Error("Trade not found");
-        mockTrade[idx] = { ...mockTrade[idx], ...data, updatedAt: new Date() };
+        mockTrade[idx] = { ...mockTrade[idx], ...data, updatedAt: new Date() } as Trade;
         return mockTrade[idx];
       }),
       findMany: jest.fn().mockImplementation(async () => mockTrade),
@@ -252,7 +254,7 @@ describe("Outbox Completeness Integration Tests", () => {
         where: { tradeId: trade.tradeId },
       });
 
-      expect(events.map((e: any) => e.eventType)).toContain(EventType.DeliveryConfirmed);
+      expect(events.map((e) => e.eventType)).toContain(EventType.DeliveryConfirmed);
     });
 
     it("should verify funds release produces FundsReleased event", async () => {
@@ -296,7 +298,7 @@ describe("Outbox Completeness Integration Tests", () => {
         where: { tradeId: trade.tradeId },
       });
 
-      expect(events.map((e: any) => e.eventType)).toContain(EventType.FundsReleased);
+      expect(events.map((e) => e.eventType)).toContain(EventType.FundsReleased);
     });
   });
 
@@ -342,7 +344,7 @@ describe("Outbox Completeness Integration Tests", () => {
         where: { tradeId: trade.tradeId },
       });
 
-      expect(events.map((e: any) => e.eventType)).toContain(EventType.DisputeInitiated);
+      expect(events.map((e) => e.eventType)).toContain(EventType.DisputeInitiated);
     });
 
     it("should emit DisputeResolved when dispute is resolved", async () => {
@@ -386,7 +388,7 @@ describe("Outbox Completeness Integration Tests", () => {
         where: { tradeId: trade.tradeId },
       });
 
-      expect(events.map((e: any) => e.eventType)).toContain(EventType.DisputeResolved);
+      expect(events.map((e) => e.eventType)).toContain(EventType.DisputeResolved);
     });
   });
 

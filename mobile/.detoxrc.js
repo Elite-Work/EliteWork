@@ -70,8 +70,21 @@ module.exports = {
     emulator: {
       type: 'android.emulator',
       device: {
-        // Minimum supported Android version — see docs/DEVICE_MATRIX.md.
+        // Target (not minimum) Android version, on a modern mid/high-end
+        // device profile — see docs/DEVICE_MATRIX.md.
         avdName: 'Pixel_6_API_34',
+      },
+    },
+    emulatorLowEnd: {
+      type: 'android.emulator',
+      device: {
+        // Representative *low-end* device from docs/DEVICE_MATRIX.md's
+        // supported matrix: minimum supported Android API (31) on a
+        // low-RAM/low-CPU profile, distinct from the CI default's modern
+        // Pixel 6. Catches perf/rendering issues (dropped frames, OOM,
+        // jank) that only show up on the hardware the pilot's rural
+        // cooperative members are more likely to actually own.
+        avdName: 'Pixel_3a_API_31',
       },
     },
   },
@@ -83,6 +96,10 @@ module.exports = {
     },
     'android.emu.debug': {
       device: 'emulator',
+      app: 'android.debug',
+    },
+    'android.emu.debug.lowend': {
+      device: 'emulatorLowEnd',
       app: 'android.debug',
     },
   },

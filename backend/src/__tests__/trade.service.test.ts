@@ -1,15 +1,85 @@
-import { PrismaClient, TradeStatus } from "@prisma/client";
+import { Prisma, Trade, TradeStatus } from "@prisma/client";
+import { ContractService } from "../services/contract.service";
 import { TradeAccessDeniedError, TradeService } from "../services/trade.service";
 
-function createMockPrisma() {
+function makeTrade(overrides: Partial<Trade> = {}): Trade {
+  return {
+    id: 1,
+    tradeId: "T1",
+    buyerAddress: "buyer",
+    sellerAddress: "seller",
+    amountUsdc: "100",
+    buyerLossBps: 5000,
+    sellerLossBps: 5000,
+    version: 0,
+    status: TradeStatus.CREATED,
+    fundedAt: null,
+    deliveredAt: null,
+    completedAt: null,
+    expiresAt: null,
+    expiredAt: null,
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+    ...overrides,
+  };
+}
+
+type TradeStatsRow = Prisma.TradeGetPayload<{
+  select: { amountUsdc: true; status: true };
+}>;
+
+type TradePrismaMock = {
+  trade: {
+    create: jest.MockedFunction<
+      (args: Prisma.TradeCreateArgs) => Promise<Trade>
+    >;
+    findMany: jest.MockedFunction<
+      (args: Prisma.TradeFindManyArgs) => Promise<Trade[] | TradeStatsRow[]>
+    >;
+    count: jest.MockedFunction<
+      (args: Prisma.TradeCountArgs) => Promise<number>
+    >;
+    findFirst: jest.MockedFunction<
+      (args: Prisma.TradeFindFirstArgs) => Promise<Trade | null>
+    >;
+  };
+};
+
+function createMockPrisma(): TradePrismaMock {
   return {
     trade: {
-      create: jest.fn(),
-      findMany: jest.fn(),
-      count: jest.fn(),
-      findFirst: jest.fn(),
+      create: jest.fn<Promise<Trade>, [args: Prisma.TradeCreateArgs]>(),
+      findMany: jest.fn<
+        Promise<Trade[] | TradeStatsRow[]>,
+        [args: Prisma.TradeFindManyArgs]
+      >(),
+      count: jest.fn<Promise<number>, [args: Prisma.TradeCountArgs]>(),
+      findFirst: jest.fn<Promise<Trade | null>, [args: Prisma.TradeFindFirstArgs]>(),
     },
-  } as unknown as PrismaClient;
+  };
+}
+
+function asTradeDatabase(
+  mock: TradePrismaMock,
+): ConstructorParameters<typeof TradeService>[0] {
+  return mock as unknown as ConstructorParameters<typeof TradeService>[0];
+}
+
+type MockContractService = jest.Mocked<
+  Pick<ContractService, "buildInitiateDisputeTx">
+>;
+
+function createMockContractService(): MockContractService {
+  return {
+    buildInitiateDisputeTx: jest.fn<
+      ReturnType<ContractService["buildInitiateDisputeTx"]>,
+      Parameters<ContractService["buildInitiateDisputeTx"]>
+    >(),
+  };
+}
+
+function asContractService(mock: MockContractService): ContractService {
+  return mock as unknown as ContractService;
 }
 
 describe("TradeService", () => {
@@ -18,11 +88,14 @@ describe("TradeService", () => {
 
   beforeEach(() => {
     prisma = createMockPrisma();
-    service = new TradeService(prisma, {} as any);
+    service = new TradeService(
+      asTradeDatabase(prisma),
+      asContractService(createMockContractService()),
+    );
   });
 
   it("stores a pending trade with PENDING_SIGNATURE status", async () => {
-    prisma.trade.create = jest.fn().mockResolvedValue({});
+    prisma.trade.create.mockResolvedValue(makeTrade());
 
     await service.createPendingTrade({
       tradeId: "4294967297",
@@ -47,17 +120,17 @@ describe("TradeService", () => {
   });
 
   it("GET /trades returns only caller's trades", async () => {
-    prisma.trade.findMany = jest.fn().mockResolvedValue([
-      {
+    prisma.trade.findMany.mockResolvedValue([
+      makeTrade({
         id: 1,
         tradeId: "T1",
         buyerAddress: "GA_CALLER",
         sellerAddress: "GA_SELLER",
         amountUsdc: "100",
         status: TradeStatus.CREATED,
-      },
+      }),
     ]);
-    prisma.trade.count = jest.fn().mockResolvedValue(1);
+    prisma.trade.count.mockResolvedValue(1);
 
     const result = await service.listUserTrades("GA_CALLER", {
       page: 1,
@@ -77,17 +150,17 @@ describe("TradeService", () => {
   });
 
   it("GET /trades?status=FUNDED filters correctly", async () => {
-    prisma.trade.findMany = jest.fn().mockResolvedValue([
-      {
+    prisma.trade.findMany.mockResolvedValue([
+      makeTrade({
         id: 2,
         tradeId: "T2",
         buyerAddress: "GA_CALLER",
         sellerAddress: "GA_S2",
         amountUsdc: "200",
         status: TradeStatus.FUNDED,
-      },
+      }),
     ]);
-    prisma.trade.count = jest.fn().mockResolvedValue(1);
+    prisma.trade.count.mockResolvedValue(1);
 
     await service.listUserTrades("GA_CALLER", {
       status: TradeStatus.FUNDED,
@@ -107,8 +180,8 @@ describe("TradeService", () => {
   });
 
   it("uses a stable default order with an id tie-breaker", async () => {
-    prisma.trade.findMany = jest.fn().mockResolvedValue([]);
-    prisma.trade.count = jest.fn().mockResolvedValue(0);
+    prisma.trade.findMany.mockResolvedValue([]);
+    prisma.trade.count.mockResolvedValue(0);
 
     await service.listUserTrades("GA_CALLER", {
       page: 1,
@@ -125,8 +198,8 @@ describe("TradeService", () => {
   });
 
   it("keeps custom pagination sorts deterministic under identical sort values", async () => {
-    prisma.trade.findMany = jest.fn().mockResolvedValue([]);
-    prisma.trade.count = jest.fn().mockResolvedValue(0);
+    prisma.trade.findMany.mockResolvedValue([]);
+    prisma.trade.count.mockResolvedValue(0);
 
     await service.listUserTrades("GA_CALLER", {
       page: 2,
@@ -144,8 +217,8 @@ describe("TradeService", () => {
   });
 
   it("falls back to stable default ordering for unsupported sort fields", async () => {
-    prisma.trade.findMany = jest.fn().mockResolvedValue([]);
-    prisma.trade.count = jest.fn().mockResolvedValue(0);
+    prisma.trade.findMany.mockResolvedValue([]);
+    prisma.trade.count.mockResolvedValue(0);
 
     await service.listUserTrades("GA_CALLER", {
       sort: "randomField:asc",
@@ -159,14 +232,16 @@ describe("TradeService", () => {
   });
 
   it("GET /trades/:id returns 403 if caller is not party", async () => {
-    prisma.trade.findFirst = jest.fn().mockResolvedValue({
-      id: 10,
-      tradeId: "T10",
-      buyerAddress: "GA_A",
-      sellerAddress: "GA_B",
-      amountUsdc: "900",
-      status: TradeStatus.CREATED,
-    });
+    prisma.trade.findFirst.mockResolvedValue(
+      makeTrade({
+        id: 10,
+        tradeId: "T10",
+        buyerAddress: "GA_A",
+        sellerAddress: "GA_B",
+        amountUsdc: "900",
+        status: TradeStatus.CREATED,
+      }),
+    );
 
     await expect(service.getTradeById("10", "GA_NOT_PARTY")).rejects.toBeInstanceOf(
       TradeAccessDeniedError
@@ -174,7 +249,7 @@ describe("TradeService", () => {
   });
 
   it("GET /trades/stats returns correct counts and volume", async () => {
-    prisma.trade.findMany = jest.fn().mockResolvedValue([
+    prisma.trade.findMany.mockResolvedValue([
       { amountUsdc: "100", status: TradeStatus.PENDING_SIGNATURE },
       { amountUsdc: "25.5", status: TradeStatus.FUNDED },
       { amountUsdc: "50", status: TradeStatus.COMPLETED },

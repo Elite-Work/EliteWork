@@ -1,24 +1,30 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // Mock dependencies before importing the service
-vi.mock("../config/stellar", () => ({
+jest.mock("../config/stellar", () => ({
     horizonServer: {
-        loadAccount: vi.fn(),
-        strictReceivePaths: vi.fn(),
+        loadAccount: jest.fn(),
+        strictReceivePaths: jest.fn(),
     },
     sorobanRpcClient: {},
     networkPassphrase: "Test SDF Network ; September 2015",
 }));
-vi.mock("../config/tracing", () => ({ TracingHelper: { withSpan: (_n: string, fn: Function) => fn({ setAttributes: vi.fn(), end: vi.fn() }) } }));
-vi.mock("../lib/circuitBreaker", () => ({
-    CircuitBreaker: vi.fn().mockImplementation(() => ({ getState: () => "CLOSED", execute: (fn: Function) => fn() })),
-    withCircuitBreaker: (_fn: Function, _cb: any) => _fn(),
-    getCircuitBreaker: vi.fn(),
+jest.mock("../config/tracing", () => ({
+    TracingHelper: {
+        withSpan: (_n: string, fn: (span: unknown) => unknown) => fn({ setAttributes: jest.fn(), end: jest.fn() }),
+    },
 }));
-vi.mock("../lib/retry", () => ({ retryAsync: (_fn: Function) => _fn() }));
-vi.mock("../lib/metrics", () => ({ classifySubmissionError: vi.fn(), recordTransactionSubmission: vi.fn() }));
-vi.mock("../middleware/logger", () => ({ appLogger: { info: vi.fn(), error: vi.fn(), warn: vi.fn() } }));
-vi.mock("../errors/service.errors", () => ({
+jest.mock("../lib/circuitBreaker", () => ({
+    CircuitBreaker: jest.fn().mockImplementation(() => ({
+        getState: () => "CLOSED",
+        execute: (fn: () => unknown) => fn(),
+    })),
+    withCircuitBreaker: (_fn: () => unknown, _cb: unknown) => _fn(),
+    getCircuitBreaker: jest.fn(),
+}));
+jest.mock("../lib/retry", () => ({ retryAsync: (_fn: () => unknown) => _fn() }));
+jest.mock("../lib/metrics", () => ({ classifySubmissionError: jest.fn(), recordTransactionSubmission: jest.fn() }));
+jest.mock("../middleware/logger", () => ({ appLogger: { info: jest.fn(), error: jest.fn(), warn: jest.fn() } }));
+jest.mock("../errors/service.errors", () => ({
     classifyStellarServiceError: (e: Error) => e,
     StellarError: class StellarError extends Error { constructor(p: any) { super(p.message); } },
 }));
@@ -30,14 +36,14 @@ describe("StellarService new methods (#732)", () => {
     let service: StellarService;
 
     beforeEach(() => {
-        vi.clearAllMocks();
+        jest.clearAllMocks();
         service = new StellarService();
     });
 
     describe("loadAccount", () => {
         it("returns account response from Horizon", async () => {
             const mockAccount = { id: "GABC", sequence: "100" };
-            vi.mocked(horizonServer.loadAccount).mockResolvedValue(mockAccount as any);
+            jest.mocked(horizonServer.loadAccount).mockResolvedValue(mockAccount as any);
 
             const result = await service.loadAccount("GABC");
             expect(result).toEqual(mockAccount);
@@ -45,7 +51,7 @@ describe("StellarService new methods (#732)", () => {
         });
 
         it("throws classified error when Horizon fails", async () => {
-            vi.mocked(horizonServer.loadAccount).mockRejectedValue(new Error("Not found"));
+            jest.mocked(horizonServer.loadAccount).mockRejectedValue(new Error("Not found"));
             await expect(service.loadAccount("GINVALID")).rejects.toThrow("Not found");
         });
     });
@@ -53,8 +59,8 @@ describe("StellarService new methods (#732)", () => {
     describe("findPaymentPath", () => {
         it("returns path records from strictReceivePaths", async () => {
             const mockPaths = { records: [{ path: [], source_amount: "1" }] };
-            const callMock = vi.fn().mockResolvedValue(mockPaths);
-            vi.mocked(horizonServer.strictReceivePaths).mockReturnValue({ call: callMock } as any);
+            const callMock = jest.fn().mockResolvedValue(mockPaths);
+            jest.mocked(horizonServer.strictReceivePaths).mockReturnValue({ call: callMock } as any);
 
             const result = await service.findPaymentPath({
                 sourceAssets: [{ asset_type: "native" }],
@@ -65,8 +71,8 @@ describe("StellarService new methods (#732)", () => {
         });
 
         it("throws classified error on Horizon failure", async () => {
-            vi.mocked(horizonServer.strictReceivePaths).mockReturnValue({
-                call: vi.fn().mockRejectedValue(new Error("horizon down")),
+            jest.mocked(horizonServer.strictReceivePaths).mockReturnValue({
+                call: jest.fn().mockRejectedValue(new Error("horizon down")),
             } as any);
             await expect(service.findPaymentPath({
                 sourceAssets: [],

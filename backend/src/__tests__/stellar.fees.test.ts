@@ -1,5 +1,4 @@
 import request from "supertest";
-import { createApp } from "../app";
 import express from "express";
 
 const mockFeeStats = jest.fn();
@@ -11,6 +10,8 @@ jest.mock("../config/stellar", () => ({
   sorobanRpcClient: {},
   networkPassphrase: "Test SDF Network ; September 2015",
 }));
+
+const { createApp } = require("../app") as typeof import("../app");
 
 describe("GET /stellar/fees", () => {
   let app: express.Application;

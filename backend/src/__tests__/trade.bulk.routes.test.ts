@@ -2,6 +2,7 @@ import express from "express";
 import jwt from "jsonwebtoken";
 import request from "supertest";
 import * as StellarSdk from "@stellar/stellar-sdk";
+import { Trade, TradeStatus } from "@prisma/client";
 import { tradeRoutes } from "../routes/trade.routes";
 import { ContractService } from "../services/contract.service";
 import { TradeService } from "../services/trade.service";
@@ -14,8 +15,6 @@ import {
   PilotMetricsRecorder,
 } from "../lib/metrics";
 
-jest.mock("../services/contract.service");
-jest.mock("../services/trade.service");
 jest.mock("../services/auth.service", () => ({
   AuthService: {
     validateToken: jest.fn(async (token: string) => {
@@ -25,6 +24,46 @@ jest.mock("../services/auth.service", () => ({
     isTokenRevoked: jest.fn().mockResolvedValue(false),
   },
 }));
+
+function createMockTradeService() {
+  return {
+    createPendingTrade: jest.spyOn(TradeService.prototype, "createPendingTrade"),
+  };
+}
+
+function createMockContractService() {
+  return {
+    buildCreateTradeTx: jest.spyOn(
+      ContractService.prototype,
+      "buildCreateTradeTx",
+    ),
+  };
+}
+
+function makeTrade(overrides: Partial<Trade> = {}): Trade {
+  return {
+    id: 1,
+    tradeId: "trade-1",
+    buyerAddress: "",
+    sellerAddress: "",
+    amountUsdc: "10",
+    buyerLossBps: 5000,
+    sellerLossBps: 5000,
+    version: 0,
+    status: TradeStatus.PENDING_SIGNATURE,
+    fundedAt: null,
+    deliveredAt: null,
+    completedAt: null,
+    expiresAt: null,
+    expiredAt: null,
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+    ...overrides,
+  };
+}
+
+const mockTradeService = createMockTradeService();
+const mockContractService = createMockContractService();
 
 const app = express();
 app.use(express.json());
@@ -58,6 +97,8 @@ describe("POST /trades/bulk (issue #45)", () => {
 
   beforeEach(() => {
     jest.spyOn(AuthService, "isTokenRevoked").mockResolvedValue(false);
+    mockTradeService.createPendingTrade.mockReset();
+    mockContractService.buildCreateTradeTx.mockReset();
   });
 
   afterEach(() => {
@@ -69,12 +110,12 @@ describe("POST /trades/bulk (issue #45)", () => {
   }
 
   it("creates every row and returns per-row tradeIds (200)", async () => {
-    (ContractService.prototype.buildCreateTradeTx as jest.Mock)
+    mockContractService.buildCreateTradeTx
       .mockResolvedValueOnce({ tradeId: "t-1", unsignedXdr: "XDR-1" })
       .mockResolvedValueOnce({ tradeId: "t-2", unsignedXdr: "XDR-2" });
-    (TradeService.prototype.createPendingTrade as jest.Mock)
-      .mockResolvedValueOnce({ tradeId: "t-1" })
-      .mockResolvedValueOnce({ tradeId: "t-2" });
+    mockTradeService.createPendingTrade
+      .mockResolvedValueOnce(makeTrade({ tradeId: "t-1" }))
+      .mockResolvedValueOnce(makeTrade({ tradeId: "t-2" }));
 
     const res = await request(app)
       .post("/trades/bulk")
@@ -86,16 +127,18 @@ describe("POST /trades/bulk (issue #45)", () => {
     expect(res.body.created[0]).toEqual({ index: 0, tradeId: "t-1", unsignedXdr: "XDR-1" });
     expect(res.body.failed).toEqual([]);
     // Buyer always comes from the JWT, never the row.
-    expect(ContractService.prototype.buildCreateTradeTx).toHaveBeenCalledWith(
+    expect(mockContractService.buildCreateTradeTx).toHaveBeenCalledWith(
       expect.objectContaining({ buyerAddress, sellerAddress: sellerA }),
     );
   });
 
   it("reports a failing row without aborting the batch", async () => {
-    (ContractService.prototype.buildCreateTradeTx as jest.Mock)
+    mockContractService.buildCreateTradeTx
       .mockRejectedValueOnce(new Error("simulate failed"))
       .mockResolvedValueOnce({ tradeId: "t-2", unsignedXdr: "XDR-2" });
-    (TradeService.prototype.createPendingTrade as jest.Mock).mockResolvedValue({ tradeId: "t-2" });
+    mockTradeService.createPendingTrade.mockResolvedValue(
+      makeTrade({ tradeId: "t-2" }),
+    );
 
     const res = await request(app)
       .post("/trades/bulk")
@@ -170,11 +213,13 @@ describe("POST /trades/bulk (issue #45)", () => {
 
     it("records per-cooperative metrics when the caller belongs to the cooperative", async () => {
       process.env.COOPERATIVE_ADMINS = `${coop}:${buyerAddress}`;
-      (ContractService.prototype.buildCreateTradeTx as jest.Mock).mockResolvedValue({
+      mockContractService.buildCreateTradeTx.mockResolvedValue({
         tradeId: "t-1",
         unsignedXdr: "XDR-1",
       });
-      (TradeService.prototype.createPendingTrade as jest.Mock).mockResolvedValue({ tradeId: "t-1" });
+      mockTradeService.createPendingTrade.mockResolvedValue(
+        makeTrade({ tradeId: "t-1" }),
+      );
 
       const res = await request(app)
         .post("/trades/bulk")
@@ -191,11 +236,13 @@ describe("POST /trades/bulk (issue #45)", () => {
     it("skips attribution when the caller does not belong to the cooperative", async () => {
       process.env.COOPERATIVE_ADMINS = `${coop}:${sellerA}`;
       process.env.COOPERATIVE_MEMBERS = `${coop}:${sellerB}`;
-      (ContractService.prototype.buildCreateTradeTx as jest.Mock).mockResolvedValue({
+      mockContractService.buildCreateTradeTx.mockResolvedValue({
         tradeId: "t-1",
         unsignedXdr: "XDR-1",
       });
-      (TradeService.prototype.createPendingTrade as jest.Mock).mockResolvedValue({ tradeId: "t-1" });
+      mockTradeService.createPendingTrade.mockResolvedValue(
+        makeTrade({ tradeId: "t-1" }),
+      );
 
       const res = await request(app)
         .post("/trades/bulk")

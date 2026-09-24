@@ -120,7 +120,7 @@ jobs:
       - name: Test
         if: needs.changes.outputs.frontend == 'true'
         # --json writes a machine-readable result file used by the flake reporter
-        run: pnpm test -- --json --outputFile=jest-results.json || true
+        run: pnpm test --json --outputFile=jest-results.json || true
 
       - name: Detect flake candidates (frontend)
         if: needs.changes.outputs.frontend == 'true'
@@ -277,6 +277,33 @@ jobs:
     name: Backend Required Gate
     runs-on: ubuntu-latest
     needs: [changes, validate-quarantine]
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: amana_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d amana_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgresql://postgres:password@localhost:5432/amana_test
+      REDIS_URL: redis://localhost:6379
+      RUN_INTEGRATION_TESTS: "true"
     defaults:
       run:
         working-directory: backend
@@ -297,9 +324,16 @@ jobs:
       - name: Install deps
         run: pnpm install --frozen-lockfile
 
+      - name: Apply database migrations
+        run: pnpm exec prisma migrate deploy
+
       - name: Build
         if: needs.changes.outputs.backend == 'true'
         run: pnpm build
+
+      - name: Lint
+        if: needs.changes.outputs.backend == 'true'
+        run: pnpm lint
 
       - name: Test
         if: needs.changes.outputs.backend == 'true'
@@ -307,7 +341,7 @@ jobs:
           NODE_ENV: test
           JWT_SECRET: test-jwt-secret-value-with-minimum-length-32
         # --json writes a machine-readable result file used by the flake reporter
-        run: pnpm test -- --json --outputFile=jest-results.json || true
+        run: pnpm test --coverage=false --json --outputFile=jest-results.json || true
 
       - name: Detect flake candidates (backend)
         if: needs.changes.outputs.backend == 'true'

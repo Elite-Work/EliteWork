@@ -68,8 +68,14 @@ function createRes() {
   return { res, headers };
 }
 
+type RedisTestMock = {
+  get: jest.Mock<Promise<string | null>, [string]>;
+  set: jest.Mock<Promise<string | null>, [string, string, string, ...unknown[]]>;
+  del: jest.Mock<Promise<number>, [string]>;
+};
+
 describe("idempotencyMiddleware", () => {
-  const redisMock = redis as jest.Mocked<typeof redis>;
+  const redisMock = redis as unknown as RedisTestMock;
   const alertMock = alertService as jest.Mocked<typeof alertService>;
 
   beforeEach(() => {
@@ -174,8 +180,8 @@ describe("idempotencyMiddleware", () => {
       return null as any;
     });
 
-    redisMock.set.mockImplementation(async (key: string, value: string, mode: string) => {
-      if (key === "idempotency:lock:POST:/trades:idem-1" && mode === "NX") {
+    redisMock.set.mockImplementation(async (key: string, value: string, _mode: string, ...options: unknown[]) => {
+      if (key === "idempotency:lock:POST:/trades:idem-1" && options.includes("NX")) {
         if (lockHeld) return null as any;
         lockHeld = true;
         return "OK" as any;
@@ -237,8 +243,8 @@ describe("idempotencyMiddleware", () => {
       return null as any;
     });
 
-    redisMock.set.mockImplementation(async (key: string, value: string, mode: string) => {
-      if (key === "idempotency:lock:POST:/trades:idem-1" && mode === "NX") {
+    redisMock.set.mockImplementation(async (key: string, value: string, _mode: string, ...options: unknown[]) => {
+      if (key === "idempotency:lock:POST:/trades:idem-1" && options.includes("NX")) {
         if (lockHeld) return null as any;
         lockHeld = true;
         return "OK" as any;

@@ -22,6 +22,7 @@ import {
   ManifestNotFoundError,
   ManifestAccessDeniedError,
 } from "../services/manifest.service";
+import { EncryptionService } from "../services/encryption.service";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -60,8 +61,17 @@ function createMockIpfs(cid = "bafybeicid000") {
 }
 
 function makeVideoFile(name = "proof.mp4", mime = "video/mp4", size = 1024): Express.Multer.File {
+  const buffer = Buffer.alloc(size);
+  if (mime === "video/mp4") {
+    buffer.write("ftyp", 4, "ascii");
+  } else {
+    buffer[0] = 0x1a;
+    buffer[1] = 0x45;
+    buffer[2] = 0xdf;
+    buffer[3] = 0xa3;
+  }
   return {
-    buffer: Buffer.alloc(size),
+    buffer,
     originalname: name,
     mimetype: mime,
     size,
@@ -100,7 +110,7 @@ describe("Evidence round-trip", () => {
         filename: "proof.mp4",
         mimeType: "video/mp4",
         uploadedBy: BUYER,
-        createdAt: new Date("2026-01-01T00:00:00Z"),
+        createdAt: new Date(),
       };
       prisma.tradeEvidence.create = jest.fn().mockResolvedValue(createdRecord);
 
@@ -216,15 +226,16 @@ describe("Manifest round-trip", () => {
     expectedDeliveryAt: new Date(Date.now() + 86400000).toISOString(),
   };
 
+  const encryptionService = new EncryptionService();
   const storedManifest = {
     id: 7,
     tradeId: TRADE_ID,
-    driverName: "Jane Driver",
-    driverIdNumber: "DL-99887766",
+    driverName: encryptionService.encrypt("Jane Driver", TRADE_ID),
+    driverIdNumber: encryptionService.encrypt("DL-99887766", TRADE_ID),
     driverNameHash: "a".repeat(64),
     driverIdHash: "b".repeat(64),
-    vehicleRegistration: "LG-234-XYZ",
-    routeDescription: "Lagos → Ibadan",
+    vehicleRegistration: encryptionService.encrypt("LG-234-XYZ", TRADE_ID),
+    routeDescription: encryptionService.encrypt("Lagos → Ibadan", TRADE_ID),
     expectedDeliveryAt: new Date(Date.now() + 86400000),
     createdAt: new Date(),
   };
@@ -292,8 +303,8 @@ describe("Manifest round-trip", () => {
       const view = await manifestService.getManifestByTradeId(TRADE_ID, SELLER);
 
       expect(view.roleView).toBe("seller");
-      expect((view as any).driverName).toBe(storedManifest.driverName);
-      expect((view as any).driverIdNumber).toBe(storedManifest.driverIdNumber);
+      expect((view as any).driverName).toBe("Jane Driver");
+      expect((view as any).driverIdNumber).toBe("DL-99887766");
       expect((view as any).driverNameHash).toBe(storedManifest.driverNameHash);
       expect((view as any).driverIdHash).toBe(storedManifest.driverIdHash);
     });

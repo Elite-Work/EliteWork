@@ -70,6 +70,9 @@ export function parseArgs(argv: string[]): ClawbackArgs {
       const key = arg.slice(2);
       const next = argv[i + 1];
       if (!next || next.startsWith("--")) {
+        if (key === "stream-id") {
+          throw new Error("--stream-id is required and must not be empty.");
+        }
         throw new Error(`Flag --${key} requires a value.`);
       }
       args[key] = next;

@@ -78,7 +78,7 @@ describe("ShutdownOrchestrator", () => {
 
     const exitSpy = jest
       .spyOn(process, "exit")
-      .mockImplementation((() => undefined) as unknown as (code?: number) => never);
+      .mockImplementation((() => undefined) as unknown as (code?: string | number | null) => never);
 
     await orchestrator.shutdown("SIGTERM", server, [svc1, svc2]);
 
@@ -96,7 +96,7 @@ describe("ShutdownOrchestrator", () => {
 
     const exitSpy = jest
       .spyOn(process, "exit")
-      .mockImplementation((() => undefined) as unknown as (code?: number) => never);
+      .mockImplementation((() => undefined) as unknown as (code?: string | number | null) => never);
 
     await orchestrator.shutdown("SIGTERM", server, [
       { name: "a", stop: s1 },
@@ -132,7 +132,7 @@ describe("ShutdownOrchestrator", () => {
       .spyOn(process, "exit")
       .mockImplementation(((
         code?: number,
-      ) => undefined) as unknown as (code?: number) => never);
+      ) => undefined) as unknown as (code?: string | number | null) => never);
 
     await orchestrator.shutdown("SIGTERM", server, [hangy]);
 

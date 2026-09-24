@@ -58,7 +58,7 @@ jobs:
 
       - name: TypeScript parity tests
         working-directory: frontend
-        run: pnpm jest --config jest.config.ts --testPathPattern='shared-test-fixtures.*money_math_parity' --verbose
+        run: pnpm exec jest --config jest.money-math.config.ts --runInBand --verbose
 
       - name: Parity check summary
         run: |

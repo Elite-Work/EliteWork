@@ -2899,7 +2899,7 @@ paths:
           $ref: "#/components/responses/UnauthorizedError"
         "500":
           $ref: "#/components/responses/InternalError"
-  /admin/contract/mediators:
+  /api/admin/contract/mediators:
     post:
       tags: [Admin]
       summary: Register a mediator on the escrow contract
@@ -2940,7 +2940,7 @@ paths:
           $ref: "#/components/responses/ForbiddenError"
         "500":
           $ref: "#/components/responses/InternalError"
-  /admin/contract/mediators/{address}:
+  /api/admin/contract/mediators/{address}:
     delete:
       tags: [Admin]
       summary: Revoke a mediator on the escrow contract
@@ -2974,7 +2974,7 @@ paths:
           $ref: "#/components/responses/ForbiddenError"
         "500":
           $ref: "#/components/responses/InternalError"
-  /admin/contract/fee:
+  /api/admin/contract/fee:
     patch:
       tags: [Admin]
       summary: Update the escrow contract platform fee rate

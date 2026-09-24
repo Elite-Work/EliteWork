@@ -3,16 +3,55 @@ import jwt from "jsonwebtoken";
 import request from "supertest";
 import { createDisputeCategoryRouter } from "../controllers/disputeCategory.controller";
 import { AuthService } from "../services/auth.service";
+import type { JWTPayload } from "../services/auth.service";
+import { DisputeCategory, Prisma } from "@prisma/client";
 
-function createMockPrisma() {
+type CategoryPrismaMock = {
+  disputeCategory: {
+    create: jest.MockedFunction<
+      (args: Prisma.DisputeCategoryCreateArgs) => Promise<DisputeCategory>
+    >;
+    findMany: jest.MockedFunction<
+      (args: Prisma.DisputeCategoryFindManyArgs) => Promise<DisputeCategory[]>
+    >;
+    findUnique: jest.MockedFunction<
+      (args: Prisma.DisputeCategoryFindUniqueArgs) => Promise<DisputeCategory | null>
+    >;
+    update: jest.MockedFunction<
+      (args: Prisma.DisputeCategoryUpdateArgs) => Promise<DisputeCategory>
+    >;
+  };
+};
+
+function createMockPrisma(): CategoryPrismaMock {
   return {
     disputeCategory: {
-      create: jest.fn(),
-      findMany: jest.fn(),
-      findUnique: jest.fn(),
-      update: jest.fn(),
+      create: jest.fn<
+        Promise<DisputeCategory>,
+        [args: Prisma.DisputeCategoryCreateArgs]
+      >(),
+      findMany: jest.fn<
+        Promise<DisputeCategory[]>,
+        [args: Prisma.DisputeCategoryFindManyArgs]
+      >(),
+      findUnique: jest.fn<
+        Promise<DisputeCategory | null>,
+        [args: Prisma.DisputeCategoryFindUniqueArgs]
+      >(),
+      update: jest.fn<
+        Promise<DisputeCategory>,
+        [args: Prisma.DisputeCategoryUpdateArgs]
+      >(),
     },
   };
+}
+
+type CategoryDatabase = NonNullable<
+  Parameters<typeof createDisputeCategoryRouter>[0]
+>;
+
+function asPrismaClient(mock: CategoryPrismaMock): CategoryDatabase {
+  return mock as unknown as CategoryDatabase;
 }
 
 function buildToken(walletAddress: string, jti: string): string {
@@ -45,7 +84,15 @@ describe("Dispute Category Routes", () => {
     process.env.ADMIN_STELLAR_PUBKEYS = adminAddress;
     adminToken = buildToken(adminAddress, "dispute-category-admin-jti");
     userToken = buildToken(userAddress, "dispute-category-user-jti");
+    jest.spyOn(AuthService, "validateToken").mockImplementation(async (token) => {
+      const payload = jwt.decode(token);
+      if (!payload || typeof payload === "string") {
+        throw new Error("Invalid test token");
+      }
+      return payload as JWTPayload;
+    });
     jest.spyOn(AuthService, "isTokenRevoked").mockResolvedValue(false);
+    jest.spyOn(AuthService, "getTokenVersion").mockResolvedValue(0);
   });
 
   afterEach(() => {
@@ -75,7 +122,7 @@ describe("Dispute Category Routes", () => {
 
     const app = express();
     app.use(express.json());
-    app.use("/dispute-categories", createDisputeCategoryRouter(prisma as any));
+    app.use("/dispute-categories", createDisputeCategoryRouter(asPrismaClient(prisma)));
 
     const res = await request(app)
       .get("/dispute-categories?includeInactive=true")
@@ -103,7 +150,7 @@ describe("Dispute Category Routes", () => {
 
     const app = express();
     app.use(express.json());
-    app.use("/dispute-categories", createDisputeCategoryRouter(prisma as any));
+    app.use("/dispute-categories", createDisputeCategoryRouter(asPrismaClient(prisma)));
 
     const res = await request(app)
       .get("/dispute-categories")
@@ -136,7 +183,7 @@ describe("Dispute Category Routes", () => {
 
     const app = express();
     app.use(express.json());
-    app.use("/dispute-categories", createDisputeCategoryRouter(prisma as any));
+    app.use("/dispute-categories", createDisputeCategoryRouter(asPrismaClient(prisma)));
 
     const res = await request(app)
       .post("/dispute-categories")
@@ -151,7 +198,7 @@ describe("Dispute Category Routes", () => {
     const prisma = createMockPrisma();
     const app = express();
     app.use(express.json());
-    app.use("/dispute-categories", createDisputeCategoryRouter(prisma as any));
+    app.use("/dispute-categories", createDisputeCategoryRouter(asPrismaClient(prisma)));
 
     const res = await request(app)
       .post("/dispute-categories")

@@ -43,7 +43,7 @@ function makeHorizonMock() {
 
 /** Builds a minimal valid signed XDR string using the real SDK so the parser
  *  accepts it. Falls back to a known-invalid string for negative tests. */
-const VALID_KEY = "GABC1234VALIDSTELLARKEY000000000000000000000000000000";
+const VALID_KEY = "GAT64WXNUTEGEPUCVY37RYK3FORUD53LQURINYCZFF5JQ77RXQK4DJ7E";
 const INVALID_XDR = "not-valid-xdr-at-all";
 
 // ── submitTransaction — success path ─────────────────────────────────────────

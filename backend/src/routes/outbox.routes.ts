@@ -13,6 +13,7 @@ import {
   exportOutboxGaps,
 } from "../lib/outbox/outboxScanner";
 import { adminMiddleware } from "../middleware/admin.middleware";
+import { prisma } from "../lib/db";
 
 const isAdmin = adminMiddleware;
 
@@ -112,8 +113,6 @@ export function createOutboxRoutes(): Router {
     isAdmin,
     async (req: Request, res: Response, next: NextFunction) => {
       try {
-        const prisma = require("../lib/db").prisma;
-
         // Fetch outbox stats
         const totalEvents = await prisma.chainEventOutbox.count();
         const pendingEvents = await prisma.chainEventOutbox.count({
@@ -177,8 +176,6 @@ export function createOutboxRoutes(): Router {
             error: "Missing required field: eventId or tradeId",
           });
         }
-
-        const prisma = require("../lib/db").prisma;
 
         const event = await prisma.chainEventOutbox.findFirst({
           where: eventId ? { id: parseInt(eventId) } : { tradeId },

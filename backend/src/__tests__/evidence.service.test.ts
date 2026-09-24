@@ -33,7 +33,7 @@ const mockEvidence = [
         filename: "video.mp4",
         mimeType: "video/mp4",
         uploadedBy: BUYER,
-        createdAt: new Date("2026-03-01T00:00:00Z"),
+        createdAt: new Date(),
     },
 ];
 
@@ -214,7 +214,7 @@ describe("EvidenceService", () => {
                 filename: "proof-1.mp4",
                 mimeType: "video/mp4",
                 uploadedBy: BUYER.toLowerCase(),
-                createdAt: new Date("2026-03-01T00:00:00Z"),
+                createdAt: new Date(),
             })
             .mockResolvedValueOnce({
                 id: 12,
@@ -223,7 +223,7 @@ describe("EvidenceService", () => {
                 filename: "proof-2.mp4",
                 mimeType: "video/mp4",
                 uploadedBy: SELLER.toLowerCase(),
-                createdAt: new Date("2026-03-01T00:00:01Z"),
+                createdAt: new Date(Date.now() + 1),
             });
         prisma.tradeEvidence.findMany = jest.fn().mockResolvedValue([
             {
@@ -233,7 +233,7 @@ describe("EvidenceService", () => {
                 filename: "proof-1.mp4",
                 mimeType: "video/mp4",
                 uploadedBy: BUYER.toLowerCase(),
-                createdAt: new Date("2026-03-01T00:00:00Z"),
+                createdAt: new Date(),
             },
             {
                 id: 12,
@@ -242,7 +242,7 @@ describe("EvidenceService", () => {
                 filename: "proof-2.mp4",
                 mimeType: "video/mp4",
                 uploadedBy: SELLER.toLowerCase(),
-                createdAt: new Date("2026-03-01T00:00:01Z"),
+                createdAt: new Date(Date.now() + 1),
             },
         ]);
 

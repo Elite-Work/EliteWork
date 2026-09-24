@@ -4,11 +4,12 @@ import request from "supertest";
 import { createManifestRouter } from "../routes/manifest.routes";
 import { ManifestConflictError } from "../services/manifest.service";
 import { AuthService } from "../services/auth.service";
+import { Keypair } from "@stellar/stellar-sdk";
 
 describe("Manifest Routes", () => {
-  const walletAddress = "G" + "A".repeat(55);
-  const buyerAddress = "G" + "B".repeat(55);
-  const mediatorAddress = "G" + "C".repeat(55);
+  const walletAddress = Keypair.random().publicKey();
+  const buyerAddress = Keypair.random().publicKey();
+  const mediatorAddress = Keypair.random().publicKey();
   let token: string;
   let buyerToken: string;
   let mediatorToken: string;
@@ -53,6 +54,7 @@ describe("Manifest Routes", () => {
     );
     process.env.ADMIN_STELLAR_PUBKEYS = mediatorAddress;
     jest.spyOn(AuthService, "isTokenRevoked").mockResolvedValue(false);
+    jest.spyOn(AuthService, "getTokenVersion").mockResolvedValue(0);
   });
 
   it("reads :id from parent route params when posting manifest", async () => {

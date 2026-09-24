@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { TracedHttpClient, createTracedClient, withTracing } from '../lib/traced-http-client';
+import { CORRELATION_ID_HEADER, REQUEST_ID_HEADER } from '../middleware/correlationId.middleware';
 
 // Mock axios and OpenTelemetry
 jest.mock('axios');
@@ -33,7 +34,7 @@ jest.mock('@opentelemetry/api', () => ({
 
 jest.mock('../config/tracing', () => ({
   TracingHelper: {
-    withSpan: jest.fn((name, fn) => fn({})),
+    withSpan: jest.fn((name, fn) => fn({ setAttribute: jest.fn() })),
     recordException: jest.fn(),
   },
 }));
@@ -116,9 +117,9 @@ describe('TracedHttpClient', () => {
 
       const result = requestHandler(config);
 
-      expect(result.headers['X-Correlation-Id']).toBeDefined();
-      expect(result.headers['X-Request-Id']).toBeDefined();
-      expect(result.headers['X-Correlation-Id']).toBe('test-correlation-id');
+      expect(result.headers[CORRELATION_ID_HEADER]).toBeDefined();
+      expect(result.headers[REQUEST_ID_HEADER]).toBeDefined();
+      expect(result.headers[CORRELATION_ID_HEADER]).toBe('test-correlation-id');
     });
 
     it('should preserve existing headers', async () => {
@@ -136,7 +137,7 @@ describe('TracedHttpClient', () => {
 
       expect(result.headers['Authorization']).toBe('Bearer token');
       expect(result.headers['Content-Type']).toBe('application/json');
-      expect(result.headers['X-Correlation-Id']).toBeDefined();
+      expect(result.headers[CORRELATION_ID_HEADER]).toBeDefined();
     });
 
     it('should generate unique request IDs', async () => {
@@ -148,7 +149,7 @@ describe('TracedHttpClient', () => {
       const result1 = requestHandler(config1);
       const result2 = requestHandler(config2);
 
-      expect(result1.headers['X-Request-Id']).not.toBe(result2.headers['X-Request-Id']);
+      expect(result1.headers[REQUEST_ID_HEADER]).not.toBe(result2.headers[REQUEST_ID_HEADER]);
     });
   });
 
@@ -156,7 +157,7 @@ describe('TracedHttpClient', () => {
     it('should handle successful responses', async () => {
       const responseHandler = mockAxiosInstance.interceptors.response.use.mock.calls[0][0];
       const response = {
-        config: { otelSpan: { setAttributes: jest.fn(), setStatus: jest.fn(), end: jest.fn() } },
+        config: { otelSpan: { setAttributes: jest.fn(), setAttribute: jest.fn(), setStatus: jest.fn(), end: jest.fn() } },
         status: 200,
         statusText: 'OK',
         data: { result: 'success' },
@@ -179,7 +180,7 @@ describe('TracedHttpClient', () => {
         message: 'Request failed',
       };
 
-      await expect(errorHandler(error)).rejects.toThrow();
+      await expect(errorHandler(error)).rejects.toBe(error);
       expect(error.config.otelSpan.recordException).toHaveBeenCalled();
       expect(error.config.otelSpan.setStatus).toHaveBeenCalledWith({
         code: 'ERROR',
@@ -190,7 +191,7 @@ describe('TracedHttpClient', () => {
     it('should track response body size', async () => {
       const responseHandler = mockAxiosInstance.interceptors.response.use.mock.calls[0][0];
       const response = {
-        config: { otelSpan: { setAttributes: jest.fn(), setStatus: jest.fn(), end: jest.fn() } },
+        config: { otelSpan: { setAttributes: jest.fn(), setAttribute: jest.fn(), setStatus: jest.fn(), end: jest.fn() } },
         status: 200,
         statusText: 'OK',
         data: { result: 'success', large: 'x'.repeat(1000) },
@@ -198,9 +199,9 @@ describe('TracedHttpClient', () => {
 
       responseHandler(response);
 
-      expect(response.config.otelSpan.setAttributes).toHaveBeenCalledWith(
+      expect(response.config.otelSpan.setAttribute).toHaveBeenCalledWith(
         'http.response_body_size',
-        expect.any(Number)
+        expect.any(Number),
       );
     });
   });
@@ -304,7 +305,7 @@ describe('withTracing', () => {
 
     // Mock the implementation to call the function
     TracingHelper.withSpan.mockImplementation((name: string, fn: (span: unknown) => unknown) => {
-      return fn({}); // Mock span
+      return fn({ setAttribute: jest.fn() });
     });
 
     await withTracing('test-operation', mockFn);

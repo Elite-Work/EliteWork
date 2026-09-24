@@ -2,8 +2,10 @@ import express from "express";
 import jwt from "jsonwebtoken";
 import request from "supertest";
 import * as StellarSdk from "@stellar/stellar-sdk";
+import type { TradeNote } from "@prisma/client";
 import { tradeNotesRoutes } from "../routes/trade.notes.routes";
 import { AuthService } from "../services/auth.service";
+import type { TradeNotesService } from "../services/trade.notes.service";
 
 import { errorHandler } from "../middleware/errorHandler";
 import { encrypt, decrypt } from "../lib/crypto";
@@ -18,21 +20,59 @@ jest.mock("../services/auth.service", () => ({
   },
 }));
 
-let mockAddNote: jest.Mock;
-let mockListNotes: jest.Mock;
+type AddNoteMock = jest.MockedFunction<TradeNotesService["addNote"]>;
+type ListNotesMock = jest.MockedFunction<TradeNotesService["listNotes"]>;
+type NoteView = Awaited<ReturnType<TradeNotesService["listNotes"]>>[number];
+
+let mockAddNote: AddNoteMock;
+let mockListNotes: ListNotesMock;
+let MockTradeNoteAccessDeniedError: new () => Error;
+let MockTradeNoteNotFoundError: new () => Error;
 
 beforeAll(() => {
-  const mod = require("../services/trade.notes.service") as {
-    mockAddNote: jest.Mock;
-    mockListNotes: jest.Mock;
-  };
+  const mod = jest.requireMock<{
+    mockAddNote: AddNoteMock;
+    mockListNotes: ListNotesMock;
+    TradeNoteAccessDeniedError: new () => Error;
+    TradeNoteNotFoundError: new () => Error;
+  }>("../services/trade.notes.service");
   mockAddNote = mod.mockAddNote;
   mockListNotes = mod.mockListNotes;
+  MockTradeNoteAccessDeniedError = mod.TradeNoteAccessDeniedError;
+  MockTradeNoteNotFoundError = mod.TradeNoteNotFoundError;
 });
 
+function makeTradeNote(overrides: Partial<TradeNote> = {}): TradeNote {
+  return {
+    id: 1,
+    tradeId: "4294967297",
+    authorAddress: "g-author",
+    content: "encrypted-content",
+    createdAt: new Date("2025-01-01T00:00:00.000Z"),
+    ...overrides,
+  };
+}
+
+function makeNoteView(overrides: Partial<NoteView> = {}): NoteView {
+  return {
+    id: 1,
+    tradeId: "4294967297",
+    authorAddress: "g-author",
+    content: "decrypted-content",
+    createdAt: new Date("2025-01-01T00:00:00.000Z"),
+    ...overrides,
+  };
+}
+
 jest.mock("../services/trade.notes.service", () => {
-  const addNote = jest.fn();
-  const listNotes = jest.fn();
+  const addNote = jest.fn<
+    ReturnType<TradeNotesService["addNote"]>,
+    Parameters<TradeNotesService["addNote"]>
+  >();
+  const listNotes = jest.fn<
+    ReturnType<TradeNotesService["listNotes"]>,
+    Parameters<TradeNotesService["listNotes"]>
+  >();
   class MockAccessDeniedError extends Error {
     status = 403;
     constructor() {
@@ -123,6 +163,8 @@ describe("Trade Notes Routes", () => {
 
   beforeEach(() => {
     jest.spyOn(AuthService, "isTokenRevoked").mockResolvedValue(false);
+    mockAddNote.mockReset();
+    mockListNotes.mockReset();
   });
 
   afterEach(() => {
@@ -135,10 +177,9 @@ describe("Trade Notes Routes", () => {
 
   describe("POST /trades/:id/notes", () => {
     it("returns 201 and adds a note", async () => {
-      mockAddNote.mockResolvedValue({
-        id: 1,
-        createdAt: new Date("2025-01-01T00:00:00Z"),
-      });
+      mockAddNote.mockResolvedValue(
+        makeTradeNote({ createdAt: new Date("2025-01-01T00:00:00Z") }),
+      );
 
       const res = await request(app)
         .post(`/trades/${tradeId}/notes`)
@@ -182,9 +223,8 @@ describe("Trade Notes Routes", () => {
     });
 
     it("returns 403 when TradeNotesService throws TradeNoteAccessDeniedError", async () => {
-      const { TradeNoteAccessDeniedError } = require("../services/trade.notes.service");
       mockAddNote.mockRejectedValue(
-        new TradeNoteAccessDeniedError(),
+        new MockTradeNoteAccessDeniedError(),
       );
 
       const res = await request(app)
@@ -196,9 +236,8 @@ describe("Trade Notes Routes", () => {
     });
 
     it("returns 404 when TradeNotesService throws TradeNoteNotFoundError", async () => {
-      const { TradeNoteNotFoundError } = require("../services/trade.notes.service");
       mockAddNote.mockRejectedValue(
-        new TradeNoteNotFoundError(),
+        new MockTradeNoteNotFoundError(),
       );
 
       const res = await request(app)
@@ -219,13 +258,12 @@ describe("Trade Notes Routes", () => {
 
     it("returns decrypted notes for the author", async () => {
       mockListNotes.mockResolvedValue([
-        {
-          id: 1,
+        makeNoteView({
           tradeId,
           authorAddress: buyerAddress.toLowerCase(),
           content: "My private note",
           createdAt: now,
-        },
+        }),
       ]);
 
       const res = await request(app)
@@ -242,13 +280,12 @@ describe("Trade Notes Routes", () => {
 
     it("returns null content for non-author party", async () => {
       mockListNotes.mockResolvedValue([
-        {
-          id: 1,
+        makeNoteView({
           tradeId,
           authorAddress: buyerAddress.toLowerCase(),
           content: null,
           createdAt: now,
-        },
+        }),
       ]);
 
       const res = await request(app)
@@ -267,9 +304,8 @@ describe("Trade Notes Routes", () => {
     });
 
     it("returns 403 when TradeNotesService throws TradeNoteAccessDeniedError", async () => {
-      const { TradeNoteAccessDeniedError } = require("../services/trade.notes.service");
       mockListNotes.mockRejectedValue(
-        new TradeNoteAccessDeniedError(),
+        new MockTradeNoteAccessDeniedError(),
       );
 
       const res = await request(app)
@@ -292,7 +328,13 @@ describe("Trade Notes Routes", () => {
       mockAddNote.mockImplementation(
         async (_tradeId: string, _author: string, content: string) => {
           storedContent = encrypt(content);
-          return { id: 1, createdAt: new Date() };
+          return makeTradeNote({
+            id: 1,
+            tradeId: _tradeId,
+            authorAddress: _author,
+            content: storedContent ?? "",
+            createdAt: new Date(),
+          });
         },
       );
 

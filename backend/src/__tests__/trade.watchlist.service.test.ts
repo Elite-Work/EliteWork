@@ -1,13 +1,59 @@
+import {
+  Prisma,
+  Trade,
+  TradeStatus,
+  UserWatchlist,
+} from "@prisma/client";
 import { TradeWatchlistService } from "../services/trade.watchlist.service";
 
 describe("TradeWatchlistService", () => {
-  const trade = { tradeId: "trade-1", buyerAddress: "g-user", sellerAddress: "g-seller" };
-  const watch = { id: 1, userAddress: "g-user", tradeId: "trade-1", createdAt: new Date() };
-  const prisma = {
-    trade: { findUnique: jest.fn() },
-    userWatchlist: { upsert: jest.fn(), deleteMany: jest.fn(), findMany: jest.fn() },
+  const trade: Trade = {
+    id: 1,
+    tradeId: "trade-1",
+    buyerAddress: "g-user",
+    sellerAddress: "g-seller",
+    amountUsdc: "100",
+    buyerLossBps: 5000,
+    sellerLossBps: 5000,
+    version: 0,
+    status: TradeStatus.CREATED,
+    fundedAt: null,
+    deliveredAt: null,
+    completedAt: null,
+    expiresAt: null,
+    expiredAt: null,
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    updatedAt: new Date("2026-01-01T00:00:00.000Z"),
   };
-  const service = new TradeWatchlistService(prisma as any);
+  const watch: UserWatchlist = {
+    id: 1,
+    userAddress: "g-user",
+    tradeId: "trade-1",
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+  };
+  type WatchlistWithTrade = Prisma.UserWatchlistGetPayload<{
+    include: { trade: true };
+  }>;
+  type WatchlistDatabase = ConstructorParameters<typeof TradeWatchlistService>[0];
+  const prisma = {
+    trade: {
+      findUnique: jest.fn<Promise<Trade | null>, [args: Prisma.TradeFindUniqueArgs]>(),
+    },
+    userWatchlist: {
+      upsert: jest.fn<Promise<UserWatchlist>, [args: Prisma.UserWatchlistUpsertArgs]>(),
+      deleteMany: jest.fn<
+        Promise<Prisma.BatchPayload>,
+        [args: Prisma.UserWatchlistDeleteManyArgs]
+      >(),
+      findMany: jest.fn<
+        Promise<WatchlistWithTrade[]>,
+        [args: Prisma.UserWatchlistFindManyArgs]
+      >(),
+    },
+  };
+  const service = new TradeWatchlistService(
+    prisma as unknown as WatchlistDatabase,
+  );
 
   beforeEach(() => jest.clearAllMocks());
 

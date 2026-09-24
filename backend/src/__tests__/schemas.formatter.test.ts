@@ -242,8 +242,9 @@ describe("Trade Schemas - Formatters & Validators", () => {
         });
         expect(result.success).toBe(true);
         if (result.success) {
-          expect(result.data.buyerLossBps).toBeUndefined();
-          expect(result.data.sellerLossBps).toBeUndefined();
+          const data = result.data as Record<string, unknown>;
+          expect(data.buyerLossBps).toBeUndefined();
+          expect(data.sellerLossBps).toBeUndefined();
         }
       });
 

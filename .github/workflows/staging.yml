@@ -71,6 +71,30 @@ jobs:
           ./scripts/staging-up.sh
         timeout-minutes: 10
 
+      - name: Start backend service
+        working-directory: backend
+        run: |
+          set -a
+          source ../.env.staging
+          set +a
+          export DATABASE_URL="${STAGING_DATABASE_URL:-postgresql://postgres:staging-password@localhost:5434/amana_staging}"
+          export REDIS_URL="${STAGING_REDIS_URL:-redis://localhost:6380}"
+          export JWT_SECRET="${JWT_SECRET:-ci-staging-jwt-secret-placeholder-minimum-32}"
+          export AMANA_ESCROW_CONTRACT_ID="${AMANA_ESCROW_CONTRACT_ID:-CCY3G5O6M7K8N9P0Q1R2S3T4U5V6W7X8Y9Z0A1B2C3}"
+          export USDC_CONTRACT_ID="${USDC_CONTRACT_ID:-test-usdc-contract}"
+          export ADMIN_SECRET_KEY="${ADMIN_SECRET_KEY:-test-admin-secret-key-value}"
+          nohup npm run dev > /tmp/amana-backend.log 2>&1 &
+          echo $! > /tmp/amana-backend.pid
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://localhost:4000/health/live >/dev/null; then
+              echo "Backend is ready"
+              exit 0
+            fi
+            sleep 2
+          done
+          cat /tmp/amana-backend.log
+          exit 1
+
       - name: Validate staging deployment
         run: ./scripts/staging-validate.sh
         timeout-minutes: 5

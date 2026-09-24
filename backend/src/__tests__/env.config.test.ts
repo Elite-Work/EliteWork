@@ -210,7 +210,14 @@ describe('env config — optional fields absent or malformed', () => {
 
 describe('env config — aggregated boot validation (multi-error report)', () => {
   it('reports ALL missing required variables, not just the first', () => {
-    const { JWT_SECRET: _, DATABASE_URL: __, AMANA_ESCROW_CONTRACT_ID: ___, USDC_CONTRACT_ID: ____, ...rest } = VALID_BASE;
+    const {
+      JWT_SECRET: _,
+      DATABASE_URL: __,
+      AMANA_ESCROW_CONTRACT_ID: ___,
+      USDC_CONTRACT_ID: ____,
+      ADMIN_SECRET_KEY: _____,
+      ...rest
+    } = VALID_BASE;
     const issues = collectEnvIssues(rest);
     const keys = issues.map((i) => i.key);
     expect(keys).toContain('JWT_SECRET');
@@ -222,7 +229,13 @@ describe('env config — aggregated boot validation (multi-error report)', () =>
   });
 
   it('throws an EnvironmentValidationError carrying every issue', () => {
-    const { JWT_SECRET: _, DATABASE_URL: __, USDC_CONTRACT_ID: ___, ...rest } = VALID_BASE;
+    const {
+      JWT_SECRET: _,
+      DATABASE_URL: __,
+      USDC_CONTRACT_ID: ___,
+      AMANA_ESCROW_CONTRACT_ID: ____,
+      ...rest
+    } = VALID_BASE;
     expect(() => assertValidEnv(rest)).toThrow(EnvironmentValidationError);
     try {
       assertValidEnv(rest);

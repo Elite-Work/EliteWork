@@ -13,7 +13,7 @@ export const authMiddleware = async (
   // Use centralized auth helper for proper error classification
   const { user, error } = await AuthHelper.authenticateRequest(
     req,
-    AuthService.validateToken,
+    (token: string) => AuthService.validateToken(token),
   );
 
   if (error) {
@@ -23,8 +23,10 @@ export const authMiddleware = async (
     if (isAppError(error)) {
       res.status(error.statusCode).json({
         code: error.code,
-        error: "Unauthorized",
+        message: error.message,
+        error: error.message,
         details: error.details,
+        timestamp: new Date().toISOString(),
       });
       return;
     }

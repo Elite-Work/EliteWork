@@ -4,7 +4,7 @@ import { getPinataClient } from "../config/ipfs";
 import { retryAsync } from "../lib/retry";
 import { appLogger } from "../middleware/logger";
 import { TracingHelper } from "../config/tracing";
-import { env } from "../config/env";
+import { env, runtimeEnvValue } from "../config/env";
 import {
   CircuitBreaker,
   CircuitBreakerOpenError,
@@ -23,14 +23,14 @@ export class IPFSService {
 
     constructor() {
       this.pinataCircuit = new CircuitBreaker("pinata-ipfs", {
-        failureThreshold: env.IPFS_PINATA_CIRCUIT_FAILURE_THRESHOLD,
+        failureThreshold: runtimeEnvValue("IPFS_PINATA_CIRCUIT_FAILURE_THRESHOLD"),
         successThreshold: 2,
-        cooldownMs: env.IPFS_PINATA_CIRCUIT_COOLDOWN_MS,
+        cooldownMs: runtimeEnvValue("IPFS_PINATA_CIRCUIT_COOLDOWN_MS"),
       });
     }
 
     private getUploadTimeoutMs(): number {
-        return env.IPFS_UPLOAD_TIMEOUT_MS;
+        return runtimeEnvValue("IPFS_UPLOAD_TIMEOUT_MS");
     }
 
     private async withTimeout<T>(operation: Promise<T>, timeoutMs: number): Promise<T> {
@@ -73,14 +73,19 @@ export class IPFSService {
 
                     try {
                         const timeoutMs = this.getUploadTimeoutMs();
-                        const result = await retryAsync(() =>
-                            this.withTimeout(
-                                pinata.pinFileToIPFS(stream, {
-                                    pinataMetadata: { name: filename },
-                                    pinataOptions: { cidVersion: 1 },
-                                }),
-                                timeoutMs,
-                            )
+                        const result = await retryAsync(
+                            () =>
+                                this.withTimeout(
+                                    pinata.pinFileToIPFS(stream, {
+                                        pinataMetadata: { name: filename },
+                                        pinataOptions: { cidVersion: 1 },
+                                    }),
+                                    timeoutMs,
+                                ),
+                            {
+                                backoffMs: [1000, 2000, 4000, 8000],
+                                operationName: "ipfs.upload",
+                            },
                         );
 
                         span.setAttributes({

@@ -4,8 +4,8 @@ import request from "supertest";
 import * as StellarSdk from "@stellar/stellar-sdk";
 
 import { createAdminStreamsRouter } from "../routes/admin.streams.routes";
-import { streamClawbackService } from "../services/streamClawback.service";
 import { errorHandler } from "../middleware/errorHandler";
+import { AppError, ErrorCode } from "../errors/errorCodes";
 import { AdminStreamsService } from "../services/adminStreams.service";
 import { StreamValidationService } from "../services/streamValidation.service";
 
@@ -66,6 +66,23 @@ jest.mock("../services/auth.service", () => ({
 }));
 
 const adminAddress = StellarSdk.Keypair.random().publicKey();
+const testLocks = new Set<string>();
+const testClawbackService = {
+  acquire(streamId: string): void {
+    if (testLocks.has(streamId)) {
+      throw new AppError(
+        ErrorCode.DOMAIN_ERROR,
+        `A clawback operation is already in progress for stream ${streamId}`,
+        409,
+        { streamId },
+      );
+    }
+    testLocks.add(streamId);
+  },
+  release(streamId: string): void {
+    testLocks.delete(streamId);
+  },
+};
 
 function signToken(walletAddress: string): string {
   const secret = process.env.JWT_SECRET || "test-secret-at-least-32-characters-long";
@@ -82,7 +99,13 @@ function buildApp(): Express {
   app.use(express.json());
   app.use(
     "/api",
-    createAdminStreamsRouter(undefined, undefined, fakeStreamsService(), fakeValidationService()),
+    createAdminStreamsRouter(
+      undefined,
+      undefined,
+      fakeStreamsService(),
+      fakeValidationService(),
+      testClawbackService,
+    ),
   );
   app.use(errorHandler);
   return app;
@@ -98,6 +121,7 @@ describe("concurrent stream clawback prevention (#14)", () => {
   });
 
   beforeEach(() => {
+    testLocks.clear();
     app = buildApp();
   });
 
@@ -114,7 +138,7 @@ describe("concurrent stream clawback prevention (#14)", () => {
   });
 
   it("rejects a concurrent clawback on the same stream with 409", async () => {
-    streamClawbackService.acquire("stream-race");
+    testClawbackService.acquire("stream-race");
 
     try {
       const res = await request(app)
@@ -126,12 +150,12 @@ describe("concurrent stream clawback prevention (#14)", () => {
       expect(res.body.code).toBe("DOMAIN_ERROR");
       expect(res.body.message).toMatch(/already in progress/i);
     } finally {
-      streamClawbackService.release("stream-race");
+      testClawbackService.release("stream-race");
     }
   });
 
   it("allows clawback on different streams concurrently", async () => {
-    streamClawbackService.acquire("stream-a");
+    testClawbackService.acquire("stream-a");
 
     try {
       const res = await request(app)
@@ -142,7 +166,7 @@ describe("concurrent stream clawback prevention (#14)", () => {
       expect(res.status).toBe(200);
       expect(res.body.streamId).toBe("stream-b");
     } finally {
-      streamClawbackService.release("stream-a");
+      testClawbackService.release("stream-a");
     }
   });
 
@@ -161,7 +185,7 @@ describe("concurrent stream clawback prevention (#14)", () => {
   });
 
   it("returns standardized error shape on concurrent conflict", async () => {
-    streamClawbackService.acquire("stream-shape");
+    testClawbackService.acquire("stream-shape");
 
     try {
       const res = await request(app)
@@ -175,7 +199,7 @@ describe("concurrent stream clawback prevention (#14)", () => {
       expect(res.body).toHaveProperty("details");
       expect(res.body.details.streamId).toBe("stream-shape");
     } finally {
-      streamClawbackService.release("stream-shape");
+      testClawbackService.release("stream-shape");
     }
   });
 });

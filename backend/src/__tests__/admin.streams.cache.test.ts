@@ -8,6 +8,7 @@
 
 jest.mock("../config/env", () => ({
   env: { NODE_ENV: "test", JWT_SECRET: "test-jwt-secret-value-with-minimum-length-32" },
+  runtimeEnvValue: (key: string) => process.env[key] ?? false,
 }));
 
 jest.mock("../config/rateLimit", () => ({
@@ -364,7 +365,12 @@ describe("Stream cache service", () => {
       const avgMiss = missDuration / ITERATIONS;
       const avgHit = hitDuration / ITERATIONS;
 
-      expect(avgHit).toBeLessThan(avgMiss * 0.8);
+      // Wall-clock ratios are noisy on shared CI runners. Verify the
+      // deterministic cache contract instead: every lookup hits Redis, while
+      // only miss-path iterations consult the database.
+      const { prisma } = require("../lib/db");
+      expect(mockRedisGet).toHaveBeenCalledTimes(ITERATIONS * 2);
+      expect(prisma.stream.findUnique).toHaveBeenCalledTimes(ITERATIONS);
 
       // Log results for visibility
       const { appLogger } = require("../middleware/logger");

@@ -50,7 +50,7 @@ export class StreamClawbackService {
     // If Redis SET fails due to race (NX fails), we keep lock and treat as success since in-memory already protects this pod.
     // If Redis op errors, we remain holding in-memory and log; the lock will be released via TTL + release()
     void redis
-      .set(redisKey(streamId), "1", "NX", "EX", REDIS_CLAWBACK_TTL_SECONDS)
+      .set(redisKey(streamId), "1", "EX", REDIS_CLAWBACK_TTL_SECONDS, "NX")
       .then((result) => {
         if (result !== "OK") {
           // Redis indicates another pod holds lock — we already added to local set, so we are actually double-holding
@@ -79,7 +79,7 @@ export class StreamClawbackService {
       );
     }
     try {
-      const result = await redis.set(redisKey(streamId), "1", "NX", "EX", REDIS_CLAWBACK_TTL_SECONDS);
+      const result = await redis.set(redisKey(streamId), "1", "EX", REDIS_CLAWBACK_TTL_SECONDS, "NX");
       if (result !== "OK") {
         throw new AppError(
           ErrorCode.DOMAIN_ERROR,

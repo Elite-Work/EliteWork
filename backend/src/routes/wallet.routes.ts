@@ -29,12 +29,17 @@ walletRoutes.get("/path-payment-quote", authMiddleware, async (req, res) => {
       return res.status(400).json({ error: "Missing sourceAmount or sourceAsset" });
     }
     
-    const quotes = await pathPaymentService.getPathPaymentQuote(
+    const result = await pathPaymentService.getPathPaymentQuote(
       sourceAmount as string,
       sourceAsset as string,
       sourceAssetIssuer as string
     );
-    res.json({ routes: quotes });
+    res.json({
+      routes: result.quotes,
+      cached: result.cached,
+      freshnessMs: result.freshnessMs,
+      quotedAt: result.quotedAt,
+    });
   } catch (error) {
     res.status(500).json({ error: "Failed to fetch quotes" });
   }

@@ -100,10 +100,18 @@ export default function EvidenceCaptureScreen({ route, navigation }: Props) {
     <View style={[styles.container, { paddingTop: insets.top }]}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
+        <TouchableOpacity
+          style={styles.backBtn}
+          onPress={() => navigation.goBack()}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
           <Text style={styles.backText}>← Back</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Upload Evidence</Text>
+        <Text style={styles.headerTitle} accessibilityRole="header">
+          Upload Evidence
+        </Text>
         <View style={{ width: 60 }} />
       </View>
 
@@ -121,6 +129,8 @@ export default function EvidenceCaptureScreen({ route, navigation }: Props) {
             <TouchableOpacity
               style={styles.doneBtn}
               onPress={() => navigation.navigate('TradeDetail', { tradeId })}
+              accessibilityRole="button"
+              accessibilityLabel="Back to trade"
             >
               <Text style={styles.doneBtnText}>Back to Trade</Text>
             </TouchableOpacity>
@@ -136,8 +146,13 @@ export default function EvidenceCaptureScreen({ route, navigation }: Props) {
                     key={t}
                     style={[styles.typeBtn, selectedType === t && styles.typeBtnActive]}
                     onPress={() => { setSelectedType(t); handleReset(); }}
+                    accessibilityRole="radio"
+                    accessibilityLabel={`${t === 'video' ? 'Video' : 'Photo'} evidence type`}
+                    accessibilityState={{ selected: selectedType === t }}
                   >
-                    <Text style={styles.typeIcon}>{t === 'video' ? '🎥' : '📷'}</Text>
+                    <Text style={styles.typeIcon} accessibilityElementsHidden importantForAccessibility="no">
+                      {t === 'video' ? '🎥' : '📷'}
+                    </Text>
                     <Text style={[styles.typeLabel, selectedType === t && styles.typeLabelActive]}>
                       {t === 'video' ? 'Video' : 'Photo'}
                     </Text>
@@ -162,16 +177,28 @@ export default function EvidenceCaptureScreen({ route, navigation }: Props) {
                 style={[styles.captureArea, captured && styles.captureAreaDone]}
                 onPress={uploadState === 'idle' || uploadState === 'error' ? handleCapture : undefined}
                 activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel={
+                  captured
+                    ? `${selectedType === 'video' ? 'Video' : 'Photo'} captured: ${captured.name}`
+                    : `Tap to ${selectedType === 'video' ? 'record a video' : 'capture a photo'}`
+                }
+                accessibilityHint={captured ? undefined : 'Opens the device camera'}
+                accessibilityState={{ disabled: uploadState === 'uploading' || uploadState === 'captured' }}
               >
                 {captured ? (
                   <View style={styles.capturedPreview}>
-                    <Text style={styles.capturedIcon}>{selectedType === 'video' ? '🎬' : '🖼️'}</Text>
+                    <Text style={styles.capturedIcon} accessibilityElementsHidden importantForAccessibility="no">
+                      {selectedType === 'video' ? '🎬' : '🖼️'}
+                    </Text>
                     <Text style={styles.capturedName}>{captured.name}</Text>
                     <Text style={styles.capturedReady}>Ready to upload</Text>
                   </View>
                 ) : (
                   <View style={styles.capturePlaceholder}>
-                    <Text style={styles.captureIcon}>{selectedType === 'video' ? '🎥' : '📷'}</Text>
+                    <Text style={styles.captureIcon} accessibilityElementsHidden importantForAccessibility="no">
+                      {selectedType === 'video' ? '🎥' : '📷'}
+                    </Text>
                     <Text style={styles.captureLabel}>
                       Tap to {selectedType === 'video' ? 'record' : 'capture'}
                     </Text>
@@ -180,7 +207,14 @@ export default function EvidenceCaptureScreen({ route, navigation }: Props) {
               </TouchableOpacity>
 
               {captured && uploadState !== 'uploading' && (
-                <TouchableOpacity style={styles.retakeBtn} onPress={handleReset}>
+                <TouchableOpacity
+                  style={styles.retakeBtn}
+                  onPress={handleReset}
+                  accessibilityRole="button"
+                  accessibilityLabel="Retake"
+                  accessibilityHint={`Discards the captured ${selectedType} and returns to capture`}
+                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                >
                   <Text style={styles.retakeBtnText}>↩ Retake</Text>
                 </TouchableOpacity>
               )}
@@ -188,7 +222,7 @@ export default function EvidenceCaptureScreen({ route, navigation }: Props) {
 
             {/* Error */}
             {uploadState === 'error' && uploadError && (
-              <View style={styles.errorBanner}>
+              <View style={styles.errorBanner} accessibilityRole="alert" accessibilityLiveRegion="assertive">
                 <Text style={styles.errorText}>Upload failed: {uploadError}</Text>
               </View>
             )}
@@ -199,6 +233,13 @@ export default function EvidenceCaptureScreen({ route, navigation }: Props) {
                 style={[styles.uploadBtn, uploadState === 'uploading' && styles.btnDisabled]}
                 onPress={handleUpload}
                 disabled={uploadState === 'uploading'}
+                accessibilityRole="button"
+                accessibilityLabel={
+                  uploadState === 'uploading'
+                    ? 'Uploading, please wait'
+                    : `Upload ${selectedType === 'video' ? 'video' : 'photo'}`
+                }
+                accessibilityState={{ disabled: uploadState === 'uploading', busy: uploadState === 'uploading' }}
               >
                 {uploadState === 'uploading' ? (
                   <View style={styles.uploadingRow}>
@@ -231,6 +272,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#e0e8e0',
   },
+  backBtn: { minHeight: 44, minWidth: 60, justifyContent: 'center' },
   backText: { fontSize: 14, color: '#2d6a2d', fontWeight: '500', width: 60 },
   headerTitle: { fontSize: 18, fontWeight: '700', color: '#1a3a1a' },
   content: { padding: 16, gap: 16 },
@@ -279,8 +321,8 @@ const styles = StyleSheet.create({
   capturedIcon: { fontSize: 40 },
   capturedName: { fontSize: 12, color: '#555', fontFamily: 'monospace' },
   capturedReady: { fontSize: 13, color: '#2d6a2d', fontWeight: '600' },
-  retakeBtn: { alignSelf: 'center' },
-  retakeBtnText: { color: '#888', fontSize: 13 },
+  retakeBtn: { alignSelf: 'center', minHeight: 44, minWidth: 44, justifyContent: 'center', paddingHorizontal: 12 },
+  retakeBtnText: { color: '#888', fontSize: 13, textAlign: 'center' },
   errorBanner: { backgroundColor: '#FEE2E2', padding: 12, borderRadius: 8 },
   errorText: { color: '#DC2626', fontSize: 13 },
   uploadBtn: {

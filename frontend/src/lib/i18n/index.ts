@@ -5,6 +5,7 @@
  *   t("wallet.wrongNetworkBody", { expected: "Testnet" }); // → "Switch Freighter to Testnet…"
  */
 import en from "./messages/en";
+import fr from "./messages/fr";
 import { pseudoLocalize } from "./pseudo";
 import { resolveLocale, type Locale } from "./config";
 
@@ -27,7 +28,7 @@ type Paths<T> = {
 
 export type MessageKey = Paths<Messages>;
 
-const CATALOGS: Record<string, Messages> = { "en-NG": en, "en-US": en, pseudo: en };
+const CATALOGS: Record<string, Messages> = { "en-NG": en, "en-US": en, fr, pseudo: en };
 
 function lookup(catalog: Messages, key: string): string | undefined {
   return key

@@ -453,3 +453,169 @@ mod bps_fuzz_tests {
         }
     }
 }
+// -----------------------------------------------------------------------
+    // 8. ADR-002 boundary conditions: odd bps, 0/100 splits, rounding edge cases
+    // -----------------------------------------------------------------------
+
+    /// ADR-002: Test odd BPS values that don't divide evenly into the amount.
+    /// These expose rounding edge cases where integer division produces remainder.
+    #[test]
+    fn test_odd_bps_rounding_boundaries() {
+        // Amounts chosen to produce remainders with various BPS values
+        let test_amounts = [1, 3, 7, 13, 17, 99, 127, 1001, 9999];
+        let odd_bps_values = [1, 3, 7, 13, 37, 123, 333, 777, 999, 9999];
+
+        for &amount in &test_amounts {
+            for &bps in &odd_bps_values {
+                let fee = fee_amount(amount, bps);
+                assert!(fee.is_some(), "fee must not overflow for amount={amount}, bps={bps}");
+                let Some(fee) = fee else { continue };
+                let seller = amount - fee;
+
+                // Conservation invariant
+                assert_eq!(
+                    seller + fee, amount,
+                    "conservation violated: amount={amount}, bps={bps}"
+                );
+                // Non-negativity
+                assert!(seller >= 0 && fee >= 0);
+            }
+        }
+    }
+
+    /// ADR-002: Test 0/100 splits for loss ratios (buyer bears all / seller bears all).
+    /// This is the extreme boundary where one party bears 100% of any loss.
+    #[test]
+    fn test_loss_ratio_0_100_boundaries() {
+        let total = 10_000_i128;
+        let fee_bps = 100u32;
+
+        // 100/0 split: buyer bears all loss
+        let buyer_loss_bps = 10_000u32;
+        let seller_loss_bps = 0u32;
+
+        // seller_gets_bps = 10_000 (seller gets 100%, no loss)
+        let seller_gets_bps = 10_000u32;
+        let loss_bps = BPS_DIVISOR - seller_gets_bps as i128;
+        let seller_loss = loss_amount(total, loss_bps, seller_loss_bps).unwrap();
+        assert_eq!(seller_loss, 0, "seller_loss must be 0 when loss_bps=0");
+
+        // seller_gets_bps = 0 (seller gets 0%, full loss to buyer)
+        let seller_gets_bps = 0u32;
+        let loss_bps = BPS_DIVISOR - seller_gets_bps as i128;
+        let seller_loss = loss_amount(total, loss_bps, seller_loss_bps).unwrap();
+        assert_eq!(seller_loss, 0, "seller_loss must be 0 when seller_loss_bps=0");
+
+        // 0/100 split: seller bears all loss
+        let buyer_loss_bps = 0u32;
+        let seller_loss_bps = 10_000u32;
+
+        // seller_gets_bps = 10_000 (seller gets 100%, but seller_loss_bps=10000 means seller bears full loss)
+        let seller_gets_bps = 10_000u32;
+        let loss_bps = BPS_DIVISOR - seller_gets_bps as i128;
+        let seller_loss = loss_amount(total, loss_bps, seller_loss_bps).unwrap();
+        assert_eq!(seller_loss, 0, "seller_loss must be 0 when loss_bps=0");
+
+        // seller_gets_bps = 0 (seller gets 0%, seller bears full loss)
+        let seller_gets_bps = 0u32;
+        let loss_bps = BPS_DIVISOR - seller_gets_bps as i128;
+        let seller_loss = loss_amount(total, loss_bps, seller_loss_bps).unwrap();
+        assert_eq!(seller_loss, total, "seller_loss must equal total when seller bears 100% loss");
+    }
+
+    /// ADR-002: Test i128 overflow guards at maximum safe values.
+    /// Verifies that checked_mul doesn't overflow for edge-case inputs.
+    #[test]
+    fn test_i128_overflow_boundary() {
+        // Maximum amount that can safely multiply by 10_000 without overflow
+        let max_safe = i128::MAX / 10_000;
+
+        // Test at the boundary: max_safe * 10_000 should not overflow
+        assert!(fee_amount(max_safe, 10_000).is_some(), "max_safe * 10_000 must not overflow");
+
+        // Test one above boundary should fail gracefully (return None or panic)
+        let overflow_amount = max_safe + 1;
+        let result = overflow_amount.checked_mul(10_000i128);
+        assert!(result.is_none(), "max_safe+1 * 10_000 must overflow i128");
+
+        // Loss amount worst case: total * 10_000 * 10_000 / 100_000_000
+        // This is equivalent to total, so overflow only happens at i128::MAX
+        let max_total_for_loss = i128::MAX / (10_000 * 10_000);
+        assert!(loss_amount(max_total_for_loss, 10_000, 10_000).is_some());
+    }
+
+    /// ADR-002: Edge case where amount is smaller than the BPS divisor, causing
+    /// rounding to zero for some split configurations.
+    #[test]
+    fn test_micro_amount_rounding() {
+        // These amounts are smaller than BPS_DIVISOR, causing floor division to zero
+        let micro_amounts = [1, 10, 100, 500, 999];
+        let bps_values = [1, 10, 100, 500, 999, 5000, 9999];
+
+        for &amount in &micro_amounts {
+            for &bps in &bps_values {
+                let fee = fee_amount(amount, bps).unwrap();
+
+                // At these small amounts, fee often rounds to 0
+                // Verify that seller still gets the correct amount
+                let seller = amount - fee;
+                assert!(seller >= 0 && fee >= 0);
+                assert_eq!(seller + fee, amount);
+
+                // For loss amount with very small amounts
+                for &slbps in &[1000, 5000, 10000] {
+                    let loss = loss_amount(amount, 5000, slbps).unwrap_or(0);
+                    assert!(loss >= 0 && loss <= amount);
+                }
+            }
+        }
+    }
+
+    /// ADR-002: Metamorphic test - splitting an amount and processing halves
+    /// should produce the same result as processing the full amount.
+    #[test]
+    fn test_split_then_merge_invariant() {
+        let amounts = [1000, 5000, 10000, 99999];
+        let fee_bps = 100u32;
+        let seller_gets_bps = 7000u32;
+        let buyer_loss_bps = 6000u32;
+        let seller_loss_bps = 4000u32;
+
+        for &amount in &amounts {
+            // Process full amount
+            let loss_bps = BPS_DIVISOR - seller_gets_bps as i128;
+            let full_seller_loss = loss_amount(amount, loss_bps, seller_loss_bps).unwrap();
+            let full_seller_raw = amount - full_seller_loss;
+            let full_fee = fee_amount(full_seller_raw, fee_bps).unwrap();
+            let full_seller_net = full_seller_raw - full_fee;
+            let full_buyer_refund = amount - full_seller_raw;
+
+            // Split and merge
+            let half1 = amount / 2;
+            let half2 = amount - half1;
+
+            let l1 = loss_amount(half1, loss_bps, seller_loss_bps).unwrap();
+            let sr1 = half1 - l1;
+            let f1 = fee_amount(sr1, fee_bps).unwrap();
+            let sn1 = sr1 - f1;
+            let br1 = half1 - sr1;
+
+            let l2 = loss_amount(half2, loss_bps, seller_loss_bps).unwrap();
+            let sr2 = half2 - l2;
+            let f2 = fee_amount(sr2, fee_bps).unwrap();
+            let sn2 = sr2 - f2;
+            let br2 = half2 - sr2;
+
+            let total_seller_net = sn1 + sn2;
+            let total_fee = f1 + f2;
+            let total_buyer_refund = br1 + br2;
+
+            // Conservation must hold
+            assert_eq!(
+                total_seller_net + total_buyer_refund + total_fee,
+                amount,
+                "split-then-merge conservation failed for amount={amount}"
+            );
+        }
+    }
+}

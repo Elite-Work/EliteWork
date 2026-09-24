@@ -1033,10 +1033,9 @@ impl EscrowContract {
             .storage()
             .instance()
             .get::<_, Address>(&DataKey::Mediator)
+            && legacy == mediator_address
         {
-            if legacy == mediator_address {
-                env.storage().instance().remove(&DataKey::Mediator);
-            }
+            env.storage().instance().remove(&DataKey::Mediator);
         }
 
         MediatorRemovedEvent {
@@ -1778,10 +1777,9 @@ impl EscrowContract {
             .storage()
             .instance()
             .get::<_, Address>(&DataKey::Mediator)
+            && legacy_mediator == mediator
         {
-            if legacy_mediator == mediator {
-                return mediator;
-            }
+            return mediator;
         }
 
         panic!("Unauthorized mediator");

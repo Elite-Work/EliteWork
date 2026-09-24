@@ -473,9 +473,6 @@ fn test_boundary_split_then_merge_metamorphic() {
         let seller_loss_bps = 10_000 - buyer_loss_bps;
         let fee_bps = rng.gen_range(1u32..=500);
 
-        let pe = PropEnv::new(fee_bps);
-        let (s_full, b_full, f_full) = pe.resolve(buyer_loss_bps, seller_loss_bps, 5000u32, amount);
-
         let pe2 = PropEnv::new(fee_bps);
         let (s_half1, b_half1, f_half1) = pe2.resolve(buyer_loss_bps, seller_loss_bps, 5000u32, amount / 2);
 

@@ -3,6 +3,11 @@ import { appLogger } from "./logger";
 import { TracedRequest } from "./correlationId.middleware";
 import { apiVersionFrom } from "./apiVersion.middleware";
 
+interface RequestWithOptionalUser extends Request {
+  user?: { id?: string };
+  userId?: string;
+}
+
 /**
  * Structured request logging middleware.
  *
@@ -22,7 +27,7 @@ export function requestLoggerMiddleware(
   next: NextFunction,
 ): void {
   const start = Date.now();
-  const traced = req as TracedRequest;
+  const traced = req as TracedRequest & RequestWithOptionalUser;
 
   // Propagate the server-generated request ID to the client.
   if (traced.requestId) {
@@ -39,7 +44,7 @@ export function requestLoggerMiddleware(
       status,
       durationMs,
       correlationId: traced.correlationId,
-      userId: (req as any).user?.id ?? (req as any).userId ?? undefined,
+      userId: traced.user?.id ?? traced.userId ?? undefined,
       userAgent: req.get("user-agent"),
       ip: req.ip,
       // Which API lane served this request: "v1", "/api/legacy", or

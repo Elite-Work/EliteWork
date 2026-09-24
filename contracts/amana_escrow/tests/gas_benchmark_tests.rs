@@ -16,10 +16,8 @@ struct BenchEnv {
     env: Env,
     contract_id: Address,
     usdc_id: Address,
-    admin: Address,
     buyer: Address,
     seller: Address,
-    treasury: Address,
 }
 
 impl BenchEnv {
@@ -27,13 +25,12 @@ impl BenchEnv {
         let env = Env::default();
         env.mock_all_auths();
         let admin = admin_address(&env);
-        let treasury = Address::generate(&env);
         let usdc_id = env
             .register_stellar_asset_contract_v2(admin.clone())
             .address();
         let contract_id = env.register(EscrowContract, ());
         EscrowContractClient::new(&env, &contract_id)
-            .initialize(&admin, &usdc_id, &treasury, &100u32, &usdc_id);
+            .initialize(&admin, &usdc_id, &admin, &100u32, &usdc_id);
 
         let buyer = Address::generate(&env);
         let seller = Address::generate(&env);
@@ -42,10 +39,8 @@ impl BenchEnv {
             env,
             contract_id,
             usdc_id,
-            admin,
             buyer,
             seller,
-            treasury,
         }
     }
 
@@ -149,7 +144,7 @@ fn bench_create_trade() {
 
     let events_before = bench.env.events().all();
 
-    for i in 0..10 {
+    for _ in 0..10 {
         bench.client().create_trade(
             &bench.buyer,
             &bench.seller,
@@ -219,7 +214,7 @@ fn bench_storage_footprint_deposit_release_cycle() {
 
     token::StellarAssetClient::new(&bench.env, &bench.usdc_id).mint(&bench.buyer, &(amount * 5));
 
-    for i in 0..5 {
+    for iteration in 0..5 {
         let trade_id = bench.client().create_trade(
             &bench.buyer,
             &bench.seller,
@@ -232,12 +227,11 @@ fn bench_storage_footprint_deposit_release_cycle() {
         bench.client().confirm_delivery(&trade_id);
         bench.client().release_funds(&trade_id, &bench.buyer);
 
-        if i == 0 || i == 4 {
-            std::eprintln!("[#192] storage_footprint iteration {} complete", i + 1);
+        if iteration == 0 || iteration == 4 {
+            std::eprintln!("[#192] storage_footprint iteration {} complete", iteration + 1);
         }
     }
 
     let final_fees = bench.client().get_accrued_fees();
-    let expected_total_fees = (amount * 5) / 100;
     assert!(final_fees > 0, "fees should accumulate");
 }

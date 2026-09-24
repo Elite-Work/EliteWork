@@ -19,13 +19,16 @@ struct Corpus {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct GeneratorMeta {
+    #[allow(dead_code)]
     seed: u64,
     generated_cases: u64,
     bps_divisor: i128,
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct Fixtures {
     fee_boundary: Vec<FeeCase>,
     fee_generated: Vec<FeeCase>,
@@ -60,15 +63,14 @@ struct ReleaseCase {
     fee_bps: u32,
     seller_amount: i128,
     fee_amount: i128,
-    sum_equals_amount: bool,
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct DisputeCase {
     id: u64,
     total: i128,
     seller_gets_bps: u32,
-    buyer_loss_bps: u32,
     seller_loss_bps: u32,
     fee_bps: u32,
     seller_loss: i128,
@@ -76,17 +78,15 @@ struct DisputeCase {
     buyer_refund: i128,
     fee: i128,
     seller_net: i128,
-    sum_equals_total: bool,
-    all_non_negative: bool,
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct ClawbackCase {
     id: u64,
     trade_amount: i128,
     clawback_amount: i128,
     expected_remaining: i128,
-    expected_clawback_total: i128,
     full_clawback: bool,
 }
 
@@ -94,10 +94,12 @@ struct ClawbackCase {
 
 const BPS_DIVISOR: i128 = 10_000;
 
+#[allow(dead_code)]
 fn checked_fee_amount(amount: i128, fee_bps: u32) -> Option<i128> {
     amount.checked_mul(fee_bps as i128).map(|v| v / BPS_DIVISOR)
 }
 
+#[allow(dead_code)]
 fn checked_loss_amount(total: i128, loss_bps: i128, seller_loss_bps: u32) -> Option<i128> {
     total
         .checked_mul(loss_bps)

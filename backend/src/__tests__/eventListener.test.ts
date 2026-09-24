@@ -1,7 +1,8 @@
 import { jest } from "@jest/globals";
+import { vi } from "vitest";
 import { EventType } from "../types/events";
-
-const vi = jest as any;
+import { createRawSorobanEvent } from "./factories/mockFactories";
+import type { RawSorobanEvent } from "./factories/mockFactories";
 
 /* ------------------------------------------------------------------ */
 /*  Hoisted mock variables (must be declared before vi.mock factories) */
@@ -56,7 +57,7 @@ const TEST_CONFIG = {
 /*  Helpers                                                           */
 /* ------------------------------------------------------------------ */
 
-function createMockPrisma() {
+function createMockPrismaForEventListener() {
   const mockTx = {
     trade: { upsert: vi.fn().mockResolvedValue({}) },
     processedEvent: {
@@ -75,17 +76,6 @@ function createMockPrisma() {
       await cb(mockTx);
     }),
     _mockTx: mockTx,
-  } as any;
-}
-
-/** Build a minimal raw Soroban event for testing. */
-function makeRawEvent(ledger: number, id = `evt-${ledger}`, contractId = "CONTRACT_TEST_123") {
-  return {
-    ledger,
-    id,
-    contractId,
-    topic: [{ _scval: "symbol" }, { _scval: "tradeId" }],
-    value: { type: "test", value: {} },
   };
 }
 

@@ -42,8 +42,11 @@ and `navigation/AppNavigator.tsx`.
 
 - **Cold**: `Linking.getInitialURL()` in `AppNavigator` on mount.
 - **Warm**: `Linking.addEventListener('url', …)`.
-Both funnel through `useDeepLink().handleUrl`. Covered by
-`hooks/useDeepLink.test.ts` and `constants/__tests__/links.test.ts`.
+Both funnel through `useDeepLink().handleUrl`. Parsing logic is covered by
+`hooks/useDeepLink.test.ts` and `constants/__tests__/links.test.ts`; the full
+path (URL → navigation → screen → data fetch) against a real app instance,
+cold and warm, is covered end to end by `e2e/deep-link.e2e.ts`
+(`device.launchApp({ url })` / `device.openURL({ url })`).
 
 ## Fallback for recipients without the app
 

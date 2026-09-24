@@ -159,3 +159,93 @@ jobs:
           name: nightly-detox-android-${{ github.run_id }}
           path: mobile/.detox-artifacts/
           retention-days: 14
+
+  # Runs the same smoke suite against a low-end device from
+  # mobile/docs/DEVICE_MATRIX.md's supported matrix (minimum API 31, on a
+  # low-RAM/low-CPU profile) instead of the default Pixel 6 API 34 used
+  # above — see mobile/.detoxrc.js's `emulatorLowEnd` device.
+  mobile-e2e-android-lowend-nightly:
+    name: Nightly Smoke — Android (low-end device)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: mobile/pnpm-lock.yaml
+
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Cache AVD
+        uses: actions/cache@v4
+        id: avd-cache
+        with:
+          path: |
+            ~/.android/avd/*
+            ~/.android/adb*
+          key: avd-nightly-Pixel_3a_API_31-${{ runner.os }}
+
+      - name: Create AVD
+        if: steps.avd-cache.outputs.cache-hit != 'true'
+        run: |
+          echo "no" | avdmanager create avd \
+            --force \
+            --name Pixel_3a_API_31 \
+            --abi google_apis/x86_64 \
+            --package "system-images;android-31;google_apis;x86_64" \
+            --device "pixel_3a"
+
+      - name: Expo prebuild (Android)
+        run: pnpm expo prebuild --platform android --non-interactive
+        env:
+          CI: true
+
+      - name: Build Android APK (debug)
+        run: |
+          cd android && ./gradlew assembleDebug assembleAndroidTest -DtestBuildType=debug
+        env:
+          CI: true
+
+      - name: Start emulator and run Detox smoke tests
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 31
+          target: google_apis
+          arch: x86_64
+          profile: pixel_3a
+          avd-name: Pixel_3a_API_31
+          # Low-end profile: constrain RAM/heap to approximate real
+          # low-end hardware rather than the runner's default allocation.
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -memory 2048
+          script: cd mobile && pnpm test:e2e:android:lowend
+        env:
+          CI: true
+
+      - name: Upload artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-detox-android-lowend-${{ github.run_id }}
+          path: mobile/.detox-artifacts/
+          retention-days: 14

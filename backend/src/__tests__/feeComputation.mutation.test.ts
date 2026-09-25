@@ -139,11 +139,11 @@ describe("feeComputation — BPS boundary values (mutation killers)", () => {
   it("BPS_DIVISOR is exactly 10_000 — not 9_999 or 10_001", () => {
     // If BPS_DIVISOR were 9_999: fee of 1% on 10_000 = 10_000*100/9_999 ≈ 100.01 → 100n ← same
     // Use a value where rounding diverges: 1% on 9_999
-    // Correct: 9_999 * 100 / 10_000 = 9 (floor of 9.999)
+    // Correct: 9_999 * 100 / 10_000 = 99 (floor of 99.99)
     // Wrong (9_999 divisor): 9_999 * 100 / 9_999 = 100 (exact) → different!
     const r = computeReleaseFee(9_999n, 100);
-    expect(BigInt(r.fee)).toBe(9n); // floor of 9.999
-    expect(BigInt(r.sellerNet)).toBe(9_990n);
+    expect(BigInt(r.fee)).toBe(99n); // floor of 99.99
+    expect(BigInt(r.sellerNet)).toBe(9_900n);
   });
 });
 
@@ -300,8 +300,19 @@ describe("assertFeeConservation (mutation killers)", () => {
       sellerNet: "0",
       buyerRefund: "0", // 0+0+0 ≠ 1000
       feeBps: 0,
+      feeDust: "0",
       calculatedAt: new Date().toISOString(),
     };
-    expect(() => assertFeeConservation(broken)).toThrow(/\[split\]/);
+    expect(() => assertFeeConservation(broken)).toThrow(
+      "[split] fee conservation violated: 0 + 0 + 0 = 0 ≠ 1000"
+    );
+  });
+
+  it("refund: feeDust is explicitly '0'", () => {
+    expect(computeRefundFee(1_000n, 100).feeDust).toBe("0");
+  });
+
+  it("full_buyer: feeDust is explicitly '0'", () => {
+    expect(computeFullBuyerFee(1_000n, 100).feeDust).toBe("0");
   });
 });

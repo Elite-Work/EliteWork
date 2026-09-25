@@ -28,7 +28,9 @@ on:
       - "scripts/**"
       - "infra/**"
       - "mobile/**"
-      - "mobile/package-lock.json"
+      - "backend/pnpm-lock.yaml"
+      - "frontend/pnpm-lock.yaml"
+      - "mobile/pnpm-lock.yaml"
       - "pnpm-lock.yaml"
 
 jobs:
@@ -52,13 +54,13 @@ jobs:
           filters: |
             frontend:
               - 'frontend/**'
-              - 'frontend/package-lock.json'
+              - 'frontend/pnpm-lock.yaml'
             backend:
               - 'backend/**'
-              - 'backend/package-lock.json'
+              - 'backend/pnpm-lock.yaml'
             mobile:
               - 'mobile/**'
-              - 'mobile/package-lock.json'
+              - 'mobile/pnpm-lock.yaml'
             contracts:
               - 'contracts/**'
               - 'scripts/check-contract-deployment-safety.sh'
@@ -84,6 +86,28 @@ jobs:
 
       - name: Validate quarantine registry (no expired entries)
         run: node scripts/validate-flaky-quarantine.mjs
+
+  # Issues #118/#119 — fails fast on npm/pnpm lockfile drift and on stray
+  # package-lock.json files in pnpm-managed subprojects, instead of only
+  # discovering it at `pnpm install --frozen-lockfile` time. Independent of
+  # the stack gates below so it always runs when CI triggers.
+  lockfile-drift:
+    name: Lockfile Drift Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Check lockfiles are in sync, no stray npm lockfiles
+        run: ./scripts/check-lockfile-drift.sh
 
   frontend:
     name: Frontend Required Gate

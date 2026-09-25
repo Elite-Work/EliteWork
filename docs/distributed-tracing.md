@@ -1,4 +1,4 @@
-# Distributed Tracing Implementation Summary
+# Distributed Tracing
 
 ## Overview
 
@@ -31,9 +31,8 @@ This implementation adds comprehensive distributed tracing and correlation IDs a
 2. **`src/hooks/useTracedFetch.ts`** - React hooks for traced HTTP requests
 
 #### Documentation:
-1. **`DISTRIBUTED_TRACING_GUIDE.md`** - Comprehensive implementation guide
-2. **`README.md`** - Updated with tracing information
-3. **`TRACING_IMPLEMENTATION_SUMMARY.md`** - This summary
+1. **`docs/distributed-tracing.md`** (this document) - implementation guide and reference
+2. **`README.md`** - tracing quick start
 
 ## Key Features Implemented
 
@@ -79,19 +78,19 @@ This implementation adds comprehensive distributed tracing and correlation IDs a
 ### Backend OpenTelemetry Packages:
 ```json
 {
-  "@opentelemetry/api": "^1.8.0",
-  "@opentelemetry/auto-instrumentations-node": "^0.46.1",
-  "@opentelemetry/exporter-jaeger": "^1.22.0",
-  "@opentelemetry/exporter-prometheus": "^0.48.0",
-  "@opentelemetry/exporter-zipkin": "^1.22.0",
-  "@opentelemetry/instrumentation": "^0.48.0",
-  "@opentelemetry/instrumentation-express": "^0.40.1",
-  "@opentelemetry/instrumentation-http": "^0.48.0",
-  "@opentelemetry/resources": "^1.22.0",
-  "@opentelemetry/sdk-metrics": "^1.22.0",
-  "@opentelemetry/sdk-node": "^0.48.0",
-  "@opentelemetry/sdk-trace-base": "^1.22.0",
-  "@opentelemetry/semantic-conventions": "^1.22.0"
+  "@opentelemetry/api": "1.9.1",
+  "@opentelemetry/auto-instrumentations-node": "0.46.1",
+  "@opentelemetry/exporter-jaeger": "1.30.1",
+  "@opentelemetry/exporter-prometheus": "0.52.1",
+  "@opentelemetry/exporter-zipkin": "1.30.1",
+  "@opentelemetry/instrumentation": "0.52.1",
+  "@opentelemetry/instrumentation-express": "0.44.0",
+  "@opentelemetry/instrumentation-http": "0.52.1",
+  "@opentelemetry/resources": "1.30.1",
+  "@opentelemetry/sdk-metrics": "1.30.1",
+  "@opentelemetry/sdk-node": "0.52.1",
+  "@opentelemetry/sdk-trace-base": "1.30.1",
+  "@opentelemetry/semantic-conventions": "1.41.1"
 }
 ```
 
@@ -241,10 +240,7 @@ If issues arise:
 ## Support
 
 For issues:
-1. Check `DISTRIBUTED_TRACING_GUIDE.md`
+1. Check this guide (`docs/distributed-tracing.md`)
 2. Review test files for examples
 3. Check Jaeger UI for trace visualization
 4. Review logs for correlation ID propagation
-
-
-// Starting work on issues

@@ -1,12 +1,112 @@
 #!/usr/bin/env bash
-# Lightweight pre-commit hook: blocks commits containing secrets matched by .gitleaks.toml.
-# Installed via scripts/install-git-hooks.sh (sets core.hooksPath=.githooks).
+# pre-commit — repo-local git hooks, installed via scripts/install-git-hooks.sh
+# (sets core.hooksPath=.githooks).
+#
+#  1. gitleaks secret scan on staged changes (blocks on leaks).
+#  2. Staged-only lint (issue #117): runs each stack's own eslint / rustfmt
+#     binary ONLY on staged files, so lint errors are caught before they reach
+#     CI rather than after. The hook never touches unstaged work, never
+#     installs anything, and never blocks a commit just because a toolchain
+#     isn't installed locally (fresh clones warn-and-skip; CI still lints).
 set -euo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
+
+# ─── 1. Secret scan ─────────────────────────────────────────────────────────
 
 if ! command -v gitleaks &>/dev/null; then
   echo "WARNING: gitleaks not installed — skipping local secret scan (CI will still block)." >&2
   echo "Install: https://github.com/gitleaks/gitleaks#installing" >&2
+else
+  gitleaks protect --config=.gitleaks.toml --staged --verbose
+fi
+
+# ─── 2. Staged-only lint ────────────────────────────────────────────────────
+
+STAGED="$(git diff --cached --name-only --diff-filter=ACM || true)"
+if [[ -z "$STAGED" ]]; then
   exit 0
 fi
 
-gitleaks protect --config=.gitleaks.toml --staged --verbose
+LINT_FAILED=0
+
+# Run a JS/TS subproject's own eslint binary on the staged files under it.
+# Usage: lint_js_project <project-dir>
+lint_js_project() {
+  local project="$1"
+  local rel_files=()
+  while IFS= read -r f; do
+    case "$f" in
+      "$project"/*.js|"$project"/*.mjs|"$project"/*.cjs|"$project"/*.jsx|"$project"/*.ts|"$project"/*.mts|"$project"/*.cts|"$project"/*.tsx)
+        rel_files+=("${f#"$project"/}")
+        ;;
+    esac
+  done <<< "$STAGED"
+
+  if ((${#rel_files[@]} == 0)); then
+    return 0
+  fi
+
+  local eslint="$REPO_ROOT/$project/node_modules/.bin/eslint"
+  if [[ ! -x "$eslint" ]]; then
+    echo "WARNING: staged files in $project/ but $project/node_modules/.bin/eslint is not installed — skipping local lint for $project (CI will still lint). Run 'pnpm install' in $project/ to enable it." >&2
+    return 0
+  fi
+
+  echo "Linting ${#rel_files[@]} staged file(s) in $project/ ..."
+  if (cd "$REPO_ROOT/$project" && ./node_modules/.bin/eslint --no-warn-ignored -- "${rel_files[@]}"); then
+    echo "  eslint clean ($project)"
+  else
+    echo "ERROR: eslint failed on staged files in $project/ — fix the issues, re-stage, and commit again." >&2
+    LINT_FAILED=1
+  fi
+}
+
+# rustfmt --check on staged Rust files only (whole-workspace `cargo fmt`
+# would flag untouched files, so per-file rustfmt keeps this staged-only).
+lint_rust() {
+  local rs_files=()
+  while IFS= read -r f; do
+    case "$f" in
+      contracts/*.rs) rs_files+=("$f") ;;
+    esac
+  done <<< "$STAGED"
+
+  if ((${#rs_files[@]} == 0)); then
+    return 0
+  fi
+
+  if ! command -v rustfmt &>/dev/null; then
+    echo "WARNING: staged Rust files but rustfmt is not installed — skipping local format check (CI will still check). Install the Rust toolchain to enable it." >&2
+    return 0
+  fi
+
+  local edition="2021"
+  local detected
+  detected="$(grep -m1 -E '^edition[[:space:]]*=' contracts/amana_escrow/Cargo.toml 2>/dev/null | cut -d'"' -f2 || true)"
+  if [[ -n "$detected" ]]; then
+    edition="$detected"
+  fi
+
+  echo "Checking formatting on ${#rs_files[@]} staged Rust file(s) ..."
+  if rustfmt --check --edition "$edition" -- "${rs_files[@]}"; then
+    echo "  rustfmt clean (contracts)"
+  else
+    echo "ERROR: rustfmt --check failed on staged Rust files — run 'cargo fmt', re-stage, and commit again." >&2
+    LINT_FAILED=1
+  fi
+}
+
+lint_js_project "frontend"
+lint_js_project "backend"
+lint_js_project "mobile"
+lint_js_project "routes-d"
+lint_rust
+
+if ((LINT_FAILED != 0)); then
+  echo "pre-commit blocked: staged-only lint failed (see errors above)." >&2
+  exit 1
+fi
+
+exit 0

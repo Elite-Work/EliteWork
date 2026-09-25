@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { useTrade } from "../TradeContext";
 import { validateStep2 } from "../validation";
+import { KeyboardHint } from "@/components/ui/KeyboardHint";
 
 export default function Step2Negotiation() {
   const { data, update, setStep } = useTrade();
@@ -53,7 +54,15 @@ export default function Step2Negotiation() {
   };
 
   return (
-    <div className="flex flex-col gap-6">
+    <form
+      className="flex flex-col gap-6"
+      noValidate
+      onSubmit={(e) => {
+        // Enter anywhere in the form advances the wizard, same as the button.
+        e.preventDefault();
+        handleReview();
+      }}
+    >
       {/* Loss ratio */}
       <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between">
@@ -138,18 +147,21 @@ export default function Step2Negotiation() {
 
       <div className="flex gap-3">
         <button
+          type="button"
           onClick={() => setStep(1)}
           className="flex-1 h-12 rounded-full border border-border-default text-text-secondary hover:border-border-hover transition-colors"
         >
           Back
         </button>
         <button
-          onClick={handleReview}
+          type="submit"
           className="flex-1 h-12 rounded-full bg-gradient-gold-cta text-text-inverse font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
         >
           Review Trade
         </button>
       </div>
-    </div>
+
+      <KeyboardHint keys="Enter">to review the trade</KeyboardHint>
+    </form>
   );
 }

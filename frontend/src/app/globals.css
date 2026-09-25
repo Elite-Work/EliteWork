@@ -144,6 +144,33 @@
   --bg-overlay: var(--surface-3);
 }
 
+/*
+ * Theme preview palette
+ * ─────────────────────
+ * Fixed snapshots of the light and dark themes, used by the settings page to
+ * render live previews of a theme *before* it is applied. They are deliberately
+ * declared outside `.light` / `.dark` so a swatch can show either theme no
+ * matter which one is currently on <html> — the point of a preview is to see
+ * the theme you are not currently using. Values mirror the token blocks above.
+ */
+:root {
+  --preview-light-bg: #F7FAF8;
+  --preview-light-card: #FFFFFF;
+  --preview-light-text: #1A2E1F;
+  --preview-light-text-muted: #7A9A82;
+  --preview-light-gold: #9A7B2F;
+  --preview-light-emerald: #059669;
+  --preview-light-border: rgba(26, 46, 31, 0.15);
+
+  --preview-dark-bg: #0B1A14;
+  --preview-dark-card: #122A1F;
+  --preview-dark-text: #F0F5F1;
+  --preview-dark-text-muted: #8BA89A;
+  --preview-dark-gold: #D4A853;
+  --preview-dark-emerald: #34D399;
+  --preview-dark-border: rgba(139, 168, 154, 0.2);
+}
+
 @theme inline {
   --color-surface-0: var(--surface-0);
   --color-surface-1: var(--surface-1);

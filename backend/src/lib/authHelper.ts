@@ -1,6 +1,7 @@
 import { Request } from 'express';
 import { AppError, ErrorCode } from '../errors/errorCodes';
 import { ServiceErrorConverter, ServiceType } from '../errors/serviceErrorConverter';
+import { JWTPayload } from '../services/auth.service';
 
 /**
  * Authentication header parsing result
@@ -237,18 +238,18 @@ export class AuthHelper {
    */
   static async authenticateRequest(
     req: Request,
-    validateFn: (token: string) => Promise<any>
-  ): Promise<{ user: any; error?: AppError }> {
+    validateFn: (token: string) => Promise<JWTPayload>
+  ): Promise<{ user?: JWTPayload; error?: AppError }> {
     // Extract and validate header
     const headerResult = this.extractAuthHeader(req);
     if (!headerResult.valid) {
-      return { user: null, error: headerResult.error };
+      return { user: undefined, error: headerResult.error };
     }
 
     // Validate token format
     const formatResult = this.validateTokenFormat(headerResult.token!);
     if (!formatResult.valid) {
-      return { user: null, error: formatResult.error };
+      return { user: undefined, error: formatResult.error };
     }
 
     try {
@@ -256,7 +257,7 @@ export class AuthHelper {
       return { user };
     } catch (error) {
       const classifiedError = this.classifyAuthError(error);
-      return { user: null, error: classifiedError };
+      return { user: undefined, error: classifiedError };
     }
   }
 }

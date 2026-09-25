@@ -3,17 +3,51 @@ import * as StellarSdk from "@stellar/stellar-sdk";
 import { horizonServer } from "../config/stellar";
 import { appLogger } from "../middleware/logger";
 
+interface NamedXdrEnum {
+  name: string;
+}
+
+function isNamedXdrEnum(value: unknown): value is NamedXdrEnum {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "name" in value &&
+    typeof (value as { name: unknown }).name === "string"
+  );
+}
+
+function extractXdrCodeName(value: unknown): string {
+  if (isNamedXdrEnum(value) && value.name.length > 0) {
+    return value.name;
+  }
+  return "unknown";
+}
+
+interface ErrorWithResponse {
+  response?: {
+    status?: number;
+  };
+}
+
+function isNotFoundError(error: unknown): boolean {
+  if (typeof error === "object" && error !== null && "response" in error) {
+    const res = (error as ErrorWithResponse).response;
+    return typeof res === "object" && res !== null && res.status === 404;
+  }
+  return false;
+}
+
 function parseResultCodes(resultXdr: string): { transaction: string; operations: string[] } {
   try {
     const xdr = Buffer.from(resultXdr, "base64");
     const result = StellarSdk.xdr.TransactionResult.fromXDR(xdr);
     const resultCode = result.result().switch();
-    const transactionCode = (resultCode as any).name || "unknown";
+    const transactionCode = extractXdrCodeName(resultCode);
 
     const opResults = result.result().results() || [];
     const operationCodes = opResults.map((op) => {
       const opResult = op.tr().switch();
-      return (opResult as any).name || "unknown";
+      return extractXdrCodeName(opResult);
     });
 
     return {
@@ -52,8 +86,8 @@ export function createStellarTxStatusRouter(): Router {
         hash: txResponse.id,
         createdAt: txResponse.created_at,
       });
-    } catch (error: any) {
-      if (error?.response?.status === 404) {
+    } catch (error: unknown) {
+      if (isNotFoundError(error)) {
         res.status(404).json({
           status: "pending",
           hash,

@@ -6,9 +6,13 @@
  */
 
 import { Router, Request, Response, NextFunction } from "express";
-import { jobHeartbeatService } from "../services/jobHeartbeat.service";
+import { jobHeartbeatService, JobType } from "../services/jobHeartbeat.service";
 import { appLogger } from "../middleware/logger";
 import { prisma } from "../lib/db";
+
+function isJobType(val: unknown): val is JobType {
+  return typeof val === "string" && Object.values(JobType).includes(val as JobType);
+}
 
 export function createJobHealthRoutes(): Router {
   const router = Router();
@@ -85,7 +89,15 @@ export function createJobHealthRoutes(): Router {
         const jobTypeParam = Array.isArray(req.params.jobType)
           ? req.params.jobType[0]
           : req.params.jobType;
-        const health = await jobHeartbeatService.getJobHealth(jobTypeParam as any);
+
+        if (!isJobType(jobTypeParam)) {
+          return res.status(404).json({
+            error: "Job not found",
+            jobType: jobTypeParam,
+          });
+        }
+
+        const health = await jobHeartbeatService.getJobHealth(jobTypeParam);
 
         if (!health) {
           return res.status(404).json({
@@ -205,7 +217,15 @@ export function createJobHealthRoutes(): Router {
         const jobTypeParam = Array.isArray(req.params.jobType)
           ? req.params.jobType[0]
           : req.params.jobType;
-        const health = await jobHeartbeatService.getJobHealth(jobTypeParam as any);
+
+        if (!isJobType(jobTypeParam)) {
+          return res.status(404).json({
+            error: "Job not found",
+            jobType: jobTypeParam,
+          });
+        }
+
+        const health = await jobHeartbeatService.getJobHealth(jobTypeParam);
 
         if (!health) {
           return res.status(404).json({
@@ -248,6 +268,14 @@ export function createJobHealthRoutes(): Router {
         const jobTypeParam = Array.isArray(req.params.jobType)
           ? req.params.jobType[0]
           : req.params.jobType;
+
+        if (!isJobType(jobTypeParam)) {
+          return res.status(404).json({
+            error: "Job not found",
+            jobType: jobTypeParam,
+          });
+        }
+
         const { reason } = req.body;
 
         await prisma.jobHeartbeat.update({

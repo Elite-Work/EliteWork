@@ -41,6 +41,8 @@ export function GlobalSearch({ onClose }: GlobalSearchProps) {
   const [activeIndex, setActiveIndex] = useState(-1);
 
   const inputRef = useRef<HTMLInputElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const restoreFocusRef = useRef(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const allItems = [
@@ -59,6 +61,7 @@ export function GlobalSearch({ onClose }: GlobalSearchProps) {
   }, []);
 
   const close = useCallback(() => {
+    restoreFocusRef.current = true;
     setIsOpen(false);
     setQuery("");
     setResults(EMPTY_RESULTS);
@@ -85,6 +88,14 @@ export function GlobalSearch({ onClose }: GlobalSearchProps) {
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [isOpen, open, close]);
+
+  // Return focus to the trigger button once the overlay has closed
+  useEffect(() => {
+    if (!isOpen && restoreFocusRef.current) {
+      restoreFocusRef.current = false;
+      triggerRef.current?.focus();
+    }
+  }, [isOpen]);
 
   // Debounced search
   useEffect(() => {
@@ -150,6 +161,7 @@ export function GlobalSearch({ onClose }: GlobalSearchProps) {
   if (!isOpen) {
     return (
       <button
+        ref={triggerRef}
         onClick={open}
         aria-label="Open global search"
         className="flex items-center gap-2 rounded-lg border border-border-default bg-bg-elevated px-3 py-1.5 text-sm text-text-muted hover:border-border-hover hover:text-text-secondary transition-colors"

@@ -140,14 +140,32 @@ function isClientError(status: number): boolean {
   return status >= 400 && status < 500 && status !== 429;
 }
 
+/**
+ * Loose shape for the error-like objects thrown by Prisma, Supabase/PostgREST,
+ * and HTTP clients. Fields are `unknown` because callers only ever narrow them
+ * with `typeof`/`Number()` checks below.
+ */
+interface ErrorLike {
+  status?: unknown;
+  statusCode?: unknown;
+  code?: unknown;
+  details?: unknown;
+  error?: unknown;
+  response?: {
+    status?: unknown;
+    statusCode?: unknown;
+  };
+}
+
 function extractHttpStatus(error: unknown): number | undefined {
   if (!error || typeof error !== "object") return undefined;
 
+  const err = error as ErrorLike;
   const candidates = [
-    (error as any).status,
-    (error as any).statusCode,
-    (error as any).response?.status,
-    (error as any).response?.statusCode,
+    err.status,
+    err.statusCode,
+    err.response?.status,
+    err.response?.statusCode,
   ];
 
   for (const c of candidates) {
@@ -160,20 +178,21 @@ function extractHttpStatus(error: unknown): number | undefined {
 function extractPrismaCode(error: unknown): string | undefined {
   if (!error || typeof error !== "object") return undefined;
   // Prisma errors carry a `code` string like "P1001"
-  const code = (error as any).code;
+  const code = (error as ErrorLike).code;
   return typeof code === "string" ? code : undefined;
 }
 
 function extractSupabaseCode(error: unknown): string | undefined {
   if (!error || typeof error !== "object") return undefined;
   // Supabase client errors expose error.code (PostgreSQL SQLSTATE or PGRST code)
-  const code = (error as any).code;
+  const err = error as ErrorLike;
+  const code = err.code;
   if (typeof code === "string" && code.length > 0) return code;
 
   // Also check nested error details for PostgREST responses
-  const details = (error as any).details ?? (error as any).error;
+  const details = err.details ?? err.error;
   if (details && typeof details === "object") {
-    const nested = (details as any).code;
+    const nested = (details as ErrorLike).code;
     if (typeof nested === "string") return nested;
   }
   return undefined;

@@ -13,7 +13,7 @@ function redisKey(streamId: string): string {
 }
 
 function isRedisReady(): boolean {
-  const status = (redis as unknown as { status?: string }).status;
+  const status = redis.status;
   // ioredis statuses: wait, connecting, connect, ready, close, end, reconnecting
   // Treat 'ready' as available; others as unavailable for fail-closed
   return status === "ready";
@@ -36,7 +36,7 @@ export class StreamClawbackService {
     }
     // Fail-closed: if Redis is not ready, deny clawback to avoid split-brain
     if (!isRedisReady()) {
-      appLogger.error({ streamId, redisStatus: (redis as any).status }, "Clawback denied — Redis unavailable (fail-closed)");
+      appLogger.error({ streamId, redisStatus: redis.status }, "Clawback denied — Redis unavailable (fail-closed)");
       throw new AppError(
         ErrorCode.DOMAIN_ERROR,
         `Clawback temporarily unavailable: Redis required for payout safety (stream ${streamId})`,

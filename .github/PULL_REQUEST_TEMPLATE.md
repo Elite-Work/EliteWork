@@ -11,6 +11,19 @@
 - [ ] Breaking change (fix or feature that would cause existing functionality to not work as expected)
 - [ ] Infrastructure / CI / Policy / Documentation update
 
+## 🔒 Required CI Gates
+<!--
+All pull requests must pass the required stack-level CI gates before review.
+See the Required PR CI Gates section in the README: ../README.md#-required-pr-ci-gates
+and the Branch Protection Policy: ../docs/branch-protection-policy.md
+-->
+- [ ] **Frontend Required Gate**: `npm ci`, `npm run lint`, `npm run build`, `npm test` in `frontend/` (or skipped if no `frontend/` changes)
+- [ ] **Backend Required Gate**: `npm ci`, `npm run build`, `npm test` in `backend/` (or skipped if no `backend/` changes)
+- [ ] **Contracts Required Gate**: `cargo test` in `contracts/amana_escrow/` (or skipped if no `contracts/` changes)
+- [ ] **Mobile Required Gate**: `npm ci`, `npm run type-check`, `npm run lint` in `mobile/` (or skipped if no `mobile/` changes)
+
+> **Note**: Path-aware execution is enabled via `dorny/paths-filter`. Stacks with no changed files will report a skip-note and pass automatically. Reviewers will only review PRs once all applicable required gates are green. See [Required PR CI Gates](../README.md#-required-pr-ci-gates).
+
 ## PR Checklist
 - [ ] Code builds and passes all unit & integration tests locally (`pnpm test` / `cargo test`)
 - [ ] Documentation has been updated to reflect code changes

@@ -5,6 +5,12 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { api, type TradeStatsResponse, type TradeResponse } from "@/lib/api";
+import {
+  compareByDeadline,
+  formatDeadlineLabel,
+  getDeadlineInfo,
+  isNearDeadline,
+} from "@/lib/tradeDeadline";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { Button } from "@/components/ui/Button";
 import {
@@ -277,6 +283,10 @@ interface AssetTableProps {
   onSearchChange: (s: string) => void;
   statusFilter: StatusFilter;
   onStatusFilterChange: (s: StatusFilter) => void;
+  nearDeadlineOnly: boolean;
+  onNearDeadlineOnlyChange: (value: boolean) => void;
+  deadlineSort: boolean;
+  onDeadlineSortChange: (value: boolean) => void;
   onRefresh: () => void;
 }
 
@@ -302,7 +312,10 @@ function AssetTableSkeleton() {
 function AssetTable({
   trades, loading, page, totalPages,
   onPageChange, search, onSearchChange,
-  statusFilter, onStatusFilterChange, onRefresh,
+  statusFilter, onStatusFilterChange,
+  nearDeadlineOnly, onNearDeadlineOnlyChange,
+  deadlineSort, onDeadlineSortChange,
+  onRefresh,
 }: AssetTableProps) {
   return (
     <div className="rounded-2xl border border-border-default bg-surface-1 overflow-hidden">
@@ -341,6 +354,36 @@ function AssetTable({
                 {f.label}
               </button>
             ))}
+          </div>
+
+          {/* Deadline quick filter + sort */}
+          <div className="flex gap-1 flex-wrap" role="group" aria-label="Deadline controls">
+            <button
+              type="button"
+              onClick={() => onNearDeadlineOnlyChange(!nearDeadlineOnly)}
+              className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+                nearDeadlineOnly
+                  ? "bg-status-warning text-text-inverse"
+                  : "bg-surface-2 text-text-secondary hover:text-text-primary"
+              }`}
+              aria-pressed={nearDeadlineOnly}
+              title="Show trades due within 7 days or already overdue"
+            >
+              Near deadline
+            </button>
+            <button
+              type="button"
+              onClick={() => onDeadlineSortChange(!deadlineSort)}
+              className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+                deadlineSort
+                  ? "bg-gold text-text-inverse"
+                  : "bg-surface-2 text-text-secondary hover:text-text-primary"
+              }`}
+              aria-pressed={deadlineSort}
+              title="Sort by soonest deadline"
+            >
+              {deadlineSort ? "Deadline ↑" : "Deadline"}
+            </button>
           </div>
         </div>
 
@@ -394,6 +437,14 @@ function AssetTable({
             const statusKey = trade.status.toLowerCase().replace(/_/g, "");
             const pill = STATUS_STYLES[statusKey] ?? "text-text-muted bg-surface-2 border border-border-default";
             const displayStatus = trade.status.toLowerCase().replace(/_/g, " ");
+            const deadlineInfo = getDeadlineInfo(trade);
+            const deadlineLabel = formatDeadlineLabel(deadlineInfo);
+            const deadlineTone =
+              deadlineInfo.state === "overdue"
+                ? "text-status-danger"
+                : deadlineInfo.state === "on-track"
+                  ? "text-text-muted"
+                  : "text-status-warning";
 
             return (
               <div
@@ -412,6 +463,14 @@ function AssetTable({
                       month: "short", day: "numeric", year: "numeric",
                     })}
                   </p>
+                  {deadlineLabel && (
+                    <p
+                      className={`text-[11px] mt-0.5 font-medium ${deadlineTone}`}
+                      title={deadlineInfo.deadline?.toLocaleString()}
+                    >
+                      {deadlineLabel}
+                    </p>
+                  )}
                 </div>
 
                 <p className="text-sm font-semibold text-text-primary tabular-nums">
@@ -495,6 +554,8 @@ export default function AssetsPage() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [nearDeadlineOnly, setNearDeadlineOnly] = useState(false);
+  const [deadlineSort, setDeadlineSort] = useState(false);
 
   const fetchData = useCallback(async () => {
     if (!token) return;
@@ -518,13 +579,31 @@ export default function AssetsPage() {
   }, [token]);
 
   useEffect(() => {
+    // Initial/authenticated data load: the effect intentionally kicks off a
+    // fetch whose loading state is owned by the store, not external state.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (isAuthenticated && token) void fetchData();
   }, [isAuthenticated, token, fetchData]);
 
-  // Reset to page 1 when filters change
-  useEffect(() => {
+  // Reset to page 1 whenever a filter changes. Done in the change handlers
+  // rather than a `useEffect` so we never call setState synchronously inside an
+  // effect (react-hooks/set-state-in-effect).
+  const handleSearchChange = useCallback((value: string) => {
+    setSearch(value);
     setPage(1);
-  }, [search, statusFilter]);
+  }, []);
+  const handleStatusFilterChange = useCallback((value: StatusFilter) => {
+    setStatusFilter(value);
+    setPage(1);
+  }, []);
+  const handleNearDeadlineChange = useCallback((value: boolean) => {
+    setNearDeadlineOnly(value);
+    setPage(1);
+  }, []);
+  const handleDeadlineSortChange = useCallback((value: boolean) => {
+    setDeadlineSort(value);
+    setPage(1);
+  }, []);
   // Filter trades client-side
   const filteredTrades = useMemo(() => {
     let result = allTrades;
@@ -550,8 +629,22 @@ export default function AssetsPage() {
       );
     }
 
+    // Quick filter: only trades whose delivery deadline is inside the warning
+    // window (or already missed) and that still need action.
+    if (nearDeadlineOnly) {
+      result = result.filter((t: TradeResponse) => isNearDeadline(t));
+    }
+
+    // Optional soonest-first ordering. Copy before sorting so the sort never
+    // mutates the fetched list that other derived state reads from.
+    if (deadlineSort) {
+      result = [...result].sort((a: TradeResponse, b: TradeResponse) =>
+        compareByDeadline(a, b),
+      );
+    }
+
     return result;
-  }, [allTrades, statusFilter, search]);
+  }, [allTrades, statusFilter, search, nearDeadlineOnly, deadlineSort]);
 
   const totalPages = Math.max(1, Math.ceil(filteredTrades.length / PAGE_SIZE));
   const pagedTrades = filteredTrades.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -660,16 +753,20 @@ export default function AssetsPage() {
 
             {/* Asset table */}
             <AssetTable
-              key={`${search}-${statusFilter}`}
+              key={`${search}-${statusFilter}-${nearDeadlineOnly}-${deadlineSort}`}
               trades={pagedTrades}
               loading={loading && allTrades.length === 0}
               page={page}
               totalPages={totalPages}
               onPageChange={setPage}
               search={search}
-              onSearchChange={setSearch}
+              onSearchChange={handleSearchChange}
               statusFilter={statusFilter}
-              onStatusFilterChange={setStatusFilter}
+              onStatusFilterChange={handleStatusFilterChange}
+              nearDeadlineOnly={nearDeadlineOnly}
+              onNearDeadlineOnlyChange={handleNearDeadlineChange}
+              deadlineSort={deadlineSort}
+              onDeadlineSortChange={handleDeadlineSortChange}
               onRefresh={fetchData}
             />
 

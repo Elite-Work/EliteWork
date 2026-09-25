@@ -3,7 +3,22 @@ import { create } from 'zustand';
 import { tradeApi } from '../api/trade';
 import { viewForError } from '../api/errorInterceptor';
 import { AdminErrorView } from '../api/errors';
+import {
+  isTradeStatusTransition,
+  triggerTradeStatusHaptic,
+} from '../services/haptics.service';
 import type { Trade, TradeListResult, TradeStatus } from '../types/trade';
+
+/**
+ * Fire the status-change haptic (Issue #124) when a refresh/action reveals a
+ * new status for the trade already on screen. A first load (no previous trade)
+ * is not a transition, and a different trade id is never treated as one.
+ */
+function notifyStatusTransition(previous: Trade | null, next: Trade): void {
+  if (!previous || previous.tradeId !== next.tradeId) return;
+  if (!isTradeStatusTransition(previous.status, next.status)) return;
+  void triggerTradeStatusHaptic(next.status);
+}
 
 interface TradeState {
   trades: Trade[];
@@ -95,6 +110,7 @@ export const useTradeStore = create<TradeState>((set, get) => ({
     set({ isLoading: true, ...(silent ? {} : { errorView: null }) });
     try {
       const trade = await tradeApi.getTrade(tradeId);
+      notifyStatusTransition(get().currentTrade, trade);
       set({ currentTrade: trade, isLoading: false });
     } catch (error: unknown) {
       if (silent) {
@@ -125,6 +141,7 @@ export const useTradeStore = create<TradeState>((set, get) => ({
     set({ isLoading: true, lastActionErrorView: null });
     try {
       const trade = await tradeApi.confirmDelivery(tradeId);
+      notifyStatusTransition(get().currentTrade, trade);
       set({ currentTrade: trade, isLoading: false });
     } catch (error: unknown) {
       set({ lastActionErrorView: viewForError(error), isLoading: false });
@@ -167,6 +184,7 @@ export const useTradeStore = create<TradeState>((set, get) => ({
     set({ isLoading: true, lastActionErrorView: null });
     try {
       const trade = await tradeApi.initiateDispute(tradeId, reason);
+      notifyStatusTransition(get().currentTrade, trade);
       set({ currentTrade: trade, isLoading: false });
     } catch (error: unknown) {
       set({ lastActionErrorView: viewForError(error), isLoading: false });

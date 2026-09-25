@@ -10,8 +10,10 @@ import {
   registerForPushNotifications,
   storePushTokenOnBackend,
   setupNotificationListeners,
+  setupForegroundNotificationHandler,
   checkNotificationPermissions,
 } from './services/notification.service';
+import { triggerNotificationHaptic } from './services/haptics.service';
 import type { RootStackParamList } from './types/navigation';
 import { AppNavigator } from './navigation/AppNavigator';
 import type { NotificationData } from './services/notification.service';
@@ -44,11 +46,24 @@ export default function App() {
       if (data.tradeId && navigationRef.current) {
         navigationRef.current.navigate('TradeDetail', { tradeId: data.tradeId });
       } else if (data.screen && navigationRef.current) {
+        // Notification payloads name a route dynamically, so the param type
+        // cannot be statically guaranteed here.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         navigationRef.current.navigate(data.screen as any);
       }
     });
 
-    return unsubscribe;
+    // Haptic tap alongside the foreground notification for trade state changes
+    // (Issue #124). Fire-and-forget — haptics never block notification display.
+    const unsubscribeForeground = setupForegroundNotificationHandler((notification) => {
+      const data = notification.request.content.data as NotificationData | undefined;
+      void triggerNotificationHaptic(data?.type);
+    });
+
+    return () => {
+      unsubscribe();
+      unsubscribeForeground();
+    };
   }, [token]);
 
   if (!bootstrapped) {

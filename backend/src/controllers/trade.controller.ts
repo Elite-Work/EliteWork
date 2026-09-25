@@ -494,7 +494,7 @@ export class TradeController {
       if (error instanceof DisputeTradeStatusError) {
         return next(
           new AppError(ErrorCode.TRADE_INVALID_STATUS, error.message, 400, {
-            currentStatus: (error as any).status,
+            currentStatus: error.status,
           }),
         );
       }

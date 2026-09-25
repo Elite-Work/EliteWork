@@ -30,7 +30,7 @@ export class DisputeController {
       return res.status(401).json({ error: "Unauthorized" });
     }
 
-    const { status, page, limit } = req.query as any;
+    const { status, page, limit } = req.query as unknown as z.infer<typeof listDisputesQuerySchema>;
 
     try {
       const result = await this.disputeService.listMediatorDisputes(

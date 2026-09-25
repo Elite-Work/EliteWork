@@ -9,6 +9,7 @@ import { api, apiConfig, ApiError } from "@/lib/api";
 import { createTradeInputSchema, fieldErrors } from "@/lib/domain-schemas/trade";
 import Link from "next/link";
 import { LegalDisclaimerModal } from "@/components/ui/LegalDisclaimerModal";
+import { KeyboardHint } from "@/components/ui/KeyboardHint";
 import { useOffline } from "@/hooks/useOffline";
 import { useOfflineQueueStore } from "@/stores/offlineQueueStore";
 import { useToast, TOAST_CONTRACT } from "@/hooks/useToast";
@@ -292,6 +293,7 @@ export default function Step3Review() {
 
       <div className="flex gap-3">
         <button
+          type="button"
           disabled={loading}
           onClick={() => setStep(2)}
           className="flex-1 h-12 rounded-full border border-border-default text-text-secondary hover:border-border-hover transition-colors disabled:opacity-40"
@@ -299,6 +301,7 @@ export default function Step3Review() {
           Back
         </button>
         <button
+          type="button"
           disabled={loading || !isFormValid}
           onClick={() => setShowDisclaimer(true)}
           className="flex-1 h-12 rounded-full bg-gradient-gold-cta text-text-inverse font-semibold disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
@@ -316,6 +319,12 @@ export default function Step3Review() {
           )}
         </button>
       </div>
+
+      {showDisclaimer ? (
+        <KeyboardHint keys="Esc">to go back without locking funds</KeyboardHint>
+      ) : (
+        <KeyboardHint>Confirm the legal disclaimer to lock funds</KeyboardHint>
+      )}
     </div>
   );
 }

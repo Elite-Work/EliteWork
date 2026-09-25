@@ -1,0 +1,52 @@
+# ==============================================================================
+# CODEOWNERS
+# Monorepo code ownership and review routing for EliteWork / Amana
+# Syntax: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+# ==============================================================================
+
+# Default fallback owners for the entire repository
+* @FrankHood1 @UFObject247
+
+# ------------------------------------------------------------------------------
+# Subprojects
+# ------------------------------------------------------------------------------
+
+# Frontend web application (Next.js, React, Tailwind CSS, Jest, Playwright)
+/frontend/ @FrankHood1 @UFObject247
+
+# Backend services, APIs, and background jobs (Node.js, Express, Prisma, Redis)
+/backend/ @FrankHood1 @UFObject247
+
+# Smart contracts and Soroban integration (Rust, Soroban SDK, cargo test)
+/contracts/ @UFObject247 @FrankHood1
+
+# Mobile application (React Native, Expo, Detox)
+/mobile/ @FrankHood1 @UFObject247
+
+# Infrastructure, deployment configs, and container orchestration
+/infra/ @FrankHood1 @UFObject247
+/docker-compose.yml @FrankHood1 @UFObject247
+/.env.staging.example @FrankHood1 @UFObject247
+
+# ------------------------------------------------------------------------------
+# Shared Libraries, Tooling, and Configuration
+# ------------------------------------------------------------------------------
+
+# Schemas and shared contracts/interfaces
+/schemas/ @FrankHood1 @UFObject247
+/shared-test-fixtures/ @FrankHood1 @UFObject247
+
+# Performance testing, monitoring, and SLOs
+/k6/ @FrankHood1 @UFObject247
+/slo-snapshots/ @FrankHood1 @UFObject247
+
+# Automation scripts and tooling
+/scripts/ @FrankHood1 @UFObject247
+/.githooks/ @FrankHood1 @UFObject247
+
+# GitHub workflows, issue templates, and CI configuration
+/.github/ @FrankHood1 @UFObject247
+
+# Documentation and Architecture Decision Records
+/docs/ @FrankHood1 @UFObject247
+/*.md @FrankHood1 @UFObject247

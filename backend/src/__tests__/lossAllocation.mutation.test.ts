@@ -3,7 +3,7 @@
  *
  * Covers the mutation classes that the main lossAllocation.test.ts is weakest
  * against, particularly:
- *   - ArithmeticOperator: BigInt +/−/*/÷ in allocation math
+ *   - ArithmeticOperator: BigInt +, -, *, / in allocation math
  *   - BoundaryValue: BPS_DIVISOR (10_000), off-by-one in remainder loop
  *   - ConditionalExpression: comparisons in sort, eviction branches
  *   - BlockStatement: early return / guard removals

@@ -43,23 +43,23 @@ To provide a programmable safety net for regional commodity trading. Amana ensur
 
 1. `cd frontend`
 2. `cp .env.example .env.local`
-3. `npm install`
-4. `npm run dev`
+3. `pnpm install` (frontend is pnpm-managed — do not run `npm install` here, it creates a stray `package-lock.json`)
+4. `pnpm dev`
 
 ### Backend setup
 
 1. `cd backend`
 2. `cp .env.example .env`
 3. `cp .env.tracing.example .env.tracing` (for distributed tracing configuration)
-4. `npm install`
-5. `npm run dev`
+4. `pnpm install` (backend is pnpm-managed — do not run `npm install` here)
+5. `pnpm dev`
 
 ### Mobile setup
 
 1. `cd mobile`
 2. `cp .env.example .env.local`
-3. `npm install`
-4. `npm start`
+3. `pnpm install` (mobile is pnpm-managed — do not run `npm install` here)
+4. `pnpm start`
 
 ### Backend API docs
 
@@ -78,14 +78,10 @@ The backend writes `backend/src/docs/openapi.json` from the YAML spec in non-pro
 
 Amana enforces stack-level CI gates on pull requests through `.github/workflows/ci.yml`.
 
-- **Frontend Required Gate**: `npm ci`, `npm run lint`, `npm run build`, `npm test` in `frontend/`
-- **Backend Required Gate**: `npm ci`, `npm run build`, `npm test` in `backend/`
-- **Mobile Required Gate**: `npm ci`, `npm run type-check`, `npm run lint` in `mobil
-Amana enforces stack-level CI gates on pull requests through `.github/workflows/ci.yml`.
-
-- **Frontend Required Gate**: `npm ci`, `npm run lint`, `npm run build`, `npm test` in `frontend/`
-- **Backend Required Gate**: `npm ci`, `npm run build`, `npm test` in `backend/`
-- **Mobile Required Gate**: `npm ci`, `npm run type-check`, `npm run lint` in `mobile/`
+- **Lockfile Drift Check**: `./scripts/check-lockfile-drift.sh` — fails fast if a `pnpm-lock.yaml`/`package-lock.json` is out of sync with its `package.json`, or if a stray `package-lock.json` reappears in pnpm-managed `frontend/`/`backend/`/`mobile/`
+- **Frontend Required Gate**: `pnpm install --frozen-lockfile`, `pnpm lint`, `pnpm build`, `pnpm test` in `frontend/`
+- **Backend Required Gate**: `pnpm install --frozen-lockfile`, `pnpm build`, `pnpm test` in `backend/`
+- **Mobile Required Gate**: `pnpm install --frozen-lockfile`, `pnpm type-check`, `pnpm lint` in `mobile/`
 - **Contracts Required Gate**: `cargo test` in `contracts/amana_escrow/`
 
 Path-aware execution is enabled to avoid unnecessary runtime. If a stack has no changed files, the gate reports a skip-note and passes.
@@ -157,7 +153,7 @@ Amana includes comprehensive distributed tracing with OpenTelemetry for end-to-e
 
 ### Documentation
 
-See [DISTRIBUTED_TRACING_GUIDE.md](./DISTRIBUTED_TRACING_GUIDE.md) for detailed setup and usage instructions.
+See [docs/distributed-tracing.md](./docs/distributed-tracing.md) for detailed setup and usage instructions.
 
 ---
 

@@ -315,10 +315,9 @@ export class EventListenerService {
     // If the Prisma client was generated with a `chainEventOutbox` model,
     // it will be available on the client. Use feature-detection rather than
     // unsafe casts.
-    const outbox = (this.prisma as unknown as Record<string, unknown>)[
-      "chainEventOutbox"
-    ];
-    return Boolean(outbox && typeof (outbox as any).findUnique === "function");
+    const prismaRecord = this.prisma as unknown as Record<string, unknown>;
+    const outbox = prismaRecord["chainEventOutbox"] as Record<string, unknown> | undefined;
+    return Boolean(outbox && typeof outbox.findUnique === "function");
   }
 
   private async ensureOutboxRecord(event: ParsedEvent): Promise<OutboxRecord> {

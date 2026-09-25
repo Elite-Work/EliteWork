@@ -9,13 +9,13 @@ vi.mock("../config/stellar", () => ({
     sorobanRpcClient: {},
     networkPassphrase: "Test SDF Network ; September 2015",
 }));
-vi.mock("../config/tracing", () => ({ TracingHelper: { withSpan: (_n: string, fn: Function) => fn({ setAttributes: vi.fn(), end: vi.fn() }) } }));
+vi.mock("../config/tracing", () => ({ TracingHelper: { withSpan: (_n: string, fn: (...args: unknown[]) => unknown) => fn({ setAttributes: vi.fn(), end: vi.fn() }) } }));
 vi.mock("../lib/circuitBreaker", () => ({
-    CircuitBreaker: vi.fn().mockImplementation(() => ({ getState: () => "CLOSED", execute: (fn: Function) => fn() })),
-    withCircuitBreaker: (_fn: Function, _cb: any) => _fn(),
+    CircuitBreaker: vi.fn().mockImplementation(() => ({ getState: () => "CLOSED", execute: (fn: (...args: unknown[]) => unknown) => fn() })),
+    withCircuitBreaker: (_fn: (...args: unknown[]) => unknown, _cb: any) => _fn(),
     getCircuitBreaker: vi.fn(),
 }));
-vi.mock("../lib/retry", () => ({ retryAsync: (_fn: Function) => _fn() }));
+vi.mock("../lib/retry", () => ({ retryAsync: (_fn: (...args: unknown[]) => unknown) => _fn() }));
 vi.mock("../lib/metrics", () => ({ classifySubmissionError: vi.fn(), recordTransactionSubmission: vi.fn() }));
 vi.mock("../middleware/logger", () => ({ appLogger: { info: vi.fn(), error: vi.fn(), warn: vi.fn() } }));
 vi.mock("../errors/service.errors", () => ({

@@ -16,7 +16,7 @@ import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
 
 // ─── Helper components that deliberately crash ────────────────────────────
 
-function CrashOnRender({ message }: { message: string }) {
+function CrashOnRender({ message }: { message: string }): never {
   throw new Error(message);
 }
 
@@ -35,7 +35,7 @@ function CrashAfterDelay({ message, delayMs }: { message: string; delayMs: numbe
   );
 }
 
-function CrashWithBackendId() {
+function CrashWithBackendId(): never {
   const fakeError = new Error("Simulated backend-originated error");
   // Attach a fake backend correlation ID so the boundary can pick it up
   (fakeError as unknown as Record<string, unknown>).backendError = {

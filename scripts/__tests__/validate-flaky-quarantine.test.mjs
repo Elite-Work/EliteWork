@@ -11,10 +11,17 @@
 
 import { writeFileSync, mkdirSync, rmSync, existsSync } from "fs";
 import { tmpdir } from "os";
-import { join } from "path";
+import { dirname, join } from "path";
 import { execSync } from "child_process";
+import { fileURLToPath } from "url";
 
-const SCRIPT = join(process.cwd(), "../../scripts/validate-flaky-quarantine.mjs");
+// Resolve relative to this test file — process.cwd() depends on where Jest is
+// invoked from (and would point outside the repo when run from the root).
+const SCRIPT = join(
+  dirname(fileURLToPath(import.meta.url)),
+  "..",
+  "validate-flaky-quarantine.mjs",
+);
 const TMP = join(tmpdir(), "flaky-quarantine-test-" + Date.now());
 
 function registryPath() {

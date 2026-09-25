@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../types/navigation';
 import { useTradeStore } from '../stores/tradeStore';
+import { clearTradeDraft, loadTradeDraft, saveTradeDraft } from '../utils/tradeDraft';
 
 type Props = StackScreenProps<RootStackParamList, 'CreateTrade'>;
 
@@ -317,7 +318,34 @@ export default function CreateTradeScreen({ navigation }: Props) {
   const [step, setStep] = useState(0);
   const [data, setData] = useState<FormData>(defaults);
   const [submitting, setSubmitting] = useState(false);
+  const [draftLoaded, setDraftLoaded] = useState(false);
   const { createTrade } = useTradeStore();
+
+  // Restore a saved draft so a partially-filled form survives an app restart.
+  useEffect(() => {
+    let cancelled = false;
+    loadTradeDraft<FormData>().then((draft) => {
+      if (cancelled) return;
+      if (draft) {
+        setData({ ...defaults, ...draft.data });
+        if (Number.isInteger(draft.step) && draft.step >= 0 && draft.step <= 2) {
+          setStep(draft.step);
+        }
+      }
+      setDraftLoaded(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Persist the draft on every change, but only after restore has finished
+  // so the defaults never overwrite a saved draft.
+  useEffect(() => {
+    if (draftLoaded) {
+      void saveTradeDraft(data, step);
+    }
+  }, [data, step, draftLoaded]);
 
   const update = useCallback((partial: Partial<FormData>) => {
     setData((prev) => ({ ...prev, ...partial }));
@@ -341,6 +369,7 @@ export default function CreateTradeScreen({ navigation }: Props) {
       });
 
       if (result) {
+        await clearTradeDraft();
         Alert.alert('Trade Created', `Trade ${result.tradeId} has been created. Sign the transaction with your wallet to deposit funds.`);
         navigation.replace('TradeDetail', { tradeId: result.tradeId });
       } else {

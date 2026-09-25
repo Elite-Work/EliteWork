@@ -10,6 +10,7 @@ import { featureFlagService } from "../services/feature-flags.service";
 import { appLogger } from "../middleware/logger";
 import { createWalletRateLimiter } from "../lib/rateLimit";
 import { RATE_LIMIT_CONFIG } from "../config/rateLimit";
+import { prisma as defaultPrisma } from "../lib/db";
 
 const featureNameParamSchema = z.object({
   name: z
@@ -26,7 +27,7 @@ const updateFlagBodySchema = z.object({
 
 const adminRateLimit = createWalletRateLimiter(RATE_LIMIT_CONFIG.admin);
 
-export function createAdminFeaturesRouter() {
+export function createAdminFeaturesRouter(prisma: PrismaClient = defaultPrisma) {
   const router = Router();
 
   router.get(
@@ -61,6 +62,15 @@ export function createAdminFeaturesRouter() {
         const flag = await featureFlagService.setFlag(name, {
           enabled,
           rolloutPercentage,
+        });
+
+        await prisma.adminActionAudit.create({
+          data: {
+            action: "UPDATE_FEATURE_FLAG",
+            actorAddress: req.user!.walletAddress,
+            targetReference: name,
+            note: JSON.stringify({ enabled, rolloutPercentage }),
+          },
         });
 
         // Admin audit: record which admin changed a feature flag

@@ -1,35 +1,95 @@
-import { PrismaClient, DisputeStatus } from "@prisma/client";
+import { Dispute, DisputeStatus, Prisma } from "@prisma/client";
 import { DisputeService } from "../services/dispute.service";
+import type { DisputeResponse } from "../services/dispute.service";
 import { AppError, ErrorCode } from "../errors/errorCodes";
 
 const MEDIATOR = "GA_MEDIATOR_VALID";
 
-function createMockPrisma() {
-  const txClient = {
+type DisputeWithTrade = Prisma.DisputeGetPayload<{
+  include: {
+    trade: {
+      select: { buyerAddress: true; sellerAddress: true; amountUsdc: true };
+    };
+  };
+}>;
+
+type TransactionClientMock = {
+  dispute: {
+    findFirst: jest.MockedFunction<
+      (args: Prisma.DisputeFindFirstArgs) => Promise<DisputeWithTrade | null>
+    >;
+    findUniqueOrThrow: jest.MockedFunction<
+      (args: Prisma.DisputeFindUniqueOrThrowArgs) => Promise<DisputeWithTrade>
+    >;
+    updateMany: jest.MockedFunction<
+      (args: Prisma.DisputeUpdateManyArgs) => Promise<Prisma.BatchPayload>
+    >;
+  };
+};
+
+type DisputePrismaMock = {
+  dispute: {
+    findMany: jest.MockedFunction<
+      (args: Prisma.DisputeFindManyArgs) => Promise<DisputeWithTrade[]>
+    >;
+    count: jest.MockedFunction<
+      (args: Prisma.DisputeCountArgs) => Promise<number>
+    >;
+  };
+  $transaction: jest.MockedFunction<
+    (callback: (tx: TransactionClientMock) => Promise<DisputeResponse>) => Promise<DisputeResponse>
+  >;
+  _tx: TransactionClientMock;
+};
+
+function createMockPrisma(): DisputePrismaMock {
+  const txClient: TransactionClientMock = {
     dispute: {
-      findFirst: jest.fn(),
-      findUnique: jest.fn(),
-      findUniqueOrThrow: jest.fn(),
-      updateMany: jest.fn(),
+      findFirst: jest.fn<
+        Promise<DisputeWithTrade | null>,
+        [args: Prisma.DisputeFindFirstArgs]
+      >(),
+      findUniqueOrThrow: jest.fn<
+        Promise<DisputeWithTrade>,
+        [args: Prisma.DisputeFindUniqueOrThrowArgs]
+      >(),
+      updateMany: jest.fn<
+        Promise<Prisma.BatchPayload>,
+        [args: Prisma.DisputeUpdateManyArgs]
+      >(),
     },
   };
 
   return {
     dispute: {
-      findFirst: jest.fn(),
-      update: jest.fn(),
-      updateMany: jest.fn(),
-      count: jest.fn(),
-      findMany: jest.fn(),
+      findMany: jest.fn<
+        Promise<DisputeWithTrade[]>,
+        [args: Prisma.DisputeFindManyArgs]
+      >(),
+      count: jest.fn<Promise<number>, [args: Prisma.DisputeCountArgs]>(),
     },
-    $transaction: jest.fn(async (cb: (tx: typeof txClient) => Promise<unknown>) => cb(txClient)),
+    $transaction: jest.fn(
+      async (callback: (tx: TransactionClientMock) => Promise<DisputeResponse>) =>
+        callback(txClient),
+    ),
     _tx: txClient,
-  } as unknown as PrismaClient & { _tx: typeof txClient };
+  };
 }
 
-function makeDispute(status: DisputeStatus, id = 1, tradeId = "T-001", version = 0) {
+type DisputeDatabase = ConstructorParameters<typeof DisputeService>[0];
+
+function asPrismaClient(mock: DisputePrismaMock): DisputeDatabase {
+  return mock as unknown as DisputeDatabase;
+}
+
+function makeDispute(
+  status: DisputeStatus,
+  id = 1,
+  tradeId = "T-001",
+  version = 0,
+): DisputeWithTrade {
   const now = new Date();
-  return {
+  const dispute: Dispute = {
     id,
     tradeId,
     initiator: "GA_BUYER",
@@ -37,8 +97,12 @@ function makeDispute(status: DisputeStatus, id = 1, tradeId = "T-001", version =
     status,
     version,
     resolvedAt: null,
+    categoryId: null,
     createdAt: now,
     updatedAt: now,
+  };
+  return {
+    ...dispute,
     trade: { buyerAddress: "GA_BUYER", sellerAddress: "GA_SELLER", amountUsdc: "100" },
   };
 }
@@ -49,7 +113,7 @@ describe("DisputeService – status transitions", () => {
 
   beforeEach(() => {
     prisma = createMockPrisma();
-    service = new DisputeService(prisma as any);
+    service = new DisputeService(asPrismaClient(prisma));
     process.env.ADMIN_STELLAR_PUBKEYS = MEDIATOR;
   });
 
@@ -243,8 +307,8 @@ describe("DisputeService – status transitions", () => {
       makeDispute(DisputeStatus.CLOSED, 4, "T-D"),
     ];
 
-    (prisma.dispute.findMany as jest.Mock).mockResolvedValue(disputes);
-    (prisma.dispute.count as jest.Mock).mockResolvedValue(4);
+    prisma.dispute.findMany.mockResolvedValue(disputes);
+    prisma.dispute.count.mockResolvedValue(4);
 
     const result = await service.listMediatorDisputes(MEDIATOR);
 
@@ -256,8 +320,8 @@ describe("DisputeService – status transitions", () => {
   });
 
   it("listMediatorDisputes filters by specific status when provided", async () => {
-    (prisma.dispute.findMany as jest.Mock).mockResolvedValue([makeDispute(DisputeStatus.RESOLVED, 3, "T-C")]);
-    (prisma.dispute.count as jest.Mock).mockResolvedValue(1);
+    prisma.dispute.findMany.mockResolvedValue([makeDispute(DisputeStatus.RESOLVED, 3, "T-C")]);
+    prisma.dispute.count.mockResolvedValue(1);
 
     const result = await service.listMediatorDisputes(MEDIATOR, { status: DisputeStatus.RESOLVED });
 
@@ -275,8 +339,8 @@ describe("DisputeService – status transitions", () => {
   });
 
   it("listMediatorDisputes paginates correctly", async () => {
-    (prisma.dispute.findMany as jest.Mock).mockResolvedValue([]);
-    (prisma.dispute.count as jest.Mock).mockResolvedValue(50);
+    prisma.dispute.findMany.mockResolvedValue([]);
+    prisma.dispute.count.mockResolvedValue(50);
 
     const result = await service.listMediatorDisputes(MEDIATOR, { page: 3, limit: 10 });
 

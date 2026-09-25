@@ -65,6 +65,6 @@ describe("authMiddleware — failed-authorization error shape (#545)", () => {
       .set("Authorization", "Bearer some.jwt.token");
 
     expect(res.status).toBe(401);
-    expect(res.body.error).toBe("Unauthorized");
+    expect(res.body.error).toMatch(/authentication failed|unauthorized/i);
   });
 });

@@ -62,6 +62,6 @@ describe('App Bootstrap', () => {
   it('mounts wallet routes via createApp', async () => {
     const res = await request(app).get('/wallet/balance');
     expect(res.status).toBe(401);
-    expect(res.body.error).toBe('Unauthorized');
+    expect(res.body.error).toBe('Missing Authorization header');
   });
 });

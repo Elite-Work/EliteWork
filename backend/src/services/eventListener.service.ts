@@ -42,7 +42,10 @@ export async function isAlreadyProcessed(
  */
 export function isPrismaUniqueConstraintError(err: unknown): boolean {
   return (
-    err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002"
+    typeof err === "object" &&
+    err !== null &&
+    "code" in err &&
+    (err as { code?: unknown }).code === "P2002"
   );
 }
 

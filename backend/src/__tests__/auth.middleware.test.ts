@@ -12,6 +12,7 @@ jest.mock("../services/auth.service", () => {
   // class so every static method is preserved and only `isTokenRevoked` is
   // replaced with a controllable mock.
   actual.AuthService.isTokenRevoked = jest.fn();
+  actual.AuthService.getTokenVersion = jest.fn().mockResolvedValue(0);
   return actual;
 });
 

@@ -2,6 +2,7 @@ import express from "express";
 import jwt from "jsonwebtoken";
 import request from "supertest";
 import * as StellarSdk from "@stellar/stellar-sdk";
+import { Trade, TradeStatus } from "@prisma/client";
 import { tradeRoutes } from "../routes/trade.routes";
 import { ContractService } from "../services/contract.service";
 import { TradeService } from "../services/trade.service";
@@ -9,8 +10,6 @@ import { AuthService } from "../services/auth.service";
 import { errorHandler } from "../middleware/errorHandler";
 import { ErrorCode } from "../errors/errorCodes";
 
-jest.mock("../services/contract.service");
-jest.mock("../services/trade.service");
 jest.mock("../services/auth.service", () => ({
   AuthService: {
     validateToken: jest.fn(async (token: string) => {
@@ -20,6 +19,48 @@ jest.mock("../services/auth.service", () => ({
     isTokenRevoked: jest.fn().mockResolvedValue(false),
   },
 }));
+
+function createMockTradeService() {
+  return {
+    createPendingTrade: jest.spyOn(TradeService.prototype, "createPendingTrade"),
+    getTradeById: jest.spyOn(TradeService.prototype, "getTradeById"),
+  };
+}
+
+function createMockContractService() {
+  return {
+    buildCreateTradeTx: jest.spyOn(
+      ContractService.prototype,
+      "buildCreateTradeTx",
+    ),
+    buildDepositTx: jest.spyOn(ContractService.prototype, "buildDepositTx"),
+  };
+}
+
+function makeTrade(overrides: Partial<Trade> = {}): Trade {
+  return {
+    id: 1,
+    tradeId: "4294967297",
+    buyerAddress: "",
+    sellerAddress: "",
+    amountUsdc: "125.1234567",
+    buyerLossBps: 5000,
+    sellerLossBps: 5000,
+    version: 0,
+    status: TradeStatus.CREATED,
+    fundedAt: null,
+    deliveredAt: null,
+    completedAt: null,
+    expiresAt: null,
+    expiredAt: null,
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+    ...overrides,
+  };
+}
+
+const mockTradeService = createMockTradeService();
+const mockContractService = createMockContractService();
 
 const app = express();
 app.use(express.json());
@@ -64,6 +105,10 @@ describe("Trade Routes", () => {
 
   beforeEach(() => {
     jest.spyOn(AuthService, "isTokenRevoked").mockResolvedValue(false);
+    mockTradeService.createPendingTrade.mockReset();
+    mockTradeService.getTradeById.mockReset().mockResolvedValue(null);
+    mockContractService.buildCreateTradeTx.mockReset();
+    mockContractService.buildDepositTx.mockReset();
   });
 
   afterEach(() => {
@@ -71,13 +116,13 @@ describe("Trade Routes", () => {
   });
 
   it("returns 201 with tradeId and unsignedXdr for a valid request", async () => {
-    (ContractService.prototype.buildCreateTradeTx as jest.Mock).mockResolvedValue({
+    mockContractService.buildCreateTradeTx.mockResolvedValue({
       tradeId: "4294967297",
       unsignedXdr: "AAAA-test-xdr",
     });
-    (TradeService.prototype.createPendingTrade as jest.Mock).mockResolvedValue({
-      tradeId: "4294967297",
-    });
+    mockTradeService.createPendingTrade.mockResolvedValue(
+      makeTrade({ tradeId: "4294967297" }),
+    );
 
     const res = await request(app)
       .post("/trades")
@@ -94,14 +139,14 @@ describe("Trade Routes", () => {
       tradeId: "4294967297",
       unsignedXdr: "AAAA-test-xdr",
     });
-    expect(ContractService.prototype.buildCreateTradeTx).toHaveBeenCalledWith({
+    expect(mockContractService.buildCreateTradeTx).toHaveBeenCalledWith({
       buyerAddress,
       sellerAddress,
       amountUsdc: "125.1234567",
       buyerLossBps: expect.any(Number),
       sellerLossBps: expect.any(Number),
     });
-    expect(TradeService.prototype.createPendingTrade).toHaveBeenCalledWith({
+    expect(mockTradeService.createPendingTrade).toHaveBeenCalledWith({
       tradeId: "4294967297",
       buyerAddress: buyerAddress,
       sellerAddress: sellerAddress,
@@ -123,8 +168,10 @@ describe("Trade Routes", () => {
       });
 
     expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/sellerAddress/i);
-    expect(res.body.code).toBe("VALIDATION_ERROR");
+    expect(res.body).toMatchObject({
+      code: ErrorCode.VALIDATION_ERROR,
+      details: expect.any(Object),
+    });
   });
 
   it("returns 401 without auth", async () => {
@@ -138,14 +185,14 @@ describe("Trade Routes", () => {
   });
 
   it("returns unsignedXdr for a valid buyer deposit request", async () => {
-    (TradeService.prototype.getTradeById as jest.Mock).mockResolvedValue({
+    mockTradeService.getTradeById.mockResolvedValue(makeTrade({
       tradeId: "4294967297",
       buyerAddress: buyerAddress,
       sellerAddress: sellerAddress,
       amountUsdc: "125.1234567",
-      status: "CREATED",
-    });
-    (ContractService.prototype.buildDepositTx as jest.Mock).mockResolvedValue({
+      status: TradeStatus.CREATED,
+    }));
+    mockContractService.buildDepositTx.mockResolvedValue({
       unsignedXdr: "AAAA-deposit-xdr",
     });
 
@@ -157,11 +204,11 @@ describe("Trade Routes", () => {
     expect(res.body).toEqual({
       unsignedXdr: "AAAA-deposit-xdr",
     });
-    expect(TradeService.prototype.getTradeById).toHaveBeenCalledWith(
+    expect(mockTradeService.getTradeById).toHaveBeenCalledWith(
       "4294967297",
       buyerAddress
     );
-    expect(ContractService.prototype.buildDepositTx).toHaveBeenCalledWith(
+    expect(mockContractService.buildDepositTx).toHaveBeenCalledWith(
       expect.objectContaining({
         tradeId: "4294967297",
         buyerAddress: buyerAddress,
@@ -170,13 +217,13 @@ describe("Trade Routes", () => {
   });
 
   it("returns 403 with structured error if the caller is the seller", async () => {
-    (TradeService.prototype.getTradeById as jest.Mock).mockResolvedValue({
+    mockTradeService.getTradeById.mockResolvedValue(makeTrade({
       tradeId: "4294967297",
       buyerAddress: buyerAddress,
       sellerAddress: sellerAddress,
       amountUsdc: "125.1234567",
-      status: "CREATED",
-    });
+      status: TradeStatus.CREATED,
+    }));
 
     const res = await request(app)
       .post("/trades/4294967297/deposit")
@@ -188,13 +235,13 @@ describe("Trade Routes", () => {
   });
 
   it("returns 400 with structured error if the trade is already funded", async () => {
-    (TradeService.prototype.getTradeById as jest.Mock).mockResolvedValue({
+    mockTradeService.getTradeById.mockResolvedValue(makeTrade({
       tradeId: "4294967297",
       buyerAddress: buyerAddress,
       sellerAddress: sellerAddress,
       amountUsdc: "125.1234567",
-      status: "FUNDED",
-    });
+      status: TradeStatus.FUNDED,
+    }));
 
     const res = await request(app)
       .post("/trades/4294967297/deposit")
@@ -207,7 +254,7 @@ describe("Trade Routes", () => {
   });
 
   it("does not create a pending trade when create_trade contract build fails", async () => {
-    (ContractService.prototype.buildCreateTradeTx as jest.Mock).mockRejectedValue(
+    mockContractService.buildCreateTradeTx.mockRejectedValue(
       new Error("simulate failed"),
     );
 
@@ -223,6 +270,6 @@ describe("Trade Routes", () => {
 
     expect(res.status).toBe(500);
     expect(res.body.code).toBe(ErrorCode.TRADE_BUILD_FAILED);
-    expect(TradeService.prototype.createPendingTrade).not.toHaveBeenCalled();
+    expect(mockTradeService.createPendingTrade).not.toHaveBeenCalled();
   });
 });

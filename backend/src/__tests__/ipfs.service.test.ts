@@ -143,6 +143,7 @@ describe("IPFSService", () => {
         it("opens upload circuit after threshold failures", async () => {
             process.env.IPFS_PINATA_CIRCUIT_FAILURE_THRESHOLD = "1";
             process.env.IPFS_PINATA_CIRCUIT_COOLDOWN_MS = "60000";
+            service = new IPFSService();
             mockPinFileToIPFS.mockRejectedValue({ response: { status: 503 } });
 
             await expect(

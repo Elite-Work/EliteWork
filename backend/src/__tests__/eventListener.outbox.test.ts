@@ -48,6 +48,7 @@ function createMockPrisma() {
       create: jest.fn().mockResolvedValue({}),
     },
     chainEventOutbox: {
+      upsert: jest.fn().mockResolvedValue({ ...outbox }),
       update: jest.fn().mockImplementation(async ({ data }: any) => {
         if (typeof data.attempts === "number") outbox.attempts = data.attempts;
         if (data.attempts?.increment) outbox.attempts += data.attempts.increment;
@@ -65,6 +66,7 @@ function createMockPrisma() {
     },
     chainEventOutbox: {
       findUnique: jest.fn().mockResolvedValue(null),
+      upsert: jest.fn().mockResolvedValue({ ...outbox }),
       create: jest.fn().mockResolvedValue({ ...outbox }),
       update: jest.fn().mockImplementation(async ({ data }: any) => {
         if (typeof data.attempts === "number") outbox.attempts = data.attempts;
@@ -120,7 +122,7 @@ describe("EventListenerService outbox retries", () => {
 
   it("moves outbox row to DEAD_LETTER when max attempts reached", async () => {
     const prisma = createMockPrisma();
-    prisma.chainEventOutbox.create = jest.fn().mockResolvedValue({
+    prisma.chainEventOutbox.upsert = jest.fn().mockResolvedValue({
       id: 11,
       status: "RETRYING",
       attempts: 2,
@@ -147,7 +149,7 @@ describe("EventListenerService outbox retries", () => {
 
   it("skips processing when nextAttemptAt is in the future", async () => {
     const prisma = createMockPrisma();
-    prisma.chainEventOutbox.create = jest.fn().mockResolvedValue({
+    prisma.chainEventOutbox.upsert = jest.fn().mockResolvedValue({
       id: 11,
       status: "RETRYING",
       attempts: 1,

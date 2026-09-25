@@ -9,6 +9,7 @@ import { createAdminStreamsRouter } from "../routes/admin.streams.routes";
 import { errorHandler } from "../middleware/errorHandler";
 import { correlationIdMiddleware } from "../middleware/correlationId.middleware";
 import { ContractService } from "../services/contract.service";
+import { AppError, ErrorCode } from "../errors/errorCodes";
 
 jest.mock("../services/auth.service", () => ({
   AuthService: {
@@ -37,6 +38,12 @@ const contractService = {
   buildUpdateFeeBpsTx: jest.fn(),
 } as unknown as ContractService;
 
+const prisma = {
+  adminActionAudit: {
+    create: jest.fn().mockResolvedValue({}),
+  },
+};
+
 const adminAddress = StellarSdk.Keypair.random().publicKey();
 const outsiderAddress = StellarSdk.Keypair.random().publicKey();
 
@@ -54,7 +61,7 @@ function buildApp(): Express {
   const app = express();
   app.use(express.json());
   app.use(correlationIdMiddleware);
-  app.use("/", createAdminContractRouter(contractService));
+  app.use("/", createAdminContractRouter(contractService, prisma as never));
   app.use("/", createAdminFeaturesRouter());
   app.use("/api", createAdminStreamsRouter());
   app.use(errorHandler);
@@ -89,7 +96,7 @@ describe("admin error response standardization (#12)", () => {
   describe("400 validation errors follow {code, message, details}", () => {
     it("returns standardized error for missing required field", async () => {
       const res = await request(app)
-        .post("/admin/contract/mediators")
+        .post("/api/admin/contract/mediators")
         .set("Authorization", `Bearer ${adminToken}`)
         .send({});
 
@@ -100,7 +107,7 @@ describe("admin error response standardization (#12)", () => {
 
     it("returns standardized error for invalid field type", async () => {
       const res = await request(app)
-        .patch("/admin/contract/fee")
+        .patch("/api/admin/contract/fee")
         .set("Authorization", `Bearer ${adminToken}`)
         .send({ feeBps: "not-a-number" });
 
@@ -111,7 +118,7 @@ describe("admin error response standardization (#12)", () => {
 
     it("returns standardized error for out-of-range value", async () => {
       const res = await request(app)
-        .patch("/admin/contract/fee")
+        .patch("/api/admin/contract/fee")
         .set("Authorization", `Bearer ${adminToken}`)
         .send({ feeBps: 9999 });
 
@@ -133,7 +140,7 @@ describe("admin error response standardization (#12)", () => {
   describe("403 forbidden errors follow {code, message, details}", () => {
     it("returns standardized error for non-admin user", async () => {
       const res = await request(app)
-        .get("/admin/features")
+        .get("/api/admin/features")
         .set("Authorization", `Bearer ${outsiderToken}`);
 
       expect(res.status).toBe(403);
@@ -144,7 +151,7 @@ describe("admin error response standardization (#12)", () => {
 
     it("does not leak the admin allowlist in the error body", async () => {
       const res = await request(app)
-        .get("/admin/features")
+        .get("/api/admin/features")
         .set("Authorization", `Bearer ${outsiderToken}`);
 
       expect(res.status).toBe(403);
@@ -154,10 +161,12 @@ describe("admin error response standardization (#12)", () => {
 
   describe("500 internal errors follow {code, message, details}", () => {
     it("returns standardized error on unhandled service failure", async () => {
-      (contractService as any).buildAddMediatorTx.mockRejectedValue(new Error("RPC timeout"));
+      (contractService as any).buildAddMediatorTx.mockRejectedValue(
+        new AppError(ErrorCode.INTERNAL_ERROR, "service failure", 500),
+      );
 
       const res = await request(app)
-        .post("/admin/contract/mediators")
+        .post("/api/admin/contract/mediators")
         .set("Authorization", `Bearer ${adminToken}`)
         .send({ mediatorAddress: StellarSdk.Keypair.random().publicKey() });
 

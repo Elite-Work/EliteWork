@@ -30,24 +30,21 @@ jest.mock("express-rate-limit", () =>
 // ── Redis mock (in-memory store, no real Redis needed) ────────────────────────
 const redisStore = new Map<string, string>();
 
-jest.mock("ioredis", () =>
-  jest.fn().mockImplementation(() => ({
+jest.mock("../lib/redis", () => ({
+  redis: {
     set: jest.fn((key: string, value: string) => {
       redisStore.set(key, value);
       return Promise.resolve("OK");
     }),
-    get: jest.fn((key: string) =>
-      Promise.resolve(redisStore.get(key) ?? null)
-    ),
+    get: jest.fn((key: string) => Promise.resolve(redisStore.get(key) ?? null)),
     del: jest.fn((key: string) => {
       redisStore.delete(key);
       return Promise.resolve(1);
     }),
-    exists: jest.fn((key: string) =>
-      Promise.resolve(redisStore.has(key) ? 1 : 0)
-    ),
-  }))
-);
+    exists: jest.fn((key: string) => Promise.resolve(redisStore.has(key) ? 1 : 0)),
+    incr: jest.fn(async () => 0),
+  },
+}));
 
 // ── Database / user-service mock ──────────────────────────────────────────────
 jest.mock("../services/user.service", () => ({

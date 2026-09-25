@@ -26,7 +26,7 @@ describe("Fee computation — backend mirrors contract arithmetic", () => {
     it("deducts fee from full amount", () => {
       const result = computeReleaseFee(10_000n, 100);
       expect(result.fee).toBe("100");
-      expect(result.sellerNet).toBe("9_900");
+      expect(result.sellerNet).toBe("9900");
       expect(result.buyerRefund).toBe("0");
       assertFeeConservation(result);
     });
@@ -34,7 +34,7 @@ describe("Fee computation — backend mirrors contract arithmetic", () => {
     it("zero fee when feeBps=0", () => {
       const result = computeReleaseFee(10_000n, 0);
       expect(result.fee).toBe("0");
-      expect(result.sellerNet).toBe("10_000");
+      expect(result.sellerNet).toBe("10000");
       assertFeeConservation(result);
     });
 
@@ -49,13 +49,13 @@ describe("Fee computation — backend mirrors contract arithmetic", () => {
       const result = computeRefundFee(10_000n, 100);
       expect(result.fee).toBe("0");
       expect(result.sellerNet).toBe("0");
-      expect(result.buyerRefund).toBe("10_000");
+      expect(result.buyerRefund).toBe("10000");
       assertFeeConservation(result);
     });
 
     it("buyer receives full amount regardless of feeBps", () => {
       const result = computeRefundFee(50_000n, 500);
-      expect(result.buyerRefund).toBe("50_000");
+      expect(result.buyerRefund).toBe("50000");
       expect(result.fee).toBe("0");
       assertFeeConservation(result);
     });
@@ -67,16 +67,16 @@ describe("Fee computation — backend mirrors contract arithmetic", () => {
     //   → seller_raw=8_800, fee=88, seller_net=8_712, buyer_refund=1_200
     it("matches the documented contract example exactly", () => {
       const result = computeSplitFee(10_000n, 7_000n, 4_000n, 100);
-      expect(result.sellerNet).toBe("8_712");
-      expect(result.buyerRefund).toBe("1_200");
+      expect(result.sellerNet).toBe("8712");
+      expect(result.buyerRefund).toBe("1200");
       expect(result.fee).toBe("88");
       assertFeeConservation(result);
     });
 
     it("50/50 split with symmetric loss sharing", () => {
       const result = computeSplitFee(10_000n, 5_000n, 5_000n, 0);
-      expect(result.sellerNet).toBe("7_500");
-      expect(result.buyerRefund).toBe("2_500");
+      expect(result.sellerNet).toBe("7500");
+      expect(result.buyerRefund).toBe("2500");
       expect(result.fee).toBe("0");
       assertFeeConservation(result);
     });
@@ -96,7 +96,7 @@ describe("Fee computation — backend mirrors contract arithmetic", () => {
     it("buyer receives nothing, all funds to seller minus fee", () => {
       const result = computeFullSellerFee(10_000n, 100);
       expect(result.buyerRefund).toBe("0");
-      expect(result.sellerNet).toBe("9_900");
+      expect(result.sellerNet).toBe("9900");
       expect(result.fee).toBe("100");
       assertFeeConservation(result);
     });
@@ -107,7 +107,7 @@ describe("Fee computation — backend mirrors contract arithmetic", () => {
       const result = computeFullBuyerFee(10_000n, 100);
       expect(result.sellerNet).toBe("0");
       expect(result.fee).toBe("0");
-      expect(result.buyerRefund).toBe("10_000");
+      expect(result.buyerRefund).toBe("10000");
       assertFeeConservation(result);
     });
   });

@@ -11,6 +11,7 @@
 
 jest.mock("../config/env", () => ({
   env: { NODE_ENV: "test", JWT_SECRET: "test-jwt-secret-value-with-minimum-length-32" },
+  runtimeEnvValue: (key: string) => process.env[key] ?? false,
 }));
 
 jest.mock("../config/rateLimit", () => ({
@@ -162,6 +163,7 @@ function buildApp(prisma: unknown): Express {
       new StreamLockService(prisma as never),
       undefined,
       new StreamValidationService(prisma as never),
+      { acquire: jest.fn(), release: jest.fn() },
     ),
   );
   app.use(errorHandler);

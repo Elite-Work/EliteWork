@@ -2,19 +2,68 @@ import express from "express";
 import jwt from "jsonwebtoken";
 import request from "supertest";
 import * as StellarSdk from "@stellar/stellar-sdk";
+import { Trade, TradeStatus } from "@prisma/client";
 import { tradeRoutes } from "../routes/trade.routes";
-import { TradeAccessDeniedError, DisputeTradeStatusError } from "../services/trade.service";
+import { TradeAccessDeniedError, TradeService } from "../services/trade.service";
 import { AuthService } from "../services/auth.service";
+import type { JWTPayload } from "../services/auth.service";
 import { errorHandler } from "../middleware/errorHandler";
 import { ErrorCode } from "../errors/errorCodes";
+import { ContractService } from "../services/contract.service";
+import * as contractServiceModule from "../services/contract.service";
 
-jest.mock("../services/trade.service", () => {
-  mockTradeService = { createPendingTrade: jest.fn(), listUserTrades: jest.fn(), getTradeById: jest.fn(), getUserStats: jest.fn(), initiateDispute: jest.fn() };
-  class MockTradeAccessDenied extends Error { constructor() { super("Forbidden"); this.name = "TradeAccessDeniedError"; } }
-  class MockDisputeStatusError extends Error { status = 400; constructor() { super("Dispute status error"); this.name = "DisputeTradeStatusError"; } }
-  class MockDisputeCategoryError extends Error { status = 400; constructor(cat: any) { super(`Invalid dispute category: ${cat}`); this.name = "DisputeCategoryValidationError"; } }
-  return { TradeService: jest.fn(() => mockTradeService), TradeAccessDeniedError: MockTradeAccessDenied, DisputeTradeStatusError: MockDisputeStatusError, DisputeCategoryValidationError: MockDisputeCategoryError };
-});
+function createMockTradeService() {
+  return {
+    createPendingTrade: jest.spyOn(TradeService.prototype, "createPendingTrade"),
+    listUserTrades: jest.spyOn(TradeService.prototype, "listUserTrades"),
+    getTradeById: jest.spyOn(TradeService.prototype, "getTradeById"),
+    getUserStats: jest.spyOn(TradeService.prototype, "getUserStats"),
+    initiateDispute: jest.spyOn(TradeService.prototype, "initiateDispute"),
+  };
+}
+
+function createMockContractService() {
+  return {
+    buildCreateTradeTx: jest.spyOn(
+      ContractService.prototype,
+      "buildCreateTradeTx",
+    ),
+    buildDepositTx: jest.spyOn(ContractService.prototype, "buildDepositTx"),
+  };
+}
+
+function makeTrade(overrides: Partial<Trade> = {}): Trade {
+  return {
+    id: 1,
+    tradeId: "4294967297",
+    buyerAddress: "",
+    sellerAddress: "",
+    amountUsdc: "125.1234567",
+    buyerLossBps: 5000,
+    sellerLossBps: 5000,
+    version: 0,
+    status: TradeStatus.CREATED,
+    fundedAt: null,
+    deliveredAt: null,
+    completedAt: null,
+    expiresAt: null,
+    expiredAt: null,
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+    ...overrides,
+  };
+}
+
+const mockTradeService = createMockTradeService();
+const mockContractService = createMockContractService();
+const mockBuildConfirmDeliveryTx = jest.spyOn(
+  contractServiceModule,
+  "buildConfirmDeliveryTx",
+);
+const mockBuildReleaseFundsTx = jest.spyOn(
+  contractServiceModule,
+  "buildReleaseFundsTx",
+);
 
 const app = express();
 app.use(express.json());
@@ -68,7 +117,27 @@ describe("TradeController", () => {
             secret,
             { algorithm: "HS256" },
         );
+        jest.spyOn(AuthService, "validateToken").mockImplementation(async (token) => {
+            const payload = jwt.decode(token);
+            if (!payload || typeof payload === "string") {
+                throw new Error("Invalid test token");
+            }
+            return payload as JWTPayload;
+        });
         jest.spyOn(AuthService, "isTokenRevoked").mockResolvedValue(false);
+        jest.spyOn(AuthService, "getTokenVersion").mockResolvedValue(0);
+    });
+
+    beforeEach(() => {
+        mockTradeService.createPendingTrade.mockReset();
+        mockTradeService.listUserTrades.mockReset();
+        mockTradeService.getTradeById.mockReset().mockResolvedValue(null);
+        mockTradeService.getUserStats.mockReset();
+        mockTradeService.initiateDispute.mockReset();
+        mockContractService.buildCreateTradeTx.mockReset();
+        mockContractService.buildDepositTx.mockReset();
+        mockBuildConfirmDeliveryTx.mockReset();
+        mockBuildReleaseFundsTx.mockReset();
     });
 
     afterEach(() => {
@@ -77,13 +146,13 @@ describe("TradeController", () => {
 
     describe("createTrade()", () => {
         it("returns 201 with tradeId and unsignedXdr for a valid request", async () => {
-            (mockContractService.buildCreateTradeTx as jest.Mock).mockResolvedValue({
+            mockContractService.buildCreateTradeTx.mockResolvedValue({
                 tradeId: "4294967297",
                 unsignedXdr: "AAAA-test-xdr",
             });
-            (mockTradeService.createPendingTrade as jest.Mock).mockResolvedValue({
-                tradeId: "4294967297",
-            });
+            mockTradeService.createPendingTrade.mockResolvedValue(
+                makeTrade({ tradeId: "4294967297" }),
+            );
 
             const res = await request(app)
                 .post("/trades")
@@ -231,11 +300,12 @@ describe("TradeController", () => {
             });
 
             expect(res.status).toBe(401);
-            expect(res.body.error).toBe("Unauthorized");
+            expect(res.body.error).toBe("Missing Authorization header");
         });
 
         it("does not create a pending trade when contract build fails — structured TRADE_BUILD_FAILED", async () => {
-            (mockContractService.buildCreateTradeTx as jest.Mock).mockRejectedValue(                new Error("simulate failed"),
+            mockContractService.buildCreateTradeTx.mockRejectedValue(
+                new Error("simulate failed"),
             );
 
             const res = await request(app)
@@ -255,14 +325,14 @@ describe("TradeController", () => {
 
     describe("buildDepositTx()", () => {
         it("returns unsignedXdr for a valid buyer deposit request", async () => {
-            (mockTradeService.getTradeById as jest.Mock).mockResolvedValue({
+            mockTradeService.getTradeById.mockResolvedValue(makeTrade({
                 tradeId: "4294967297",
                 buyerAddress: buyerAddress,
                 sellerAddress: sellerAddress,
                 amountUsdc: "125.1234567",
-                status: "CREATED",
-            });
-            (mockContractService.buildDepositTx as jest.Mock).mockResolvedValue({
+                status: TradeStatus.CREATED,
+            }));
+            mockContractService.buildDepositTx.mockResolvedValue({
                 unsignedXdr: "AAAA-deposit-xdr",
             });
 
@@ -279,12 +349,13 @@ describe("TradeController", () => {
         });
 
         it("returns 403 structured error if the caller is the seller", async () => {
-            (mockTradeService.getTradeById as jest.Mock).mockResolvedValue({                tradeId: "4294967297",
+            mockTradeService.getTradeById.mockResolvedValue(makeTrade({
+                tradeId: "4294967297",
                 buyerAddress: buyerAddress,
                 sellerAddress: sellerAddress,
                 amountUsdc: "125.1234567",
-                status: "CREATED",
-            });
+                status: TradeStatus.CREATED,
+            }));
 
             const res = await request(app)
                 .post("/trades/4294967297/deposit")
@@ -296,12 +367,13 @@ describe("TradeController", () => {
         });
 
         it("returns 403 structured error if the caller is a stranger", async () => {
-            (mockTradeService.getTradeById as jest.Mock).mockResolvedValue({                tradeId: "4294967297",
+            mockTradeService.getTradeById.mockResolvedValue(makeTrade({
+                tradeId: "4294967297",
                 buyerAddress: buyerAddress,
                 sellerAddress: sellerAddress,
                 amountUsdc: "125.1234567",
-                status: "CREATED",
-            });
+                status: TradeStatus.CREATED,
+            }));
 
             const res = await request(app)
                 .post("/trades/4294967297/deposit")
@@ -313,12 +385,13 @@ describe("TradeController", () => {
         });
 
         it("returns 400 structured error if the trade is already funded", async () => {
-            (mockTradeService.getTradeById as jest.Mock).mockResolvedValue({                tradeId: "4294967297",
+            mockTradeService.getTradeById.mockResolvedValue(makeTrade({
+                tradeId: "4294967297",
                 buyerAddress: buyerAddress,
                 sellerAddress: sellerAddress,
                 amountUsdc: "125.1234567",
-                status: "FUNDED",
-            });
+                status: TradeStatus.FUNDED,
+            }));
 
             const res = await request(app)
                 .post("/trades/4294967297/deposit")
@@ -331,7 +404,7 @@ describe("TradeController", () => {
         });
 
         it("returns 404 structured error if trade not found", async () => {
-            (mockTradeService.getTradeById as jest.Mock).mockResolvedValue(null);
+            mockTradeService.getTradeById.mockResolvedValue(null);
             const res = await request(app)
                 .post("/trades/9999999999/deposit")
                 .set("Authorization", `Bearer ${token}`);
@@ -345,20 +418,20 @@ describe("TradeController", () => {
             const res = await request(app).post("/trades/4294967297/deposit");
 
             expect(res.status).toBe(401);
-            expect(res.body.error).toBe("Unauthorized");
+            expect(res.body.error).toBe("Missing Authorization header");
         });
     });
 
     describe("confirmDelivery()", () => {
         it("returns unsignedXdr for a valid buyer confirm delivery request", async () => {
-            (mockTradeService.getTradeById as jest.Mock).mockResolvedValue({
+            mockTradeService.getTradeById.mockResolvedValue(makeTrade({
                 tradeId: "4294967297",
                 buyerAddress: buyerAddress,
                 sellerAddress: sellerAddress,
                 amountUsdc: "125.1234567",
-                status: "FUNDED",
-            });
-            (mockBuildConfirmDeliveryTx as jest.Mock).mockResolvedValue(
+                status: TradeStatus.FUNDED,
+            }));
+            mockBuildConfirmDeliveryTx.mockResolvedValue(
                 "AAAA-confirm-delivery-xdr",            );
 
             const res = await request(app)
@@ -370,12 +443,13 @@ describe("TradeController", () => {
         });
 
         it("returns 403 structured error if the caller is the seller", async () => {
-            (mockTradeService.getTradeById as jest.Mock).mockResolvedValue({                tradeId: "4294967297",
+            mockTradeService.getTradeById.mockResolvedValue(makeTrade({
+                tradeId: "4294967297",
                 buyerAddress: buyerAddress,
                 sellerAddress: sellerAddress,
                 amountUsdc: "125.1234567",
-                status: "FUNDED",
-            });
+                status: TradeStatus.FUNDED,
+            }));
 
             const res = await request(app)
                 .post("/trades/4294967297/confirm")
@@ -387,12 +461,13 @@ describe("TradeController", () => {
         });
 
         it("returns 400 structured error if the trade is not FUNDED", async () => {
-            (mockTradeService.getTradeById as jest.Mock).mockResolvedValue({                tradeId: "4294967297",
+            mockTradeService.getTradeById.mockResolvedValue(makeTrade({
+                tradeId: "4294967297",
                 buyerAddress: buyerAddress,
                 sellerAddress: sellerAddress,
                 amountUsdc: "125.1234567",
-                status: "CREATED",
-            });
+                status: TradeStatus.CREATED,
+            }));
 
             const res = await request(app)
                 .post("/trades/4294967297/confirm")
@@ -405,7 +480,7 @@ describe("TradeController", () => {
         });
 
         it("returns 404 structured error if trade not found", async () => {
-            (mockTradeService.getTradeById as jest.Mock).mockResolvedValue(null);
+            mockTradeService.getTradeById.mockResolvedValue(null);
             const res = await request(app)
                 .post("/trades/9999999999/confirm")
                 .set("Authorization", `Bearer ${token}`);
@@ -419,20 +494,20 @@ describe("TradeController", () => {
             const res = await request(app).post("/trades/4294967297/confirm");
 
             expect(res.status).toBe(401);
-            expect(res.body.error).toBe("Unauthorized");
+            expect(res.body.error).toBe("Missing Authorization header");
         });
     });
 
     describe("releaseFunds()", () => {
         it("returns unsignedXdr for a valid buyer release funds request", async () => {
-            (mockTradeService.getTradeById as jest.Mock).mockResolvedValue({
+            mockTradeService.getTradeById.mockResolvedValue(makeTrade({
                 tradeId: "4294967297",
                 buyerAddress: buyerAddress,
                 sellerAddress: sellerAddress,
                 amountUsdc: "125.1234567",
-                status: "DELIVERED",
-            });
-            (mockBuildReleaseFundsTx as jest.Mock).mockResolvedValue(
+                status: TradeStatus.DELIVERED,
+            }));
+            mockBuildReleaseFundsTx.mockResolvedValue(
                 "AAAA-release-funds-xdr",            );
 
             const res = await request(app)
@@ -444,12 +519,13 @@ describe("TradeController", () => {
         });
 
         it("returns 403 structured error if the caller is the seller", async () => {
-            (mockTradeService.getTradeById as jest.Mock).mockResolvedValue({                tradeId: "4294967297",
+            mockTradeService.getTradeById.mockResolvedValue(makeTrade({
+                tradeId: "4294967297",
                 buyerAddress: buyerAddress,
                 sellerAddress: sellerAddress,
                 amountUsdc: "125.1234567",
-                status: "DELIVERED",
-            });
+                status: TradeStatus.DELIVERED,
+            }));
 
             const res = await request(app)
                 .post("/trades/4294967297/release")
@@ -461,12 +537,13 @@ describe("TradeController", () => {
         });
 
         it("returns 400 structured error if the trade is not DELIVERED", async () => {
-            (mockTradeService.getTradeById as jest.Mock).mockResolvedValue({                tradeId: "4294967297",
+            mockTradeService.getTradeById.mockResolvedValue(makeTrade({
+                tradeId: "4294967297",
                 buyerAddress: buyerAddress,
                 sellerAddress: sellerAddress,
                 amountUsdc: "125.1234567",
-                status: "FUNDED",
-            });
+                status: TradeStatus.FUNDED,
+            }));
 
             const res = await request(app)
                 .post("/trades/4294967297/release")
@@ -479,13 +556,13 @@ describe("TradeController", () => {
         });
 
         it("returns 400 structured error if trade is DISPUTED", async () => {
-            (mockTradeService.getTradeById as jest.Mock).mockResolvedValue({
+            mockTradeService.getTradeById.mockResolvedValue(makeTrade({
                 tradeId: "4294967297",
                 buyerAddress: buyerAddress,
                 sellerAddress: sellerAddress,
                 amountUsdc: "125.1234567",
-                status: "DISPUTED",
-            });
+                status: TradeStatus.DISPUTED,
+            }));
 
             const res = await request(app)
                 .post("/trades/4294967297/release")
@@ -497,7 +574,7 @@ describe("TradeController", () => {
         });
 
         it("returns 404 structured error if trade not found", async () => {
-            (mockTradeService.getTradeById as jest.Mock).mockResolvedValue(null);
+            mockTradeService.getTradeById.mockResolvedValue(null);
             const res = await request(app)
                 .post("/trades/9999999999/release")
                 .set("Authorization", `Bearer ${token}`);
@@ -511,13 +588,13 @@ describe("TradeController", () => {
             const res = await request(app).post("/trades/4294967297/release");
 
             expect(res.status).toBe(401);
-            expect(res.body.error).toBe("Unauthorized");
+            expect(res.body.error).toBe("Missing Authorization header");
         });
     });
 
     describe("initiateDispute()", () => {
         it("returns unsignedXdr for a valid dispute initiation", async () => {
-            (mockTradeService.initiateDispute as jest.Mock).mockResolvedValue({
+            mockTradeService.initiateDispute.mockResolvedValue({
                 unsignedXdr: "AAAA-dispute-xdr",
             });
 
@@ -546,12 +623,15 @@ describe("TradeController", () => {
                 .send({ category: "quality" });
 
             expect(res.status).toBe(400);
-            // Schema-level validation returns { error: message } format
-            expect(res.body.error).toBeDefined();
+            // Schema-level validation returns the standard structured payload.
+            expect(res.body).toMatchObject({
+                code: ErrorCode.VALIDATION_ERROR,
+                message: expect.any(String),
+            });
         });
 
         it("returns 404 structured error if trade not found", async () => {
-            (mockTradeService.initiateDispute as jest.Mock).mockRejectedValue(
+            mockTradeService.initiateDispute.mockRejectedValue(
                 new Error("Trade not found"),
             );
 
@@ -569,7 +649,7 @@ describe("TradeController", () => {
                 .post("/trades/4294967297/dispute")
                 .send({ reason: "Goods not as described", category: "quality" });
             expect(res.status).toBe(401);
-            expect(res.body.error).toBe("Unauthorized");
+            expect(res.body.error).toBe("Missing Authorization header");
         });
     });
 
@@ -605,8 +685,8 @@ describe("TradeController", () => {
         });
 
         it("handles unauthorized access in buildDepositTx", async () => {
-            (TradeService.prototype.getTradeById as jest.Mock).mockRejectedValue(
-                new Error("Access denied")
+            mockTradeService.getTradeById.mockRejectedValue(
+                new TradeAccessDeniedError(),
             );
 
             const res = await request(app)
@@ -614,35 +694,44 @@ describe("TradeController", () => {
                 .set("Authorization", `Bearer ${strangerToken}`);
 
             expect(res.status).toBe(403);
-            expect(res.body.error).toBe("Forbidden");
+            expect(res.body).toMatchObject({
+                code: ErrorCode.TRADE_ACCESS_DENIED,
+                message: "Forbidden",
+            });
         });
 
         it("handles trade not found in confirmDelivery", async () => {
-            (TradeService.prototype.getTradeById as jest.Mock).mockResolvedValue(null);
+            mockTradeService.getTradeById.mockResolvedValue(null);
 
             const res = await request(app)
-                .post("/trades/9999999999/confirm-delivery")
+                .post("/trades/9999999999/confirm")
                 .set("Authorization", `Bearer ${token}`);
 
             expect(res.status).toBe(404);
-            expect(res.body.error).toBe("Trade not found");
+            expect(res.body).toMatchObject({
+                code: ErrorCode.TRADE_NOT_FOUND,
+                message: "Trade not found",
+            });
         });
 
         it("handles business logic violations in releaseFunds", async () => {
-            (TradeService.prototype.getTradeById as jest.Mock).mockResolvedValue({
+            mockTradeService.getTradeById.mockResolvedValue(makeTrade({
                 tradeId: "4294967297",
                 buyerAddress: buyerAddress,
                 sellerAddress: sellerAddress,
                 amountUsdc: "125.1234567",
-                status: "DISPUTED",
-            });
+                status: TradeStatus.DISPUTED,
+            }));
 
             const res = await request(app)
-                .post("/trades/4294967297/release-funds")
+                .post("/trades/4294967297/release")
                 .set("Authorization", `Bearer ${token}`);
 
             expect(res.status).toBe(400);
-            expect(res.body.error).toBe("Trade must be DELIVERED to release funds (current: DISPUTED)");
+            expect(res.body).toMatchObject({
+                code: ErrorCode.TRADE_INVALID_STATUS,
+                message: "Trade must be DELIVERED to release funds (current: DISPUTED)",
+            });
         });
 
         it("handles invalid trade ID format", async () => {
@@ -650,27 +739,30 @@ describe("TradeController", () => {
                 .post("/trades/invalid-id/deposit")
                 .set("Authorization", `Bearer ${token}`);
 
-            expect(res.status).toBe(400);
-            expect(res.body.error).toBe("Trade id is required");
+            expect(res.status).toBe(404);
+            expect(res.body).toMatchObject({
+                code: ErrorCode.TRADE_NOT_FOUND,
+                message: "Trade not found",
+            });
         });
     });
 
     describe("authorization middleware", () => {
         it("enforces auth on all endpoints — all return 401", async () => {
             const endpoints = [
-                { method: "post", path: "/trades" },
-                { method: "post", path: "/trades/4294967297/deposit" },
-                { method: "post", path: "/trades/4294967297/confirm" },
-                { method: "post", path: "/trades/4294967297/release" },
-                { method: "post", path: "/trades/4294967297/dispute" },
-                { method: "get", path: "/trades" },
-                { method: "get", path: "/trades/4294967297" },
-            ];
+                () => request(app).post("/trades"),
+                () => request(app).post("/trades/4294967297/deposit"),
+                () => request(app).post("/trades/4294967297/confirm"),
+                () => request(app).post("/trades/4294967297/release"),
+                () => request(app).post("/trades/4294967297/dispute"),
+                () => request(app).get("/trades"),
+                () => request(app).get("/trades/4294967297"),
+            ] as const;
 
-            for (const endpoint of endpoints) {
-                const res = await (request(app) as any)[endpoint.method](endpoint.path);
+            for (const sendRequest of endpoints) {
+                const res = await sendRequest();
                 expect(res.status).toBe(401);
-                expect(res.body.error).toBe("Unauthorized");
+                expect(res.body.error).toBe("Missing Authorization header");
             }
         });
     });

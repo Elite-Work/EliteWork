@@ -14,6 +14,15 @@ const IDEMPOTENCY_LOCK_TTL = 30; // 30 seconds
 const IN_PROGRESS_POLL_MS = 25;
 const IDEMPOTENCY_IN_PROGRESS_MAX_WAIT_MS = IDEMPOTENCY_LOCK_TTL * 1000;
 
+function deserializeCachedBody(body: unknown): unknown {
+  if (typeof body !== "string") return body;
+  try {
+    return JSON.parse(body);
+  } catch {
+    return body;
+  }
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -71,10 +80,10 @@ export const idempotencyMiddleware = async (
       });
       res.setHeader("X-Idempotency-Cache", "HIT");
 
-      return res.status(status).json(body);
+      return res.status(status).json(deserializeCachedBody(body));
     }
 
-    const lock = await redis.set(lockKey, "1", "NX", "EX", IDEMPOTENCY_LOCK_TTL);
+    const lock = await redis.set(lockKey, "1", "EX", IDEMPOTENCY_LOCK_TTL, "NX");
 
     if (lock !== "OK") {
       const replayResponse = await waitForCachedResponse(cacheKey);
@@ -87,7 +96,7 @@ export const idempotencyMiddleware = async (
         });
         res.setHeader("X-Idempotency-Cache", "HIT");
 
-        return res.status(status).json(body);
+        return res.status(status).json(deserializeCachedBody(body));
       }
 
       res.setHeader("X-Idempotency-Cache", "IN_PROGRESS");
@@ -115,7 +124,10 @@ export const idempotencyMiddleware = async (
     const originalSend = (res.send as any)?.bind(res);
 
     const cacheResponse = (body: any) => {
-      if (res.statusCode >= 200 && res.statusCode < 300) {
+      // Validation and authorization responses are deterministic for a given
+      // key/body pair as well, so cache 4xx outcomes to prevent retries from
+      // bypassing the same idempotent decision.
+      if (res.statusCode >= 200 && res.statusCode < 500) {
         const responseData = {
           status: res.statusCode,
           body,

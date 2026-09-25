@@ -8,6 +8,7 @@ import { createAdminFeaturesRouter } from "../routes/admin.features.routes";
 import { createAdminAuthRouter } from "../routes/admin.auth.routes";
 import { createAdminStreamsRouter } from "../routes/admin.streams.routes";
 import { errorHandler } from "../middleware/errorHandler";
+import { env } from "../config/env";
 
 jest.mock("../services/auth.service", () => ({
   AuthService: {
@@ -56,14 +57,20 @@ describe("admin route feature flag gating (#15)", () => {
     adminToken = signToken(adminAddress);
   });
 
-  afterEach(() => {
+  beforeEach(() => {
     delete process.env.ADMIN_ROUTES_ENABLED;
+    (env as unknown as { ADMIN_ROUTES_ENABLED: boolean }).ADMIN_ROUTES_ENABLED = false;
+  });
+
+  afterEach(() => {
+    process.env.ADMIN_ROUTES_ENABLED = "true";
+    (env as unknown as { ADMIN_ROUTES_ENABLED: boolean }).ADMIN_ROUTES_ENABLED = true;
   });
 
   it("returns 404 for admin features when ADMIN_ROUTES_ENABLED is not set", async () => {
     const app = buildApp();
     const res = await request(app)
-      .get("/admin/features")
+      .get("/api/admin/features")
       .set("Authorization", `Bearer ${adminToken}`);
     expect(res.status).toBe(404);
     expect(res.body.code).toBe("NOT_FOUND");
@@ -74,7 +81,7 @@ describe("admin route feature flag gating (#15)", () => {
     process.env.ADMIN_ROUTES_ENABLED = "false";
     const app = buildApp();
     const res = await request(app)
-      .get("/admin/features")
+      .get("/api/admin/features")
       .set("Authorization", `Bearer ${adminToken}`);
     expect(res.status).toBe(404);
   });
@@ -83,7 +90,7 @@ describe("admin route feature flag gating (#15)", () => {
     process.env.ADMIN_ROUTES_ENABLED = "true";
     const app = buildApp();
     const res = await request(app)
-      .get("/admin/features")
+      .get("/api/admin/features")
       .set("Authorization", `Bearer ${adminToken}`);
     expect(res.status).toBe(200);
   });
@@ -118,7 +125,7 @@ describe("admin route feature flag gating (#15)", () => {
     delete process.env.ADMIN_ROUTES_ENABLED;
     const app = buildApp();
     const res = await request(app)
-      .get("/admin/features")
+      .get("/api/admin/features")
       .set("Authorization", `Bearer ${adminToken}`);
     expect(res.status).toBe(404);
   });

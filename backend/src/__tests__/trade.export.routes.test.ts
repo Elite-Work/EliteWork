@@ -2,6 +2,7 @@ import express from "express";
 import jwt from "jsonwebtoken";
 import request from "supertest";
 import * as StellarSdk from "@stellar/stellar-sdk";
+import { Prisma, Trade, TradeStatus } from "@prisma/client";
 import { createTradeExportRouter } from "../routes/trade.export.routes";
 import { AuthService } from "../services/auth.service";
 import { errorHandler } from "../middleware/errorHandler";
@@ -22,26 +23,38 @@ describe("Trade export route", () => {
   let token: string;
   const mockPrisma = {
     trade: {
-      findMany: jest.fn(),
-      count: jest.fn(),
+      findMany: jest.fn<Promise<Trade[]>, [args: Prisma.TradeFindManyArgs]>(),
+      count: jest.fn<Promise<number>, [args: Prisma.TradeCountArgs]>(),
     },
-  } as any;
+  };
 
   const app = express();
   app.use(express.json());
-  app.use("/trades", createTradeExportRouter(mockPrisma));
+  app.use(
+    "/trades",
+    createTradeExportRouter(
+      mockPrisma as unknown as NonNullable<
+        Parameters<typeof createTradeExportRouter>[0]
+      >,
+    ),
+  );
   app.use(errorHandler);
 
-  const trade = {
+  const trade: Trade = {
     id: 1,
     tradeId: "4294967297",
     buyerAddress: userAddress,
     sellerAddress,
     amountUsdc: "100",
-    status: "FUNDED",
+    buyerLossBps: 5000,
+    sellerLossBps: 5000,
+    version: 0,
+    status: TradeStatus.FUNDED,
     fundedAt: new Date("2026-06-01T00:00:00.000Z"),
     deliveredAt: null,
     completedAt: null,
+    expiresAt: null,
+    expiredAt: null,
     createdAt: new Date("2026-05-30T00:00:00.000Z"),
     updatedAt: new Date("2026-06-01T00:00:00.000Z"),
   };

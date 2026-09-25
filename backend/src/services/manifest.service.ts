@@ -171,7 +171,9 @@ export class ManifestService {
         const caller = callerAddress.toLowerCase();
         const isBuyer = trade.buyerAddress.toLowerCase() === caller;
         const isSeller = trade.sellerAddress.toLowerCase() === caller;
-        const isMediator = parseMediatorAllowlist().has(caller);
+        const isMediator = Array.from(parseMediatorAllowlist()).some(
+            (address) => address.toLowerCase() === caller,
+        );
 
         if (!isBuyer && !isSeller && !isMediator) {
             throw new ManifestAccessDeniedError();

@@ -81,7 +81,10 @@ async function getRpcAccount(
   accountId: string,
 ): Promise<StellarSdk.Account> {
   return withRpcMetrics("getAccount", () =>
-    retryAsync(() => server.getAccount(accountId)),
+    retryAsync(() => server.getAccount(accountId), {
+      backoffMs: [1000, 2000, 4000, 8000],
+      operationName: "stellar.getAccount",
+    }),
   );
 }
 
@@ -90,7 +93,10 @@ async function prepareRpcTransaction(
   transaction: StellarSdk.Transaction,
 ): Promise<StellarSdk.Transaction> {
   return withRpcMetrics("prepareTransaction", () =>
-    retryAsync(() => server.prepareTransaction(transaction)),
+    retryAsync(() => server.prepareTransaction(transaction), {
+      backoffMs: [1000, 2000, 4000, 8000],
+      operationName: "stellar.prepareTransaction",
+    }),
   );
 }
 
@@ -99,7 +105,10 @@ async function simulateRpcTransaction(
   transaction: StellarSdk.Transaction,
 ): Promise<StellarSdk.rpc.Api.SimulateTransactionResponse> {
   return withRpcMetrics("simulateTransaction", () =>
-    retryAsync(() => server.simulateTransaction(transaction)),
+    retryAsync(() => server.simulateTransaction(transaction), {
+      backoffMs: [1000, 2000, 4000, 8000],
+      operationName: "stellar.simulateTransaction",
+    }),
   );
 }
 

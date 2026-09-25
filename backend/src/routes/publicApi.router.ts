@@ -103,6 +103,8 @@ export function createPublicApiRouter(): Router {
   router.use("/stellar/fees", stellarFeesRoutes);
   router.use("/stellar/tx", stellarTxStatusRoutes);
   router.use("/stellar/assets", stellarAssetRoutes);
+  // Keep the documented /create path while retaining the legacy /account alias.
+  router.use("/stellar/account/create", stellarAccountCreateRoutes);
   router.use("/stellar/account", stellarAccountCreateRoutes);
   router.use("/stellar/account", stellarAccountBalanceRoutes);
   router.use("/contract", createContractStateRouter());

@@ -20,6 +20,9 @@ describe("Wallet Routes", () => {
 
   beforeAll(() => {
     jest.spyOn(AuthService, "isTokenRevoked").mockResolvedValue(false);
+    jest.spyOn(AuthService, "validateToken").mockImplementation(async (value: string) =>
+      jwt.decode(value) as { walletAddress: string; jti: string; sub: string; tv: number },
+    );
     // Generate a valid mock token for testing
     const secret = process.env.JWT_SECRET || "test-secret-at-least-32-characters-long";
     token = jwt.sign(
@@ -60,7 +63,7 @@ describe("Wallet Routes", () => {
       const res = await request(app).get("/wallet/balance");
 
       expect(res.status).toBe(401);
-      expect(res.body.error).toBe("Unauthorized");
+      expect(res.body.error).toBe("Missing Authorization header");
     });
     
     it("should return 401 for invalid token format", async () => {
@@ -69,7 +72,7 @@ describe("Wallet Routes", () => {
         .set("Authorization", "InvalidTokenFormat");
 
       expect(res.status).toBe(401);
-      expect(res.body.error).toBe("Unauthorized");
+      expect(res.body.error).toBe("Invalid Authorization header format. Expected: Bearer <token>");
     });
   });
 
@@ -124,7 +127,7 @@ describe("Wallet Routes", () => {
         });
 
       expect(res.status).toBe(401);
-      expect(res.body.error).toBe("Unauthorized");
+      expect(res.body.error).toBe("Missing Authorization header");
     });
   });
 

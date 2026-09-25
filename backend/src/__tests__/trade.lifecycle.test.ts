@@ -8,39 +8,129 @@
  * All dependencies are mocked — no live database or contract node required.
  */
 
-import { TradeStatus, DisputeStatus } from '@prisma/client';
+import {
+  Dispute,
+  DisputeStatus,
+  Prisma,
+  Trade,
+  TradeStatus,
+} from '@prisma/client';
 
 // ---------------------------------------------------------------------------
 // Mock factory
 // ---------------------------------------------------------------------------
 
+type CreateTradeArgs = Prisma.TradeCreateArgs;
+type FindTradeArgs = Prisma.TradeFindUniqueArgs;
+type UpdateTradeArgs = Prisma.TradeUpdateArgs;
+type CreateDisputeArgs = Prisma.DisputeCreateArgs;
+type FindDisputeArgs = Prisma.DisputeFindUniqueArgs;
+
+function makeTrade(overrides: Partial<Trade> = {}, id = Date.now()): Trade {
+  return {
+    id,
+    tradeId: overrides.tradeId ?? 'trade-id',
+    buyerAddress: overrides.buyerAddress ?? 'buyer-address',
+    sellerAddress: overrides.sellerAddress ?? 'seller-address',
+    amountUsdc: overrides.amountUsdc ?? '0',
+    buyerLossBps: overrides.buyerLossBps ?? 5000,
+    sellerLossBps: overrides.sellerLossBps ?? 5000,
+    version: overrides.version ?? 0,
+    status: overrides.status ?? TradeStatus.CREATED,
+    fundedAt: overrides.fundedAt ?? null,
+    deliveredAt: overrides.deliveredAt ?? null,
+    completedAt: overrides.completedAt ?? null,
+    expiresAt: overrides.expiresAt ?? null,
+    expiredAt: overrides.expiredAt ?? null,
+    createdAt: overrides.createdAt ?? new Date(),
+    updatedAt: overrides.updatedAt ?? new Date(),
+  };
+}
+
+function isUncheckedTradeCreateInput(
+  data: CreateTradeArgs["data"],
+): data is Prisma.TradeUncheckedCreateInput {
+  return (
+    "tradeId" in data &&
+    "buyerAddress" in data &&
+    "sellerAddress" in data
+  );
+}
+
+function makeTradeFromCreateInput(
+  data: Prisma.TradeUncheckedCreateInput,
+  id = Date.now(),
+): Trade {
+  return makeTrade({
+    tradeId: data.tradeId,
+    buyerAddress: data.buyerAddress,
+    sellerAddress: data.sellerAddress,
+    amountUsdc: data.amountUsdc,
+    buyerLossBps: data.buyerLossBps,
+    sellerLossBps: data.sellerLossBps,
+    version: data.version,
+    status: data.status,
+    fundedAt: data.fundedAt instanceof Date ? data.fundedAt : null,
+    deliveredAt: data.deliveredAt instanceof Date ? data.deliveredAt : null,
+    completedAt: data.completedAt instanceof Date ? data.completedAt : null,
+    expiresAt: data.expiresAt instanceof Date ? data.expiresAt : null,
+    expiredAt: data.expiredAt instanceof Date ? data.expiredAt : null,
+  }, id);
+}
+
+function makeDispute(overrides: Partial<Dispute> = {}, id = 1): Dispute {
+  return {
+    id,
+    tradeId: overrides.tradeId ?? 'trade-id',
+    initiator: overrides.initiator ?? 'unknown',
+    reason: overrides.reason ?? '',
+    status: overrides.status ?? DisputeStatus.OPEN,
+    version: overrides.version ?? 0,
+    resolvedAt: overrides.resolvedAt ?? null,
+    categoryId: overrides.categoryId ?? null,
+    createdAt: overrides.createdAt ?? new Date(),
+    updatedAt: overrides.updatedAt ?? new Date(),
+  };
+}
+
 function createMockPrisma() {
-  const store: Map<string, any> = new Map();
+  const store = new Map<string, Trade>();
 
   const tradeMock = {
-    create: jest.fn().mockImplementation(({ data }: { data: any }) => {
-      const t = { id: Date.now(), ...data };
-      store.set(data.tradeId, t);
-      return Promise.resolve(t);
+    create: jest.fn<Promise<Trade>, [args: CreateTradeArgs]>().mockImplementation(({ data }) => {
+      if (!isUncheckedTradeCreateInput(data)) {
+        return Promise.reject(new Error('unchecked trade create input is required'));
+      }
+      const trade = makeTradeFromCreateInput(data);
+      store.set(trade.tradeId, trade);
+      return Promise.resolve(trade);
     }),
-    findUnique: jest.fn().mockImplementation(({ where }: { where: any }) =>
-      Promise.resolve(store.get(where.tradeId) ?? null),
-    ),
-    update: jest.fn().mockImplementation(({ where, data }: { where: any; data: any }) => {
-      const existing = store.get(where.tradeId);
-      if (!existing) return Promise.reject(new Error('record not found'));
-      const updated = { ...existing, ...data };
-      store.set(where.tradeId, updated);
-      return Promise.resolve(updated);
-    }),
-    findMany: jest.fn().mockResolvedValue([]),
-    count: jest.fn().mockResolvedValue(0),
+    findUnique: jest.fn<Promise<Trade | null>, [args: FindTradeArgs]>()
+      .mockImplementation(({ where }) => {
+        const tradeId = typeof where.tradeId === 'string' ? where.tradeId : undefined;
+        return Promise.resolve(tradeId === undefined ? null : store.get(tradeId) ?? null);
+      }),
+    update: jest.fn<Promise<Trade>, [args: UpdateTradeArgs]>()
+      .mockImplementation(({ where, data }) => {
+        const tradeId = typeof where.tradeId === 'string' ? where.tradeId : undefined;
+        const existing = tradeId === undefined ? undefined : store.get(tradeId);
+        if (!existing) return Promise.reject(new Error('record not found'));
+
+        const status = typeof data.status === 'string' ? data.status as TradeStatus : undefined;
+        if (!status) return Promise.reject(new Error('status update is required'));
+
+        const updated: Trade = { ...existing, status, updatedAt: new Date() };
+        store.set(updated.tradeId, updated);
+        return Promise.resolve(updated);
+      }),
+    findMany: jest.fn<Promise<Trade[]>, [args: Prisma.TradeFindManyArgs]>().mockResolvedValue([]),
+    count: jest.fn<Promise<number>, [args: Prisma.TradeCountArgs]>().mockResolvedValue(0),
   };
 
   const disputeMock = {
-    create: jest.fn(),
-    findUnique: jest.fn(),
-    update: jest.fn(),
+    create: jest.fn<Promise<Dispute>, [args: CreateDisputeArgs]>(),
+    findUnique: jest.fn<Promise<Dispute | null>, [args: FindDisputeArgs]>(),
+    update: jest.fn<Promise<Dispute>, [args: Prisma.DisputeUpdateArgs]>(),
   };
 
   return { trade: tradeMock, dispute: disputeMock, _store: store };
@@ -186,14 +276,22 @@ describe('Trade lifecycle — dispute', () => {
     await transitionTo(prisma, 'T-dispute-3', TradeStatus.FUNDED);
     await transitionTo(prisma, 'T-dispute-3', TradeStatus.DISPUTED);
 
-    prisma.dispute.create.mockResolvedValue({
-      id: 1,
-      tradeId: 'T-dispute-3',
-      status: DisputeStatus.OPEN,
-    });
+    prisma.dispute.create.mockResolvedValue(
+      makeDispute({
+        tradeId: 'T-dispute-3',
+        initiator: 'buyer-address',
+        reason: 'Delivery dispute',
+        status: DisputeStatus.OPEN,
+      }),
+    );
 
     const dispute = await prisma.dispute.create({
-      data: { tradeId: 'T-dispute-3', status: DisputeStatus.OPEN } as any,
+      data: {
+        tradeId: 'T-dispute-3',
+        initiator: 'buyer-address',
+        reason: 'Delivery dispute',
+        status: DisputeStatus.OPEN,
+      },
     });
     expect(dispute.status).toBe(DisputeStatus.OPEN);
   });

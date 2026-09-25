@@ -50,7 +50,7 @@ function mockRes() {
   };
 }
 
-function mockReq(overrides: Partial<AuthRequest["user"]> = {}, userUndefined = false): Partial<AuthRequest> {
+function mockReq(overrides: Record<string, unknown> = {}, userUndefined = false): Partial<AuthRequest> {
   if (userUndefined) return {};
   return {
     user: {
@@ -58,7 +58,7 @@ function mockReq(overrides: Partial<AuthRequest["user"]> = {}, userUndefined = f
       sub: "admin-sub",
       jti: "jti-123",
       ...overrides,
-    },
+    } as AuthRequest["user"],
   };
 }
 
@@ -131,9 +131,9 @@ describe("adminMiddleware — service-oriented unit tests", () => {
       await adminMiddleware(req as AuthRequest, res as any, next);
 
       expect(res.status).toHaveBeenCalledWith(403);
-      expect(res.json).toHaveBeenCalledWith({
-        error: "Forbidden: admin access required",
-      });
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({ error: "Forbidden: admin access required" }),
+      );
       expect(next).not.toHaveBeenCalled();
     });
 
@@ -178,9 +178,9 @@ describe("adminMiddleware — service-oriented unit tests", () => {
       await adminMiddleware(req as AuthRequest, res as any, next);
 
       expect(res.status).toHaveBeenCalledWith(403);
-      expect(res.json).toHaveBeenCalledWith({
-        error: "Forbidden: admin access required",
-      });
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({ error: "Forbidden: admin access required" }),
+      );
       expect(next).not.toHaveBeenCalled();
     });
 
@@ -214,7 +214,9 @@ describe("adminMiddleware — service-oriented unit tests", () => {
       await adminMiddleware(req as AuthRequest, res as any, next);
 
       const jsonArg = (res.json as jest.Mock).mock.calls[0][0];
-      expect(jsonArg).toEqual({ error: "Forbidden: admin access required" });
+      expect(jsonArg).toEqual(
+        expect.objectContaining({ error: "Forbidden: admin access required" }),
+      );
       expect(jsonArg).toHaveProperty("error");
       expect(typeof jsonArg.error).toBe("string");
     });

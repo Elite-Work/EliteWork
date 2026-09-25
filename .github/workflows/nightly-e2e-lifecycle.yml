@@ -7,7 +7,7 @@ on:
     - cron: "0 2 * * *"
 
 env:
-  STELLAR_NETWORK_PASSPASSPHRASE: "Test SDF Network ; September 2015"
+  STELLAR_NETWORK_PASSPHRASE: "Test SDF Network ; September 2015"
   STELLAR_RPC_URL: "https://soroban-testnet.stellar.org"
   STELLAR_HORIZON_URL: "https://horizon-testnet.stellar.org"
   NODE_ENV: test
@@ -64,7 +64,7 @@ jobs:
         env:
           NODE_ENV: test
           JWT_SECRET: test-jwt-secret-value-with-minimum-length-32
-        run: pnpm test -- --forceExit --detectOpenHandles
+        run: pnpm test --forceExit --detectOpenHandles
 
       # ── Contract Unit Tests ─────────────────────────────────────────────
       - name: Run contract tests
@@ -83,6 +83,7 @@ jobs:
           NEXT_PUBLIC_API_URL: http://localhost:4001
         run: |
           set +e
+           set -o pipefail
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo "  Nightly E2E Trade Lifecycle — Stellar Testnet"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -94,8 +95,8 @@ jobs:
           echo ""
 
           # Run the lifecycle integration tests
-          pnpm test -- --forceExit --detectOpenHandles \
-            --testPathPattern='e2e.*lifecycle|lifecycle.*e2e' \
+          pnpm exec playwright test tests/e2e --project=e2e-chromium \
+            --grep='lifecycle' \
             --verbose 2>&1 | tee /tmp/e2e-output.log
 
           EXIT_CODE=$?

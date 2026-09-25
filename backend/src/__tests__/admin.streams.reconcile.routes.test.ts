@@ -8,6 +8,7 @@
 
 jest.mock("../config/env", () => ({
   env: { NODE_ENV: "test", JWT_SECRET: "test-jwt-secret-value-with-minimum-length-32" },
+  runtimeEnvValue: (key: string) => process.env[key] ?? false,
 }));
 
 jest.mock("../config/rateLimit", () => ({
@@ -135,7 +136,14 @@ function buildApp(
   app.use(express.json());
   app.use(
     "/api",
-    createAdminStreamsRouter(terminationService, reconciliationService),
+    createAdminStreamsRouter(
+      terminationService,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      reconciliationService,
+    ),
   );
   app.use(errorHandler);
   return app;

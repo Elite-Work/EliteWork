@@ -34,6 +34,7 @@ import { errorHandler } from "../middleware/errorHandler";
 import { correlationIdMiddleware } from "../middleware/correlationId.middleware";
 import { AuthService } from "../services/auth.service";
 import { ContractService } from "../services/contract.service";
+import { AppError, ErrorCode } from "../errors/errorCodes";
 
 jest.mock("../services/auth.service", () => ({
   AuthService: {
@@ -76,9 +77,12 @@ const contractService = {
 } as unknown as MockedContractService;
 
 const prisma = {
+  adminActionAudit: {
+    create: jest.fn().mockResolvedValue({}),
+  },
   trade: {
     findFirst: jest.fn(),
-    updateMany: jest.fn(),
+    updateMany: jest.fn().mockResolvedValue({ count: 1 }),
   },
 };
 
@@ -86,10 +90,10 @@ function buildApp(): Express {
   const app = express();
   app.use(express.json());
   app.use(correlationIdMiddleware);
-  app.use("/", createAdminContractRouter(contractService));
+  app.use("/", createAdminContractRouter(contractService, prisma as never));
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   app.use("/", createAdminTradeBatchRouter(prisma as any));
-  app.use("/", createAdminFeaturesRouter());
+  app.use("/", createAdminFeaturesRouter(prisma as never));
   app.use("/", createAdminAuditRouter());
   app.use("/", createAdminAuthRouter());
   app.use(errorHandler);
@@ -126,29 +130,29 @@ const ADMIN_ENDPOINTS: Array<{
   {
     name: "add mediator",
     method: "post",
-    path: "/admin/contract/mediators",
+    path: "/api/admin/contract/mediators",
     body: { mediatorAddress },
   },
   {
     name: "remove mediator",
     method: "delete",
-    path: `/admin/contract/mediators/${mediatorAddress}`,
+    path: `/api/admin/contract/mediators/${mediatorAddress}`,
   },
-  { name: "update fee", method: "patch", path: "/admin/contract/fee", body: { feeBps: 100 } },
+  { name: "update fee", method: "patch", path: "/api/admin/contract/fee", body: { feeBps: 100 } },
   {
     name: "batch trade status",
     method: "post",
-    path: "/admin/trades/batch/status",
+    path: "/api/admin/trades/batch/status",
     body: { updates: [{ tradeId: "t-1", status: TradeStatus.CREATED }] },
   },
-  { name: "list features", method: "get", path: "/admin/features" },
+  { name: "list features", method: "get", path: "/api/admin/features" },
   {
     name: "update feature",
     method: "patch",
-    path: "/admin/features/beta",
+    path: "/api/admin/features/beta",
     body: { enabled: true },
   },
-  { name: "list audit", method: "get", path: "/admin/audit" },
+  { name: "list audit", method: "get", path: "/api/admin/audit" },
   { name: "auth claims", method: "get", path: "/api/admin/auth/claims" },
 ];
 
@@ -177,8 +181,7 @@ describe("admin route validation harness (#23)", () => {
     });
 
     it.each(ADMIN_ENDPOINTS)("$name returns 401 for a malformed bearer token", async (route) => {
-      const res = await request(app)
-        [route.method](route.path)
+      const res = await request(app)[route.method](route.path)
         .set("Authorization", "Bearer not-a-jwt")
         .send(route.body);
       expect(res.status).toBe(401);
@@ -186,21 +189,20 @@ describe("admin route validation harness (#23)", () => {
 
     it("returns 401 when the scheme is not Bearer", async () => {
       const res = await request(app)
-        .get("/admin/features")
+        .get("/api/admin/features")
         .set("Authorization", `Basic ${adminToken}`);
       expect(res.status).toBe(401);
     });
 
     it("returns 401 when the Authorization header is empty", async () => {
-      const res = await request(app).get("/admin/features").set("Authorization", "");
+      const res = await request(app).get("/api/admin/features").set("Authorization", "");
       expect(res.status).toBe(401);
     });
   });
 
   describe("non-admin auth", () => {
     it.each(ADMIN_ENDPOINTS)("$name returns 403 for an authenticated outsider", async (route) => {
-      const res = await request(app)
-        [route.method](route.path)
+      const res = await request(app)[route.method](route.path)
         .set("Authorization", `Bearer ${outsiderToken}`)
         .send(route.body);
 
@@ -211,7 +213,7 @@ describe("admin route validation harness (#23)", () => {
 
     it("does not reach any service when authorization fails", async () => {
       await request(app)
-        .post("/admin/contract/mediators")
+        .post("/api/admin/contract/mediators")
         .set("Authorization", `Bearer ${outsiderToken}`)
         .send({ mediatorAddress });
 
@@ -227,7 +229,7 @@ describe("admin route validation harness (#23)", () => {
     }
 
     it("rejects a body that is not an object", async () => {
-      const res = await asAdmin("post", "/admin/contract/mediators")
+      const res = await asAdmin("post", "/api/admin/contract/mediators")
         .set("Content-Type", "application/json")
         .send('"just-a-string"');
       expect(res.status).toBe(400);
@@ -235,7 +237,7 @@ describe("admin route validation harness (#23)", () => {
     });
 
     it("rejects unparseable JSON", async () => {
-      const res = await asAdmin("post", "/admin/contract/mediators")
+      const res = await asAdmin("post", "/api/admin/contract/mediators")
         .set("Content-Type", "application/json")
         .send("{ not json");
       expect(res.status).toBe(400);
@@ -243,13 +245,13 @@ describe("admin route validation harness (#23)", () => {
     });
 
     it("rejects a missing required field with a field-named message", async () => {
-      const res = await asAdmin("post", "/admin/contract/mediators").send({});
+      const res = await asAdmin("post", "/api/admin/contract/mediators").send({});
       expect(res.status).toBe(400);
       expect(res.body.message).toContain("mediatorAddress");
     });
 
     it("rejects a wrong-typed field", async () => {
-      const res = await asAdmin("patch", "/admin/contract/fee").send({ feeBps: "100" });
+      const res = await asAdmin("patch", "/api/admin/contract/fee").send({ feeBps: "100" });
       expect(res.status).toBe(400);
       expect(res.body.message).toContain("feeBps");
       expect(contractService.buildUpdateFeeBpsTx).not.toHaveBeenCalled();
@@ -261,7 +263,7 @@ describe("admin route validation harness (#23)", () => {
       ["negative", -1],
       ["fractional", 12.5],
     ])("rejects feeBps %s", async (_label, feeBps) => {
-      const res = await asAdmin("patch", "/admin/contract/fee").send({ feeBps });
+      const res = await asAdmin("patch", "/api/admin/contract/fee").send({ feeBps });
       expect(res.status).toBe(400);
       expect(contractService.buildUpdateFeeBpsTx).not.toHaveBeenCalled();
     });
@@ -270,20 +272,20 @@ describe("admin route validation harness (#23)", () => {
       contractService.buildUpdateFeeBpsTx.mockResolvedValue({ unsignedXdr: "xdr" });
 
       for (const feeBps of [1, 500]) {
-        const res = await asAdmin("patch", "/admin/contract/fee").send({ feeBps });
+        const res = await asAdmin("patch", "/api/admin/contract/fee").send({ feeBps });
         expect(res.status).toBe(200);
       }
       expect(contractService.buildUpdateFeeBpsTx).toHaveBeenCalledTimes(2);
     });
 
     it("rejects a feature flag update with a non-boolean enabled", async () => {
-      const res = await asAdmin("patch", "/admin/features/beta").send({ enabled: "yes" });
+      const res = await asAdmin("patch", "/api/admin/features/beta").send({ enabled: "yes" });
       expect(res.status).toBe(400);
       expect(res.body.message).toContain("enabled");
     });
 
     it("rejects a rolloutPercentage outside 0-100", async () => {
-      const res = await asAdmin("patch", "/admin/features/beta").send({
+      const res = await asAdmin("patch", "/api/admin/features/beta").send({
         enabled: true,
         rolloutPercentage: 150,
       });
@@ -291,7 +293,7 @@ describe("admin route validation harness (#23)", () => {
     });
 
     it("rejects an empty batch of trade updates", async () => {
-      const res = await asAdmin("post", "/admin/trades/batch/status").send({ updates: [] });
+      const res = await asAdmin("post", "/api/admin/trades/batch/status").send({ updates: [] });
       expect(res.status).toBe(400);
       expect(res.body.message).toMatch(/at least one update/i);
       expect(prisma.trade.findFirst).not.toHaveBeenCalled();
@@ -302,14 +304,14 @@ describe("admin route validation harness (#23)", () => {
         tradeId: `t-${i}`,
         status: TradeStatus.CREATED,
       }));
-      const res = await asAdmin("post", "/admin/trades/batch/status").send({ updates });
+      const res = await asAdmin("post", "/api/admin/trades/batch/status").send({ updates });
       expect(res.status).toBe(400);
       expect(res.body.message).toMatch(/maximum 100/i);
       expect(prisma.trade.findFirst).not.toHaveBeenCalled();
     });
 
     it("rejects a batch where updates is not an array", async () => {
-      const res = await asAdmin("post", "/admin/trades/batch/status").send({ updates: "all" });
+      const res = await asAdmin("post", "/api/admin/trades/batch/status").send({ updates: "all" });
       expect(res.status).toBe(400);
       expect(prisma.trade.findFirst).not.toHaveBeenCalled();
     });
@@ -328,7 +330,7 @@ describe("admin route validation harness (#23)", () => {
       ["truncated", mediatorAddress.slice(0, 20)],
       ["empty", " "],
     ])("rejects add-mediator when the address is %s", async (_label, address) => {
-      const res = await asAdmin("post", "/admin/contract/mediators").send({
+      const res = await asAdmin("post", "/api/admin/contract/mediators").send({
         mediatorAddress: address,
       });
       expect(res.status).toBe(400);
@@ -337,13 +339,13 @@ describe("admin route validation harness (#23)", () => {
     });
 
     it("rejects remove-mediator for a malformed address param", async () => {
-      const res = await asAdmin("delete", "/admin/contract/mediators/not-a-valid-address");
+      const res = await asAdmin("delete", "/api/admin/contract/mediators/not-a-valid-address");
       expect(res.status).toBe(400);
       expect(contractService.buildRemoveMediatorTx).not.toHaveBeenCalled();
     });
 
     it("rejects a batch entry with an empty tradeId", async () => {
-      const res = await asAdmin("post", "/admin/trades/batch/status").send({
+      const res = await asAdmin("post", "/api/admin/trades/batch/status").send({
         updates: [{ tradeId: "", status: TradeStatus.CREATED }],
       });
       expect(res.status).toBe(400);
@@ -352,7 +354,7 @@ describe("admin route validation harness (#23)", () => {
     });
 
     it("rejects a batch entry with an unknown status", async () => {
-      const res = await asAdmin("post", "/admin/trades/batch/status").send({
+      const res = await asAdmin("post", "/api/admin/trades/batch/status").send({
         updates: [{ tradeId: "t-1", status: "NOT_A_STATUS" }],
       });
       expect(res.status).toBe(400);
@@ -362,7 +364,7 @@ describe("admin route validation harness (#23)", () => {
     it("reports an unknown tradeId as a per-entry failure, not a 400", async () => {
       prisma.trade.findFirst.mockResolvedValue(null);
 
-      const res = await asAdmin("post", "/admin/trades/batch/status").send({
+      const res = await asAdmin("post", "/api/admin/trades/batch/status").send({
         updates: [{ tradeId: "missing", status: TradeStatus.CREATED }],
       });
 
@@ -378,7 +380,7 @@ describe("admin route validation harness (#23)", () => {
         version: 1,
       });
 
-      const res = await asAdmin("post", "/admin/trades/batch/status").send({
+      const res = await asAdmin("post", "/api/admin/trades/batch/status").send({
         updates: [{ tradeId: "t-1", status: TradeStatus.FUNDED }],
       });
 
@@ -391,10 +393,12 @@ describe("admin route validation harness (#23)", () => {
   // ── Error surface ─────────────────────────────────────────────────────────
   describe("error responses", () => {
     it("maps a service failure to 500 through the error handler", async () => {
-      contractService.buildAddMediatorTx.mockRejectedValue(new Error("RPC unreachable"));
+      contractService.buildAddMediatorTx.mockRejectedValue(
+        new AppError(ErrorCode.INTERNAL_ERROR, "service unavailable", 500),
+      );
 
       const res = await request(app)
-        .post("/admin/contract/mediators")
+        .post("/api/admin/contract/mediators")
         .set("Authorization", `Bearer ${adminToken}`)
         .send({ mediatorAddress });
 
@@ -404,7 +408,7 @@ describe("admin route validation harness (#23)", () => {
 
     it("carries tracing headers on validation failures too", async () => {
       const res = await request(app)
-        .patch("/admin/contract/fee")
+        .patch("/api/admin/contract/fee")
         .set("Authorization", `Bearer ${adminToken}`)
         .send({ feeBps: 9999 });
 
@@ -415,7 +419,7 @@ describe("admin route validation harness (#23)", () => {
 
     it("never leaks the admin allowlist in a 403 body", async () => {
       const res = await request(app)
-        .get("/admin/features")
+        .get("/api/admin/features")
         .set("Authorization", `Bearer ${outsiderToken}`);
 
       expect(res.status).toBe(403);

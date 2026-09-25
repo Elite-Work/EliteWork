@@ -526,7 +526,7 @@ export class TradeController {
   }
 
   private normalizeAmountUsdc(value: unknown): string | null {
-    if (typeof value !== "string" && typeof value !== "number") {
+    if (typeof value !== "string") {
       return null;
     }
 

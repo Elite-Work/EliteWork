@@ -114,7 +114,8 @@ describe("Notification preferences route", () => {
       .send({ trade_funded: ["sms"] });
 
     expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/invalid enum value/i);
+    expect(res.body.message).toMatch(/invalid enum value/i);
+    expect(res.body.code).toBe("VALIDATION_ERROR");
     expect(mockPrisma.notificationPreference.upsert).not.toHaveBeenCalled();
   });
 });

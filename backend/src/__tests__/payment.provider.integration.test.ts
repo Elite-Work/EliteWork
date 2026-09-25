@@ -8,7 +8,7 @@
 import { PrismaClient, TradeStatus, DisputeStatus } from "@prisma/client";
 import { TradeService } from "../services/trade.service";
 import { ContractService } from "../services/contract.service";
-import { PathPaymentService } from "../services/pathPayment.service";
+import { PathPaymentService, PathPaymentQuoteResult } from "../services/pathPayment.service";
 
 // ---------------------------------------------------------------------------
 // Mock external Stellar / Soroban dependencies
@@ -191,6 +191,12 @@ describe("Payment Provider Integration – Trade lifecycle", () => {
 // ---------------------------------------------------------------------------
 describe("Payment Provider Integration – Path payment simulation", () => {
   let pathPaymentService: PathPaymentService;
+  const resultWithQuotes = (quotes: PathPaymentQuoteResult["quotes"]): PathPaymentQuoteResult => ({
+    quotes,
+    cached: false,
+    freshnessMs: 0,
+    quotedAt: new Date().toISOString(),
+  });
 
   beforeEach(() => {
     pathPaymentService = new PathPaymentService();
@@ -209,9 +215,9 @@ describe("Payment Provider Integration – Path payment simulation", () => {
       path: [],
     };
 
-    jest.spyOn(pathPaymentService, "getPathPaymentQuote").mockResolvedValue([quote]);
+    jest.spyOn(pathPaymentService, "getPathPaymentQuote").mockResolvedValue(resultWithQuotes([quote]));
 
-    const quotes = await pathPaymentService.getPathPaymentQuote("1000", "cNGN", "GA_CNGN_ISSUER");
+    const { quotes } = await pathPaymentService.getPathPaymentQuote("1000", "cNGN", "GA_CNGN_ISSUER");
 
     expect(quotes).toHaveLength(1);
     expect(quotes[0].source_asset_code).toBe("cNGN");
@@ -225,9 +231,9 @@ describe("Payment Provider Integration – Path payment simulation", () => {
       { source_amount: "1000", source_asset_code: "cNGN", destination_amount: "0.6200000", destination_asset_code: "USDC", source_asset_type: "credit_alphanum4", destination_asset_type: "credit_alphanum4", path: [{ asset_code: "XLM", asset_type: "native" }] },
     ];
 
-    jest.spyOn(pathPaymentService, "getPathPaymentQuote").mockResolvedValue(paths);
+    jest.spyOn(pathPaymentService, "getPathPaymentQuote").mockResolvedValue(resultWithQuotes(paths));
 
-    const quotes = await pathPaymentService.getPathPaymentQuote("1000", "cNGN", "GA_ISSUER");
+    const { quotes } = await pathPaymentService.getPathPaymentQuote("1000", "cNGN", "GA_ISSUER");
 
     expect(quotes).toHaveLength(2);
     expect(quotes[1].path).toHaveLength(1);
@@ -244,9 +250,9 @@ describe("Payment Provider Integration – Path payment simulation", () => {
   });
 
   it("returns empty array when no routes available (low liquidity)", async () => {
-    jest.spyOn(pathPaymentService, "getPathPaymentQuote").mockResolvedValue([]);
+    jest.spyOn(pathPaymentService, "getPathPaymentQuote").mockResolvedValue(resultWithQuotes([]));
 
-    const quotes = await pathPaymentService.getPathPaymentQuote("999999999", "cNGN", "GA_ISSUER");
+    const { quotes } = await pathPaymentService.getPathPaymentQuote("999999999", "cNGN", "GA_ISSUER");
     expect(quotes).toHaveLength(0);
   });
 });

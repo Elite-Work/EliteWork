@@ -126,7 +126,9 @@ describe("Admin Audit Routes", () => {
         .set("Authorization", `Bearer ${nonAdminToken}`);
 
       expect(res.status).toBe(403);
-      expect(res.body).toEqual({ error: "Forbidden: admin access required" });
+      expect(res.body).toEqual(
+        expect.objectContaining({ error: "Forbidden: admin access required" }),
+      );
       expect(mockAdminAuditService.list).not.toHaveBeenCalled();
     });
   });

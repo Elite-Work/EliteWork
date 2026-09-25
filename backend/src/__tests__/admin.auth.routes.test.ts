@@ -94,6 +94,8 @@ describe("GET /api/admin/auth/claims", () => {
       expiresAt: new Date(expiresAtSeconds * 1000).toISOString(),
       issuer: process.env.JWT_ISSUER ?? null,
       audience: process.env.JWT_AUDIENCE ?? null,
+      tier: null,
+      deviceBound: false,
     });
   });
 

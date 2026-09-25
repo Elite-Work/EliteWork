@@ -12,7 +12,6 @@ const queueConnections: IORedis[] = [];
  * workers re-attach. See docs/redis-resilience.md#queue-consumers
  */
 export function createQueueConnection(): IORedis {
-  // @ts-expect-error - ioredis URL+options constructor is valid at runtime
   const conn: IORedis = new IORedis(REDIS_URL, {
     maxRetriesPerRequest: null,
     enableReadyCheck: false,

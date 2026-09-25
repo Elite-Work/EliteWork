@@ -8,6 +8,7 @@ import {
     ManifestAccessDeniedError,
     ManifestNotFoundError,
 } from "../services/manifest.service";
+import { EncryptionService } from "../services/encryption.service";
 
 function createMockPrisma() {
     return {
@@ -19,6 +20,23 @@ function createMockPrisma() {
 const SELLER = "GCSELLER000000000000000000000000000000000000000000000000";
 const BUYER = "GCBUYER0000000000000000000000000000000000000000000000000";
 const TRADE_ID = "trade-001";
+
+const encryption = new EncryptionService();
+
+function manifestRow(overrides: Record<string, unknown> = {}) {
+    return {
+        tradeId: TRADE_ID,
+        driverName: encryption.encrypt("Driver Name", TRADE_ID),
+        driverIdNumber: encryption.encrypt("ID-12345", TRADE_ID),
+        vehicleRegistration: encryption.encrypt("ABC-123", TRADE_ID),
+        routeDescription: encryption.encrypt("Lagos to Abuja", TRADE_ID),
+        expectedDeliveryAt: new Date("2026-03-30T12:00:00.000Z"),
+        driverNameHash: "a".repeat(64),
+        driverIdHash: "b".repeat(64),
+        createdAt: new Date("2026-03-30T10:00:00.000Z"),
+        ...overrides,
+    };
+}
 
 const baseInput = {
     tradeId: TRADE_ID,
@@ -60,8 +78,8 @@ describe("ManifestService", () => {
         expect(prisma.deliveryManifest.create).toHaveBeenCalledWith(
             expect.objectContaining({
                 data: expect.objectContaining({
-                    driverName: "John Doe",
-                    driverIdNumber: "ID-12345",
+                    driverName: expect.stringMatching(/^v\d+:/),
+                    driverIdNumber: expect.stringMatching(/^v\d+:/),
                     driverNameHash: expect.stringMatching(/^[a-f0-9]{64}$/),
                     driverIdHash: expect.stringMatching(/^[a-f0-9]{64}$/),
                 }),
@@ -186,17 +204,7 @@ describe("ManifestService", () => {
             buyerAddress: BUYER,
             status: TradeStatus.FUNDED,
         });
-        prisma.deliveryManifest.findUnique = jest.fn().mockResolvedValue({
-            tradeId: TRADE_ID,
-            driverName: "Driver Name",
-            driverIdNumber: "ID-12345",
-            vehicleRegistration: "ABC-123",
-            routeDescription: "Lagos to Abuja",
-            expectedDeliveryAt: new Date("2026-03-30T12:00:00.000Z"),
-            driverNameHash: "a".repeat(64),
-            driverIdHash: "b".repeat(64),
-            createdAt: new Date("2026-03-30T10:00:00.000Z"),
-        });
+        prisma.deliveryManifest.findUnique = jest.fn().mockResolvedValue(manifestRow());
 
         const result = await service.getManifestByTradeId(TRADE_ID, BUYER);
         expect(result.roleView).toBe("buyer");
@@ -215,17 +223,7 @@ describe("ManifestService", () => {
             buyerAddress: BUYER,
             status: TradeStatus.FUNDED,
         });
-        prisma.deliveryManifest.findUnique = jest.fn().mockResolvedValue({
-            tradeId: TRADE_ID,
-            driverName: "Driver Name",
-            driverIdNumber: "ID-12345",
-            vehicleRegistration: "ABC-123",
-            routeDescription: "Lagos to Abuja",
-            expectedDeliveryAt: new Date("2026-03-30T12:00:00.000Z"),
-            driverNameHash: "a".repeat(64),
-            driverIdHash: "b".repeat(64),
-            createdAt: new Date("2026-03-30T10:00:00.000Z"),
-        });
+        prisma.deliveryManifest.findUnique = jest.fn().mockResolvedValue(manifestRow());
 
         const result = await service.getManifestByTradeId(TRADE_ID, MEDIATOR);
         expect(result.roleView).toBe("mediator");
@@ -243,17 +241,9 @@ describe("ManifestService", () => {
             buyerAddress: BUYER,
             status: TradeStatus.FUNDED,
         });
-        prisma.deliveryManifest.findUnique = jest.fn().mockResolvedValue({
-            tradeId: TRADE_ID,
-            driverName: "Driver Name",
-            driverIdNumber: "ID-12345",
-            vehicleRegistration: "ABC-123",
-            routeDescription: "Lagos to Abuja",
-            expectedDeliveryAt: new Date("2026-03-30T12:00:00.000Z"),
-            driverNameHash: "a".repeat(64),
-            driverIdHash: "b".repeat(64),
-            createdAt: new Date("2024-03-30T10:00:00.000Z"),
-        });
+        prisma.deliveryManifest.findUnique = jest.fn().mockResolvedValue(
+            manifestRow({ createdAt: new Date("2024-03-30T10:00:00.000Z") }),
+        );
 
         const result = await service.getManifestByTradeId(TRADE_ID, SELLER);
         expect((result as any).driverName).toBe("REDACTED");

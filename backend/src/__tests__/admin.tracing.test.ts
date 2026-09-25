@@ -8,6 +8,12 @@ jest.mock("../lib/accessControl", () => ({
   isMediatorAddress: jest.fn(),
 }));
 
+jest.mock("../services/auth.service", () => ({
+  AuthService: {
+    isTokenRevoked: jest.fn().mockResolvedValue(false),
+  },
+}));
+
 const { isMediatorAddress } = require("../lib/accessControl");
 
 // Mock OpenTelemetry trace.getActiveSpan for controlled testing
@@ -44,6 +50,7 @@ describe("adminMiddleware — tracing integration", () => {
         walletAddress: "GADMINVALIDTESTACCOUNT000000000000000000000000000000",
         sub: "admin-test",
         jti: "admin-jti-123",
+        tv: 0,
       },
     };
     mockRes = {
@@ -73,7 +80,9 @@ describe("adminMiddleware — tracing integration", () => {
     await adminMiddleware(mockReq as AuthRequest, mockRes, mockNext);
 
     expect(mockRes.status).toHaveBeenCalledWith(403);
-    expect(mockRes.json).toHaveBeenCalledWith({ error: "Forbidden: admin access required" });
+    expect(mockRes.json).toHaveBeenCalledWith(
+      expect.objectContaining({ error: "Forbidden: admin access required" }),
+    );
     expect(mockNext).not.toHaveBeenCalled();
   });
 

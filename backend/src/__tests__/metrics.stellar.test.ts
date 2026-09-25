@@ -13,6 +13,7 @@ import {
   StellarMetricsRecorder,
 } from "../lib/metrics";
 import { StellarService } from "../services/stellar.service";
+import { __resetRetrySleepForTests, __setRetrySleepForTests } from "../lib/retry";
 
 jest.mock("../config/stellar", () => ({
   horizonServer: { loadAccount: jest.fn() },
@@ -64,6 +65,9 @@ function makeRecorder(): StellarMetricsRecorder & {
     recordRpcCall(rpcMethod, outcome, durationMs) {
       rpcCalls.push({ rpcMethod, outcome, durationMs });
     },
+    recordSorobanRpcHealth() {
+      // The test recorder only needs to satisfy the metrics contract.
+    },
   };
 }
 
@@ -71,6 +75,14 @@ function makeSendTxMock(): jest.Mock {
   const { sorobanRpcClient } = require("../config/stellar");
   return sorobanRpcClient.sendTransaction as jest.Mock;
 }
+
+beforeEach(() => {
+  __setRetrySleepForTests(jest.fn().mockResolvedValue(undefined));
+});
+
+afterEach(() => {
+  __resetRetrySleepForTests();
+});
 
 describe("Stellar metrics (#521)", () => {
   let recorder: ReturnType<typeof makeRecorder>;
@@ -217,12 +229,14 @@ describe("Stellar metrics (#521)", () => {
         /transaction submission failed/i,
       );
 
-      expect(recorder.submissions).toEqual([
-        expect.objectContaining({
-          operation: "submit_transaction",
-          outcome: "network_error",
-        }),
-      ]);
+      expect(recorder.submissions).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            operation: "submit_transaction",
+            outcome: "network_error",
+          }),
+        ]),
+      );
     });
   });
 
@@ -232,7 +246,7 @@ describe("Stellar metrics (#521)", () => {
       const { TransactionBuilder } = require("@stellar/stellar-sdk");
       (horizonServer.loadAccount as jest.Mock).mockResolvedValue({
         accountId: () =>
-          "GXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+          "GAT64WXNUTEGEPUCVY37RYK3FORUD53LQURINYCZFF5JQ77RXQK4DJ7E",
         sequenceNumber: () => "1",
       });
       jest.spyOn(TransactionBuilder.prototype, "addOperation").mockReturnThis();
@@ -243,7 +257,7 @@ describe("Stellar metrics (#521)", () => {
 
       const service = new StellarService();
       const xdr = await service.buildTransaction(
-        "GXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+        "GAT64WXNUTEGEPUCVY37RYK3FORUD53LQURINYCZFF5JQ77RXQK4DJ7E",
         [],
       );
 
@@ -264,7 +278,7 @@ describe("Stellar metrics (#521)", () => {
 
       const service = new StellarService();
       await expect(
-        service.buildTransaction("GABC1234VALIDSTELLARKEY000000000000000000000000000000", []),
+        service.buildTransaction("GAT64WXNUTEGEPUCVY37RYK3FORUD53LQURINYCZFF5JQ77RXQK4DJ7E", []),
       ).rejects.toThrow();
 
       expect(recorder.submissions).toEqual([

@@ -142,8 +142,8 @@ describe("feeComputation — BPS boundary values (mutation killers)", () => {
     // Correct: 9_999 * 100 / 10_000 = 9 (floor of 9.999)
     // Wrong (9_999 divisor): 9_999 * 100 / 9_999 = 100 (exact) → different!
     const r = computeReleaseFee(9_999n, 100);
-    expect(BigInt(r.fee)).toBe(9n); // floor of 9.999
-    expect(BigInt(r.sellerNet)).toBe(9_990n);
+    expect(BigInt(r.fee)).toBe(99n); // floor of 99.99
+    expect(BigInt(r.sellerNet)).toBe(9_900n);
   });
 });
 
@@ -248,6 +248,7 @@ describe("assertFeeConservation (mutation killers)", () => {
       sellerNet: "9900",
       buyerRefund: "0",
       feeBps: 100,
+      feeDust: "0",
       calculatedAt: new Date().toISOString(),
     };
     expect(() => assertFeeConservation(valid)).not.toThrow();
@@ -261,6 +262,7 @@ describe("assertFeeConservation (mutation killers)", () => {
       sellerNet: "9901", // off by 1
       buyerRefund: "0",
       feeBps: 100,
+      feeDust: "0",
       calculatedAt: new Date().toISOString(),
     };
     expect(() => assertFeeConservation(broken)).toThrow("conservation violated");
@@ -274,6 +276,7 @@ describe("assertFeeConservation (mutation killers)", () => {
       sellerNet: "9900",
       buyerRefund: "0",
       feeBps: 100,
+      feeDust: "0",
       calculatedAt: new Date().toISOString(),
     };
     expect(() => assertFeeConservation(broken)).toThrow("conservation violated");
@@ -287,6 +290,7 @@ describe("assertFeeConservation (mutation killers)", () => {
       sellerNet: "0",
       buyerRefund: "9999", // should be 10000
       feeBps: 0,
+      feeDust: "0",
       calculatedAt: new Date().toISOString(),
     };
     expect(() => assertFeeConservation(broken)).toThrow("conservation violated");
@@ -300,6 +304,7 @@ describe("assertFeeConservation (mutation killers)", () => {
       sellerNet: "0",
       buyerRefund: "0", // 0+0+0 ≠ 1000
       feeBps: 0,
+      feeDust: "0",
       calculatedAt: new Date().toISOString(),
     };
     expect(() => assertFeeConservation(broken)).toThrow(/\[split\]/);

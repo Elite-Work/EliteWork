@@ -1,6 +1,6 @@
 import request from "supertest";
-import { createApp } from "../app";
 import express from "express";
+import { stellarAccountCreateRoutes } from "../routes/stellar.account.create";
 
 // Mock Keypair so we get deterministic values
 const MOCK_PUBLIC_KEY = "GDDD3FRCH55BSYNKISYY242HQNIBOH35CQP42NSJABR62XK2JOV5MED6";
@@ -21,9 +21,13 @@ jest.mock("@stellar/stellar-sdk", () => {
 });
 
 const mockAxiosGet = jest.fn();
-jest.mock("axios", () => ({
-  get: (...args: any[]) => mockAxiosGet(...args),
-}));
+jest.mock("axios", () => {
+  const actual = jest.requireActual("axios");
+  return {
+    ...actual,
+    get: (...args: any[]) => mockAxiosGet(...args),
+  };
+});
 
 // Mock encrypt so tests don't depend on JWT_SECRET value
 jest.mock("../lib/crypto", () => ({
@@ -42,7 +46,9 @@ describe("POST /stellar/account/create", () => {
 
   beforeEach(() => {
     mockAxiosGet.mockReset();
-    app = createApp();
+    app = express();
+    app.use(express.json());
+    app.use("/stellar/account/create", stellarAccountCreateRoutes);
   });
 
   it("creates an account and returns publicKey and encryptedSecretKey", async () => {

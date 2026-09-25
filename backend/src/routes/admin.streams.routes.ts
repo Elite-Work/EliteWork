@@ -7,7 +7,7 @@ import { validateRequest } from "../middleware/validateRequest";
 import { AuthRequest } from "../services/auth.service";
 import { createWalletRateLimiter } from "../lib/rateLimit";
 import { RATE_LIMIT_CONFIG } from "../config/rateLimit";
-import { streamClawbackService } from "../services/streamClawback.service";
+import { streamClawbackService, StreamClawbackService } from "../services/streamClawback.service";
 import { AppError, ErrorCode } from "../errors/errorCodes";
 import { classifyAdminSubmissionError } from "../errors/adminSubmissionError";
 import { adminNotificationService, extractErrorInfo } from "../services/adminNotification.service";
@@ -34,6 +34,7 @@ import {
   streamValidationService,
 } from "../services/streamValidation.service";
 import {
+  StreamReconciliationService,
   streamReconciliationService,
 } from "../services/streamReconciliation.service";
 
@@ -95,6 +96,8 @@ export function createAdminStreamsRouter(
   lockService: StreamLockService = streamLockService,
   streamsService: AdminStreamsService = adminStreamsService,
   validationService: StreamValidationService = streamValidationService,
+  clawbackService: Pick<StreamClawbackService, "acquire" | "release"> = streamClawbackService,
+  reconciliationService: StreamReconciliationService = streamReconciliationService,
 ) {
   const router = Router();
 
@@ -173,7 +176,7 @@ export function createAdminStreamsRouter(
     async (req: AuthRequest, res: Response, next) => {
       const { id: streamId } = req.params as { id: string };
       try {
-        streamClawbackService.acquire(streamId);
+        clawbackService.acquire(streamId);
       } catch (error) {
         return next(error);
       }
@@ -220,7 +223,7 @@ export function createAdminStreamsRouter(
       } catch (error) {
         next(error);
       } finally {
-        streamClawbackService.release(streamId);
+        clawbackService.release(streamId);
       }
     },
   );
@@ -462,7 +465,7 @@ export function createAdminStreamsRouter(
       try {
         const { id: streamId } = req.params as { id: string };
 
-        const result = await streamReconciliationService.reconcile(streamId);
+        const result = await reconciliationService.reconcile(streamId);
 
         res.status(200).json(result);
       } catch (error) {

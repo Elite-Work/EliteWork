@@ -7,10 +7,7 @@ import { alertService } from "../services/alert.service";
 const REDIS_URL = process.env.REDIS_URL ?? env.REDIS_URL;
 const isTestEnv = (process.env.NODE_ENV ?? env.NODE_ENV) === "test";
 
-// ioredis supports Redis URL strings at runtime, but TS 5.9 overload resolution does not match
-// the (path: string, options: RedisOptions) constructor when options is an object literal.
-// @ts-expect-error - ioredis URL+options constructor works at runtime
-export const redis = new Redis(REDIS_URL, {
+export const redis: InstanceType<typeof Redis> = new Redis(REDIS_URL, {
   maxRetriesPerRequest: null,
   enableReadyCheck: false,
   lazyConnect: isTestEnv,

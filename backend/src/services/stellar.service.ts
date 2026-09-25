@@ -298,7 +298,13 @@ public async getAccountBalance(publicKey: string, assetCode: string = TOKEN_CONF
         });
 
         try {
-          const account = await retryAsync(() => this.horizonServer.loadAccount(publicKey));
+          const account = await retryAsync(
+            () => this.horizonServer.loadAccount(publicKey),
+            {
+              backoffMs: [1000, 2000, 4000, 8000],
+              operationName: "stellar.getAccountBalance",
+            },
+          );
           const balance = account.balances.find((b: any) => {
             if (assetCode === "XLM") {
               return b.asset_type === "native";

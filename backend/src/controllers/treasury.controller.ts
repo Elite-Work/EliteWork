@@ -31,6 +31,13 @@ export class TreasuryController {
         note?: string;
       };
 
+      if (note !== undefined && typeof note !== "string") {
+        return res.status(400).json({ error: "Note must be a string" });
+      }
+      if (typeof note === "string" && note.length > 2000) {
+        return res.status(400).json({ error: "Note must be 2000 characters or fewer" });
+      }
+
       // Convert amount to string for the service
       const amountStr = typeof amount === "number" ? amount.toString() : amount;
 

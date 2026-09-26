@@ -457,6 +457,7 @@ export default function MediatorPanelClient({ disputeId }: Props) {
                 <video
                   key={pinataUrl}
                   controls
+                  aria-label="Dispute evidence video"
                   className="w-full h-full object-contain bg-black"
                   src={pinataUrl}
                   onLoadStart={() => setVideoLoadState("loading")}

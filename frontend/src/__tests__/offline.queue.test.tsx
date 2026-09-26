@@ -87,6 +87,83 @@ describe("Offline queue — draft trades survive refresh/restart and send after 
     expect(executor).toHaveBeenCalledTimes(1);
     expect(useOfflineQueueStore.getState().queue).toHaveLength(0);
   });
+
+  it("flaky network: converges after intermittent replay failures without changing the idempotency key", async () => {
+    const draft = useOfflineQueueStore.getState().enqueue({
+      type: "create-trade",
+      endpoint: "/trades",
+      method: "POST",
+      body: { amountUsdc: "300" },
+    });
+
+    const FAILURES_BEFORE_SUCCESS = 3;
+    const keysSent: string[] = [];
+    const attemptsSeen: number[] = [];
+    let calls = 0;
+    const flakyExecutor = jest.fn(async (a: any) => {
+      calls += 1;
+      keysSent.push(a.idempotencyKey);
+      attemptsSeen.push(a.attempts);
+      if (calls <= FAILURES_BEFORE_SUCCESS) throw new Error("Network flaked");
+    });
+
+    // Reconnect keeps dropping: each replay fails and the action stays queued
+    for (let i = 0; i < FAILURES_BEFORE_SUCCESS; i++) {
+      let result!: { succeeded: string[]; failed: string[] };
+      await act(async () => {
+        result = await useOfflineQueueStore.getState().replay(flakyExecutor);
+      });
+      expect(result.succeeded).toEqual([]);
+      expect(result.failed).toEqual([draft.id]);
+      expect(useOfflineQueueStore.getState().queue).toHaveLength(1);
+      expect(useOfflineQueueStore.getState().queue[0].idempotencyKey).toBe(draft.idempotencyKey);
+    }
+
+    // Connection stabilises: the next replay succeeds and the queue drains
+    let final!: { succeeded: string[]; failed: string[] };
+    await act(async () => {
+      final = await useOfflineQueueStore.getState().replay(flakyExecutor);
+    });
+    expect(final.succeeded).toEqual([draft.id]);
+    expect(final.failed).toEqual([]);
+    expect(useOfflineQueueStore.getState().queue).toHaveLength(0);
+
+    // Every attempt reused the same key, so the backend can dedup; attempts count up by one
+    expect(flakyExecutor).toHaveBeenCalledTimes(FAILURES_BEFORE_SUCCESS + 1);
+    expect(new Set(keysSent)).toEqual(new Set([draft.idempotencyKey]));
+    expect(attemptsSeen).toEqual([1, 2, 3, 4]);
+  });
+
+  it("flaky network: an action that already succeeded is not re-sent while a sibling keeps failing", async () => {
+    const ok = useOfflineQueueStore.getState().enqueue({ type: "deposit", endpoint: "/trades/t1/deposit", method: "POST" });
+    const flaky = useOfflineQueueStore.getState().enqueue({ type: "release", endpoint: "/trades/t1/release", method: "POST" });
+
+    const sent: string[] = [];
+    let flakyFailuresLeft = 2;
+    const executor = jest.fn(async (a: any) => {
+      sent.push(a.id);
+      if (a.id === flaky.id && flakyFailuresLeft > 0) {
+        flakyFailuresLeft -= 1;
+        throw new Error("Network flaked");
+      }
+    });
+
+    await act(async () => {
+      await useOfflineQueueStore.getState().replay(executor);
+    });
+    expect(useOfflineQueueStore.getState().queue.map((a) => a.id)).toEqual([flaky.id]);
+
+    await act(async () => {
+      await useOfflineQueueStore.getState().replay(executor);
+    });
+    await act(async () => {
+      await useOfflineQueueStore.getState().replay(executor);
+    });
+
+    expect(useOfflineQueueStore.getState().queue).toHaveLength(0);
+    expect(sent.filter((id) => id === ok.id)).toHaveLength(1);
+    expect(sent.filter((id) => id === flaky.id)).toHaveLength(3);
+  });
 });
 
 describe("Banner states accurate during transition windows", () => {

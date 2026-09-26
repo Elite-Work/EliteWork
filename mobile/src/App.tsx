@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainerRef } from '@react-navigation/native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { useNetInfo } from '@react-native-community/netinfo';
 import { ActivityIndicator, View } from 'react-native';
 
 import { useAuthStore } from './stores/authStore';
@@ -17,10 +18,19 @@ import { triggerNotificationHaptic } from './services/haptics.service';
 import type { RootStackParamList } from './types/navigation';
 import { AppNavigator } from './navigation/AppNavigator';
 import type { NotificationData } from './services/notification.service';
+import { OfflineBanner } from './components/OfflineBanner';
+
+// Mirrors the web `offlineBanner` flag (on by default, env kill switch).
+const OFFLINE_BANNER_ENABLED = process.env.EXPO_PUBLIC_DISABLE_OFFLINE_BANNER !== 'true';
 
 export default function App() {
   const { getToken, token } = useAuthStore();
   const [bootstrapped, setBootstrapped] = useState(false);
+  const { isConnected, isInternetReachable } = useNetInfo();
+  // Unlike useNetworkStatus, stay quiet until netinfo reports so the banner
+  // does not flash on every launch.
+  const showOfflineBanner =
+    OFFLINE_BANNER_ENABLED && (isInternetReachable === false || isConnected === false);
   const navigationRef = useRef<NavigationContainerRef<RootStackParamList> | null>(null);
 
   useEffect(() => {
@@ -77,7 +87,16 @@ export default function App() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        <AppNavigator isAuthenticated={!!token} />
+        <AppNavigator isAuthenticated={!!token} navigationRef={navigationRef} />
+        {showOfflineBanner ? (
+          <SafeAreaView
+            edges={['bottom']}
+            pointerEvents="none"
+            style={{ position: 'absolute', left: 16, right: 16, bottom: 0 }}
+          >
+            <OfflineBanner message="You're offline. Some actions won't work until the device reconnects." />
+          </SafeAreaView>
+        ) : null}
         <StatusBar style="dark" />
       </SafeAreaProvider>
     </GestureHandlerRootView>

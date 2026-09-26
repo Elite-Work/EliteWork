@@ -8,7 +8,7 @@ import {
   useState,
 } from "react";
 
-type Theme = "light" | "dark" | "system";
+export type Theme = "light" | "dark" | "system";
 
 interface ThemeContextValue {
   /** The resolved theme actually applied (never "system"). */
@@ -17,6 +17,15 @@ interface ThemeContextValue {
   themePreference: Theme;
   /** Set the theme preference. "system" follows OS preference. */
   setTheme: (theme: Theme) => void;
+  /**
+   * Apply a theme temporarily without persisting it. Call
+   * {@link clearThemePreview} to snap back to the committed preference.
+   */
+  previewTheme: (theme: Theme) => void;
+  /** Drop any temporary preview and restore the committed preference. */
+  clearThemePreview: () => void;
+  /** True while a temporary preview is being shown. */
+  isPreviewing: boolean;
 }
 
 const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
@@ -30,22 +39,28 @@ function getSystemPreference(): "light" | "dark" {
     : "light";
 }
 
-function resolveTheme(pref: Theme): "light" | "dark" {
-  return pref === "system" ? getSystemPreference() : pref;
-}
-
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [themePreference, setThemePreference] = useState<Theme>("system");
-  const [resolvedTheme, setResolvedTheme] = useState<"light" | "dark">("dark");
+  // Resolved OS theme, tracked so a preview of "system" stays correct even
+  // while the committed preference is something else.
+  const [systemTheme, setSystemTheme] = useState<"light" | "dark">("dark");
   const [mounted, setMounted] = useState(false);
+  const [previewPreference, setPreviewPreference] = useState<Theme | null>(null);
+
+  // A preview wins over the stored preference until it is cleared or committed.
+  const effectivePreference = previewPreference ?? themePreference;
+  const resolvedTheme: "light" | "dark" =
+    effectivePreference === "system" ? systemTheme : effectivePreference;
 
   // Read persisted preference and apply it (no flash — applied before paint via
   // the inline script in <head> below).
   useEffect(() => {
     const stored = localStorage.getItem(STORAGE_KEY) as Theme | null;
-    const pref = stored ?? "system";
-    setThemePreference(pref);
-    setResolvedTheme(resolveTheme(pref));
+    setThemePreference(stored ?? "system");
+    // The OS theme is read from the media query, not from the stored
+    // preference — a "system" preview must reflect the real device setting even
+    // when the committed preference is light or dark.
+    setSystemTheme(getSystemPreference());
     setMounted(true);
   }, []);
 
@@ -56,22 +71,21 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     root.classList.add(resolvedTheme);
   }, [resolvedTheme]);
 
-  // Listen for OS-level preference changes when the user is on "system".
+  // Listen for OS-level preference changes. Stays subscribed regardless of the
+  // active preference so "system" previews and a later switch stay accurate.
   useEffect(() => {
-    if (themePreference !== "system") return;
-
     const mql = window.matchMedia("(prefers-color-scheme: dark)");
     const handler = (e: MediaQueryListEvent) => {
-      setResolvedTheme(e.matches ? "dark" : "light");
+      setSystemTheme(e.matches ? "dark" : "light");
     };
     mql.addEventListener("change", handler);
     return () => mql.removeEventListener("change", handler);
-  }, [themePreference]);
+  }, []);
 
   const setTheme = useCallback((theme: Theme) => {
     setThemePreference(theme);
-    const resolved = resolveTheme(theme);
-    setResolvedTheme(resolved);
+    // Committing ends any preview — the committed value is the new preview.
+    setPreviewPreference(null);
     localStorage.setItem(STORAGE_KEY, theme);
 
     // Briefly add transition class so the switch animates smoothly.
@@ -81,8 +95,25 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     }, 250);
   }, []);
 
+  const previewTheme = useCallback((theme: Theme) => {
+    setPreviewPreference(theme);
+  }, []);
+
+  const clearThemePreview = useCallback(() => {
+    setPreviewPreference(null);
+  }, []);
+
   return (
-    <ThemeContext.Provider value={{ resolvedTheme, themePreference, setTheme }}>
+    <ThemeContext.Provider
+      value={{
+        resolvedTheme,
+        themePreference,
+        setTheme,
+        previewTheme,
+        clearThemePreview,
+        isPreviewing: previewPreference !== null,
+      }}
+    >
       {children}
     </ThemeContext.Provider>
   );
@@ -98,6 +129,9 @@ export function useTheme(): ThemeContextValue {
       resolvedTheme: "dark",
       themePreference: "system",
       setTheme: () => {},
+      previewTheme: () => {},
+      clearThemePreview: () => {},
+      isPreviewing: false,
     };
   }
   return ctx;

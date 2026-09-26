@@ -1,4 +1,5 @@
 ﻿import { useEffect, useMemo, useRef } from 'react';
+import type { MutableRefObject } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import type { LinkingOptions, NavigationContainerRef } from '@react-navigation/native';
@@ -58,11 +59,14 @@ function makeLinking(isAuthenticated: boolean): LinkingOptions<RootStackParamLis
 
 interface AppNavigatorProps {
   isAuthenticated: boolean;
+  /** Lets the app shell (e.g. push-notification taps) drive navigation. */
+  navigationRef?: MutableRefObject<NavigationContainerRef<RootStackParamList> | null>;
 }
 
-export function AppNavigator({ isAuthenticated }: AppNavigatorProps) {
+export function AppNavigator({ isAuthenticated, navigationRef }: AppNavigatorProps) {
   const { handleUrl, resumePendingDeepLink } = useDeepLink();
-  const navRef = useRef<NavigationContainerRef<RootStackParamList> | null>(null);
+  const ownRef = useRef<NavigationContainerRef<RootStackParamList> | null>(null);
+  const navRef = navigationRef ?? ownRef;
   const linking = useMemo(() => makeLinking(isAuthenticated), [isAuthenticated]);
 
   // Cold start: route (or park) the URL the app was opened with.

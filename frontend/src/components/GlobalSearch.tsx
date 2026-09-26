@@ -44,12 +44,36 @@ export function GlobalSearch({ onClose }: GlobalSearchProps) {
   const triggerRef = useRef<HTMLButtonElement>(null);
   const restoreFocusRef = useRef(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const categoryRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   const allItems = [
     ...results.trades.map((r) => ({ ...r, category: "trades" as const })),
     ...results.users.map((r) => ({ ...r, category: "users" as const })),
     ...results.contracts.map((r) => ({ ...r, category: "contracts" as const })),
   ];
+
+  const availableCategories = (
+    Object.keys(CATEGORY_LABELS) as Array<keyof GroupedResults>
+  ).filter((cat) => results[cat].length > 0);
+
+  const jumpToCategory = useCallback(
+    (category: keyof GroupedResults) => {
+      const el = categoryRefs.current[category];
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+      const baseOffset =
+        category === "trades"
+          ? 0
+          : category === "users"
+            ? results.trades.length
+            : results.trades.length + results.users.length;
+      if (results[category].length > 0) {
+        setActiveIndex(baseOffset);
+      }
+    },
+    [results],
+  );
 
   const open = useCallback(() => {
     setIsOpen(true);
@@ -219,6 +243,33 @@ export function GlobalSearch({ onClose }: GlobalSearchProps) {
           </button>
         </div>
 
+        {/* Category quick-jump affordance */}
+        {hasResults && availableCategories.length > 1 && (
+          <div
+            role="navigation"
+            aria-label="Jump to category"
+            className="flex items-center gap-1.5 px-4 py-2 border-b border-border-default/60 bg-surface-2 text-xs overflow-x-auto"
+          >
+            <span className="text-[11px] font-medium text-text-muted mr-1 select-none">
+              Jump to:
+            </span>
+            {availableCategories.map((category) => {
+              const count = results[category].length;
+              return (
+                <button
+                  key={category}
+                  type="button"
+                  onClick={() => jumpToCategory(category)}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border border-border-default bg-surface-1 text-text-secondary hover:text-text-primary hover:border-gold/60 hover:bg-gold/10 transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-gold"
+                  aria-label={`Jump to ${CATEGORY_LABELS[category]}`}
+                >
+                  <span>{`${CATEGORY_LABELS[category]} (${count})`}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
         {/* Results */}
         <div className="max-h-[60vh] overflow-y-auto p-2" role="listbox" aria-label="Search results">
           {error && (
@@ -246,7 +297,14 @@ export function GlobalSearch({ onClose }: GlobalSearchProps) {
                     : results.trades.length + results.users.length;
 
               return (
-                <div key={category} className="mb-1">
+                <div
+                  key={category}
+                  ref={(el) => {
+                    categoryRefs.current[category] = el;
+                  }}
+                  id={`search-category-${category}`}
+                  className="mb-1 scroll-mt-2"
+                >
                   <p className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-widest text-text-muted">
                     {CATEGORY_LABELS[category]}
                   </p>

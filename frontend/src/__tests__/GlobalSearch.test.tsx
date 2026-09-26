@@ -287,3 +287,71 @@ describe("GlobalSearch — navigation on select", () => {
     expect(mockPush).toHaveBeenCalledWith("/trades/t1");
   });
 });
+
+// ── Category jump affordance (#111) ──────────────────────────────────────────
+
+describe("GlobalSearch — category jump affordance (#111)", () => {
+  it("renders jump affordance buttons when multiple categories have results", async () => {
+    jest.useFakeTimers();
+    const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
+
+    render(<GlobalSearch />);
+    pressMetaK();
+    await user.type(screen.getByRole("searchbox"), "test");
+    act(() => jest.advanceTimersByTime(300));
+    await waitFor(() => screen.getByText("Trade #001"));
+
+    const nav = screen.getByRole("navigation", { name: /jump to category/i });
+    expect(nav).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /jump to trades/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /jump to users/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /jump to contracts/i })).toBeInTheDocument();
+
+    jest.useRealTimers();
+  });
+
+  it("does not render jump affordance when only one category has results", async () => {
+    jest.useFakeTimers();
+    const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
+    mockSearch.mockResolvedValue({
+      trades: [{ id: "t1", title: "Trade #001" }],
+      users: [],
+      contracts: [],
+    });
+
+    render(<GlobalSearch />);
+    pressMetaK();
+    await user.type(screen.getByRole("searchbox"), "trade");
+    act(() => jest.advanceTimersByTime(300));
+    await waitFor(() => screen.getByText("Trade #001"));
+
+    expect(screen.queryByRole("navigation", { name: /jump to category/i })).not.toBeInTheDocument();
+
+    jest.useRealTimers();
+  });
+
+  it("scrolls to category and updates selection when jump pill is clicked", async () => {
+    jest.useFakeTimers();
+    const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
+
+    const scrollIntoViewMock = jest.fn();
+    window.HTMLElement.prototype.scrollIntoView = scrollIntoViewMock;
+
+    render(<GlobalSearch />);
+    pressMetaK();
+    await user.type(screen.getByRole("searchbox"), "test");
+    act(() => jest.advanceTimersByTime(300));
+    await waitFor(() => screen.getByText("Trade #001"));
+
+    jest.useRealTimers();
+
+    const usersJumpButton = screen.getByRole("button", { name: /jump to users/i });
+    await userEvent.click(usersJumpButton);
+
+    expect(scrollIntoViewMock).toHaveBeenCalledWith({ behavior: "smooth", block: "start" });
+
+    // Pressing Enter now navigates to the first item in Users (u1)
+    fireEvent.keyDown(screen.getByRole("searchbox"), { key: "Enter" });
+    expect(mockPush).toHaveBeenCalledWith("/users/u1");
+  });
+});

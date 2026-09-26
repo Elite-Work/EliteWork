@@ -8,11 +8,22 @@
  *   - `isOffline` is true AND data exists  →  grey "Offline" badge
  *   - data is live  →  nothing rendered (no badge)
  *
+ * `Date.now()` is read once per render on purpose: re-rendering on a timer
+ * would keep every mounted badge (and its subtree) awake for no benefit on
+ * pages that come and go in seconds. Pages that stay open, however, would
+ * otherwise show a stale label that stops being true — so `live` is the
+ * opt-in that starts a one-minute tick for as long as a badge is visible.
+ *
  * Usage:
  *   <StalenessIndicator isStale={isStale} cachedAt={cachedAt} isOffline={isOffline} />
+ *   <StalenessIndicator isStale cachedAt={cachedAt} isOffline={false} live />
  */
 
 import { clsx } from "clsx";
+import { useEffect, useState } from "react";
+
+/** Cadence of the `live` variant — one tick per minute. */
+export const LIVE_REFRESH_MS = 60_000;
 
 interface StalenessIndicatorProps {
   isStale: boolean;
@@ -20,6 +31,12 @@ interface StalenessIndicatorProps {
   /** Unix ms timestamp from CacheEntry.cachedAt */
   cachedAt: number | null;
   className?: string;
+  /**
+   * Opt-in for long-open pages: recompute the elapsed time every minute so
+   * the "· 12m ago" suffix keeps counting instead of silently going out of
+   * date. Defaults to false (read-once-per-render behaviour).
+   */
+  live?: boolean;
 }
 
 function formatElapsed(ms: number): string {
@@ -35,8 +52,21 @@ export function StalenessIndicator({
   isOffline,
   cachedAt,
   className,
+  live = false,
 }: StalenessIndicatorProps) {
-  if (!isStale && !isOffline) return null;
+  const [, setTick] = useState(0);
+  const badgeVisible = isStale || isOffline;
+  const shouldTick = live && badgeVisible;
+
+  // Hooks run before the early return below, so the effect always has a
+  // chance to register (and to unregister) its interval.
+  useEffect(() => {
+    if (!shouldTick) return;
+    const id = setInterval(() => setTick((tick) => tick + 1), LIVE_REFRESH_MS);
+    return () => clearInterval(id);
+  }, [shouldTick]);
+
+  if (!badgeVisible) return null;
 
   const elapsed = cachedAt ? Date.now() - cachedAt : null;
   const label = isOffline ? "Offline" : "Stale";
@@ -51,6 +81,7 @@ export function StalenessIndicator({
           : `Showing stale data cached ${timeLabel ?? "recently"}`
       }
       data-testid="staleness-indicator"
+      data-live={live ? "true" : "false"}
       className={clsx(
         "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium",
         isOffline

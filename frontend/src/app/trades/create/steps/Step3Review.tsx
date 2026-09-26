@@ -1,9 +1,9 @@
 "use client";
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { StrKey } from "@stellar/stellar-sdk";
 import { signTransaction } from "@stellar/freighter-api";
 import { useTrade } from "../TradeContext";
+import { submitBlockers } from "../validation";
 import { useAuth } from "@/hooks/useAuth";
 import { api, apiConfig, ApiError } from "@/lib/api";
 import { createTradeInputSchema, fieldErrors } from "@/lib/domain-schemas/trade";
@@ -11,6 +11,7 @@ import Link from "next/link";
 import { LegalDisclaimerModal } from "@/components/ui/LegalDisclaimerModal";
 import { KeyboardHint } from "@/components/ui/KeyboardHint";
 import { CopyButton } from "@/components/ui/CopyButton";
+import { DisabledHint } from "@/components/ui/DisabledHint";
 import { useOffline } from "@/hooks/useOffline";
 import { useOfflineQueueStore } from "@/stores/offlineQueueStore";
 import { useToast, TOAST_CONTRACT } from "@/hooks/useToast";
@@ -51,16 +52,9 @@ export default function Step3Review() {
 
   const amountUsdc = !isNaN(rawAmount) && rawAmount > 0 ? rawAmount.toFixed(7) : "0";
 
-  const isAddressValid =
-    data.sellerAddress !== "" &&
-    StrKey.isValidEd25519PublicKey(data.sellerAddress.trim());
-  const isFormValid =
-    data.commodity !== "" &&
-    !isNaN(qty) && qty > 0 &&
-    !isNaN(price) && price > 0 &&
-    !isNaN(rawAmount) && rawAmount > 0 &&
-    isAddressValid &&
-    data.buyerRatio + data.sellerRatio === 100;
+  // Single source of truth shared with the disabled submit button below.
+  const blockers = submitBlockers(data);
+  const isFormValid = blockers.length === 0;
 
   const buyerLossBps = Math.round(data.buyerRatio * 100);
   const sellerLossBps = Math.round(data.sellerRatio * 100);
@@ -307,24 +301,34 @@ export default function Step3Review() {
         >
           Back
         </button>
-        <button
-          type="button"
-          disabled={loading || !isFormValid}
-          onClick={() => setShowDisclaimer(true)}
-          className="flex-1 h-12 rounded-full bg-gradient-gold-cta text-text-inverse font-semibold disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+        <DisabledHint
+          hintId="create-trade-submit-hint"
+          title="Why is this disabled?"
+          issues={blockers}
+          className="flex-1"
         >
-          {loading ? (
-            <>
-              <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="12" cy="12" r="10" strokeOpacity="0.25" />
-                <path d="M12 2a10 10 0 0 1 10 10" />
-              </svg>
-              Creating Trade...
-            </>
-          ) : (
-            "Lock Funds & Create Trade"
-          )}
-        </button>
+          <button
+            type="button"
+            disabled={loading || !isFormValid}
+            aria-describedby={
+              blockers.length > 0 ? "create-trade-submit-hint" : undefined
+            }
+            onClick={() => setShowDisclaimer(true)}
+            className="flex-1 h-12 rounded-full bg-gradient-gold-cta text-text-inverse font-semibold disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          >
+            {loading ? (
+              <>
+                <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="10" strokeOpacity="0.25" />
+                  <path d="M12 2a10 10 0 0 1 10 10" />
+                </svg>
+                Creating Trade...
+              </>
+            ) : (
+              "Lock Funds & Create Trade"
+            )}
+          </button>
+        </DisabledHint>
       </div>
 
       {showDisclaimer ? (

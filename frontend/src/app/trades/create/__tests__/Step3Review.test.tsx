@@ -101,12 +101,14 @@ describe('Step3Review', () => {
         mockUseAuth.isAuthenticated = true;
         mockUseAuth.isWalletConnected = true;
 
-        // Module-level state survives between tests: the dedup window would
-        // swallow every submit after the first, and a queued action would
-        // both flag the component offline-looking and keep the pending
-        // banner on screen.
-        clearActionDedup();
-        useOfflineQueueStore.getState().clear();
+            // Module-level state survives between tests: the dedup window would
+            // swallow every submit after the first, and a queued action would
+            // both flag the component offline-looking and keep the pending
+            // banner on screen. The wizard persists its draft to storage, so a
+            // later test would otherwise start from the previous test's form.
+            clearActionDedup();
+            useOfflineQueueStore.getState().clear();
+            localStorage.clear();
 
         (api.trades.create as jest.Mock).mockResolvedValue({
             tradeId: 'trade-123',
@@ -319,6 +321,25 @@ describe('Step3Review', () => {
 
             const loadingButton = screen.getByRole('button', { name: /creating trade/i });
             expect(loadingButton).toBeDisabled();
+        });
+
+        it('should explain why submit is disabled while the form is incomplete', () => {
+            renderWithProvider();
+
+            const submitButton = screen.getByRole('button', { name: /lock funds & create trade/i });
+            expect(submitButton).toBeDisabled();
+            expect(submitButton).toHaveAttribute('aria-describedby', 'create-trade-submit-hint');
+            expect(screen.getByTestId('disabled-hint')).toBeInTheDocument();
+            expect(screen.getByText('Select a commodity')).toBeInTheDocument();
+        });
+
+        it('should drop the hint entirely once the form is valid', () => {
+            renderWithProvider(validData);
+
+            const submitButton = screen.getByRole('button', { name: /lock funds & create trade/i });
+            expect(submitButton).not.toBeDisabled();
+            expect(submitButton).not.toHaveAttribute('aria-describedby');
+            expect(screen.queryByTestId('disabled-hint')).not.toBeInTheDocument();
         });
     });
 

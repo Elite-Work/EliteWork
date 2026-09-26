@@ -10,6 +10,7 @@ import { createTradeInputSchema, fieldErrors } from "@/lib/domain-schemas/trade"
 import Link from "next/link";
 import { LegalDisclaimerModal } from "@/components/ui/LegalDisclaimerModal";
 import { KeyboardHint } from "@/components/ui/KeyboardHint";
+import { CopyButton } from "@/components/ui/CopyButton";
 import { useOffline } from "@/hooks/useOffline";
 import { useOfflineQueueStore } from "@/stores/offlineQueueStore";
 import { useToast, TOAST_CONTRACT } from "@/hooks/useToast";
@@ -199,11 +200,17 @@ export default function Step3Review() {
         </div>
         <div className="w-full rounded-lg bg-bg-elevated border border-border-default px-4 py-3 text-left">
           <p className="text-xs text-text-muted mb-1">Trade ID</p>
-          <p className="text-emerald font-mono text-sm break-all">{tradeId}</p>
+          <div className="flex items-center gap-2">
+            <p className="text-emerald font-mono text-sm break-all flex-1">{tradeId}</p>
+            <CopyButton value={tradeId ?? ""} label="Trade ID" />
+          </div>
         </div>
         <div className="w-full rounded-lg bg-bg-elevated border border-border-default px-4 py-3 text-left">
           <p className="text-xs text-text-muted mb-1">Transaction Hash</p>
-          <p className="text-emerald font-mono text-sm break-all">{txHash}</p>
+          <div className="flex items-center gap-2">
+            <p className="text-emerald font-mono text-sm break-all flex-1">{txHash}</p>
+            <CopyButton value={txHash ?? ""} label="transaction hash" />
+          </div>
         </div>
         <button
           onClick={() => router.push(`/trades/${tradeId}`)}

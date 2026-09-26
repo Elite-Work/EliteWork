@@ -181,6 +181,8 @@ Key architectural decisions are documented as ADRs in [`docs/adr/`](./docs/adr):
 
 EziAgric is an open-source project aimed at improving food security and trade efficiency. We welcome developers, designers, and agricultural experts!
 
+Please read and follow our [Code of Conduct](./CODE_OF_CONDUCT.md). By participating in this project you agree to abide by its terms.
+
 1. Fork the Project.
 2. Create your Feature Branch (`git checkout -b feature/NewFeature`).
 3. Commit your Changes (`git commit -m 'Add NewFeature'`).

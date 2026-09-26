@@ -50,7 +50,7 @@ function makeLinking(isAuthenticated: boolean): LinkingOptions<RootStackParamLis
         // resumes it once a token appears (login-then-continue).
         return { routes: [{ name: 'WalletConnect' }] };
       }
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
       const nav = require('@react-navigation/native');
       return nav.getStateFromPath(path, options);
     },

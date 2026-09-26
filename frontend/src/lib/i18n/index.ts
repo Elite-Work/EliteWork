@@ -28,9 +28,13 @@ type Paths<T> = {
 
 export type MessageKey = Paths<Messages>;
 
-const CATALOGS: Record<string, Messages> = { "en-NG": en, "en-US": en, fr, pseudo: en };
+// A translated catalog may lag behind the `en` source catalog (or use different
+// literal values), so catalogs are typed structurally rather than as the exact
+// literal shape of `en`. Missing keys fall back to English in `t()`.
+type Catalog = { readonly [key: string]: string | Catalog };
+const CATALOGS: Record<string, Catalog> = { "en-NG": en, "en-US": en, fr, pseudo: en };
 
-function lookup(catalog: Messages, key: string): string | undefined {
+function lookup(catalog: unknown, key: string): string | undefined {
   return key
     .split(".")
     .reduce<unknown>((node, part) => (node as Record<string, unknown>)?.[part], catalog) as

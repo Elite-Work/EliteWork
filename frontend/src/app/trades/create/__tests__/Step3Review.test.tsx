@@ -3,8 +3,11 @@ import userEvent from '@testing-library/user-event';
 import React from 'react';
 import Step3Review from '../steps/Step3Review';
 import { TradeProvider, useTrade, TradeData } from '../TradeContext';
+import { ToastProvider } from '@/hooks/useToast';
 import { api } from '@/lib/api';
 import { signTransaction } from '@stellar/freighter-api';
+import { _clearAllForTests as clearActionDedup } from '@/lib/actionDedup';
+import { useOfflineQueueStore } from '@/stores/offlineQueueStore';
 
 // Mock @stellar/stellar-sdk to simplify address validation in tests
 jest.mock('@stellar/stellar-sdk', () => ({
@@ -82,11 +85,13 @@ const TestWrapper = ({ initialData, children }: { initialData?: Partial<TradeDat
 
 const renderWithProvider = (initialData?: Partial<TradeData>) => {
     return render(
-        <TradeProvider>
-            <TestWrapper initialData={initialData}>
-                <Step3Review />
-            </TestWrapper>
-        </TradeProvider>
+        <ToastProvider>
+            <TradeProvider>
+                <TestWrapper initialData={initialData}>
+                    <Step3Review />
+                </TestWrapper>
+            </TradeProvider>
+        </ToastProvider>
     );
 };
 
@@ -96,6 +101,15 @@ describe('Step3Review', () => {
         mockUseAuth.isAuthenticated = true;
         mockUseAuth.isWalletConnected = true;
 
+            // Module-level state survives between tests: the dedup window would
+            // swallow every submit after the first, and a queued action would
+            // both flag the component offline-looking and keep the pending
+            // banner on screen. The wizard persists its draft to storage, so a
+            // later test would otherwise start from the previous test's form.
+            clearActionDedup();
+            useOfflineQueueStore.getState().clear();
+            localStorage.clear();
+
         (api.trades.create as jest.Mock).mockResolvedValue({
             tradeId: 'trade-123',
             unsignedXdr: 'mock-xdr',
@@ -103,7 +117,11 @@ describe('Step3Review', () => {
         (signTransaction as jest.Mock).mockResolvedValue({
             signedTxXdr: 'signed-xdr',
         });
+        // Shape of a real Response: `useOffline`'s health probe reads
+        // ok/status, and the same fetch mock later serves the RPC submit.
         global.fetch = jest.fn().mockResolvedValue({
+            ok: true,
+            status: 200,
             json: jest.fn().mockResolvedValue({
                 result: { hash: 'tx-hash-123' },
             }),
@@ -304,6 +322,25 @@ describe('Step3Review', () => {
             const loadingButton = screen.getByRole('button', { name: /creating trade/i });
             expect(loadingButton).toBeDisabled();
         });
+
+        it('should explain why submit is disabled while the form is incomplete', () => {
+            renderWithProvider();
+
+            const submitButton = screen.getByRole('button', { name: /lock funds & create trade/i });
+            expect(submitButton).toBeDisabled();
+            expect(submitButton).toHaveAttribute('aria-describedby', 'create-trade-submit-hint');
+            expect(screen.getByTestId('disabled-hint')).toBeInTheDocument();
+            expect(screen.getByText('Select a commodity')).toBeInTheDocument();
+        });
+
+        it('should drop the hint entirely once the form is valid', () => {
+            renderWithProvider(validData);
+
+            const submitButton = screen.getByRole('button', { name: /lock funds & create trade/i });
+            expect(submitButton).not.toBeDisabled();
+            expect(submitButton).not.toHaveAttribute('aria-describedby');
+            expect(screen.queryByTestId('disabled-hint')).not.toBeInTheDocument();
+        });
     });
 
     describe('error states', () => {
@@ -392,6 +429,37 @@ describe('Step3Review', () => {
 
             await user.click(screen.getByRole('button', { name: /lock funds & create trade/i }));
             await user.click(screen.getByRole('button', { name: /accept/i }));
+        });
+
+        it('should offer copy buttons for the trade ID and transaction hash', async () => {
+            const user = userEvent.setup();
+            renderWithProvider(validData);
+
+            await user.click(screen.getByRole('button', { name: /lock funds & create trade/i }));
+            await user.click(screen.getByRole('button', { name: /accept/i }));
+
+            expect(await screen.findByTestId('copy-trade-id')).toBeInTheDocument();
+            expect(screen.getByTestId('copy-transaction-hash')).toBeInTheDocument();
+        });
+
+        it('should copy the full trade ID, not the truncated display text', async () => {
+            const user = userEvent.setup();
+            const writeText = jest.fn().mockResolvedValue(undefined);
+            // jsdom exposes navigator.clipboard as a getter-only property.
+            Object.defineProperty(navigator, 'clipboard', {
+                value: { writeText },
+                configurable: true,
+                writable: true,
+            });
+
+            renderWithProvider(validData);
+            await user.click(screen.getByRole('button', { name: /lock funds & create trade/i }));
+            await user.click(screen.getByRole('button', { name: /accept/i }));
+
+            const copyButton = await screen.findByTestId('copy-trade-id');
+            await user.click(copyButton);
+
+            expect(writeText).toHaveBeenCalledWith('trade-123');
         });
     });
 

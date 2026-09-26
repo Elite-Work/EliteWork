@@ -85,6 +85,10 @@ export function useToast() {
   return context;
 }
 
+export function useOptionalToast() {
+  return useContext(ToastContext);
+}
+
 /**
  * Toast inventory — unified contract (reviewed for consistency)
  * success/error/pending all use correlationId so that:

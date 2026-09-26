@@ -13,16 +13,30 @@ import {
 import { signTransaction } from "@stellar/freighter-api";
 
 import { useFreighterIdentity } from "@/hooks/useFreighterIdentity";
+import { useOptionalToast, TOAST_CONTRACT } from "@/hooks/useToast";
 import { Badge } from "@/components/ui/Badge";
 import { WalletAddressBadge } from "@/components/ui/WalletAddressBadge";
 import { api, ApiError, type EvidenceRecord } from "@/lib/api";
+import { getCorrelationId, shouldDedup, registerAction } from "@/lib/actionDedup";
+import { generateIdempotencyKey } from "@/lib/idempotency";
 
 type Props = { disputeId: string };
+
+type ActionType = "accept" | "reject" | "split";
 
 type ConfirmationModalState = {
   isOpen: boolean;
   sellerGetsBps: number | null;
   splitLabel: string;
+  actionType: ActionType;
+};
+
+type OptimisticResolution = {
+  action: ActionType;
+  label: string;
+  sellerGetsBps: number;
+  correlationId: string;
+  isPending: boolean;
 };
 
 type VideoLoadState = "loading" | "ready" | "terminal-failure";
@@ -112,6 +126,7 @@ function useFocusTrap(isActive: boolean) {
 }
 
 export default function MediatorPanelClient({ disputeId }: Props) {
+  const toast = useOptionalToast();
   const { address, isAuthorized, isLoading, connectWallet } =
     useFreighterIdentity();
   const [txStatus, setTxStatus] = useState<string>("");
@@ -128,7 +143,10 @@ export default function MediatorPanelClient({ disputeId }: Props) {
     isOpen: false,
     sellerGetsBps: null,
     splitLabel: "",
+    actionType: "split",
   });
+  const [optimisticResolution, setOptimisticResolution] =
+    useState<OptimisticResolution | null>(null);
 
   const submittingRef = useRef(false);
 
@@ -275,26 +293,46 @@ export default function MediatorPanelClient({ disputeId }: Props) {
     setExecString(s);
   }
 
-  function openConfirmationModal(sellerGetsBps: number, splitLabel: string) {
-    setModal({ isOpen: true, sellerGetsBps, splitLabel });
+  function openConfirmationModal(
+    sellerGetsBps: number,
+    splitLabel: string,
+    actionType: ActionType = "split",
+  ) {
+    setModal({ isOpen: true, sellerGetsBps, splitLabel, actionType });
   }
 
   function closeModal() {
-    setModal({ isOpen: false, sellerGetsBps: null, splitLabel: "" });
+    setModal({
+      isOpen: false,
+      sellerGetsBps: null,
+      splitLabel: "",
+      actionType: "split",
+    });
   }
 
   function getBuyerSplit(sellerBps: number): number {
     return 10000 - sellerBps;
   }
 
-  async function executeResolution(sellerGetsBps: number) {
+  async function executeResolution(
+    sellerGetsBps: number,
+    splitLabel: string,
+    actionType: ActionType,
+  ) {
     if (submittingRef.current) return;
     if (!address) {
       setTxStatus("Connect Freighter first.");
       return;
     }
 
-    submittingRef.current = true;
+    const actionKey = `resolve-dispute:${disputeId}:${sellerGetsBps}`;
+    const dedup = shouldDedup(actionKey);
+    if (dedup.dedup) return;
+
+    const correlationId = getCorrelationId();
+    const idempotencyKey = generateIdempotencyKey();
+    registerAction(actionKey, correlationId, idempotencyKey);
+
     const parsedTradeId = Number(disputeId);
     if (!Number.isInteger(parsedTradeId) || parsedTradeId < 0) {
       setTxStatus("Dispute ID must be a numeric on-chain trade_id.");
@@ -309,8 +347,34 @@ export default function MediatorPanelClient({ disputeId }: Props) {
       return;
     }
 
+    // ── Snapshot for rollback (Issue #112) ──────────────────────────────────
+    const prevOptimisticResolution = optimisticResolution;
+
+    // ── Immediate optimistic UI update ──────────────────────────────────────
+    submittingRef.current = true;
     setIsSubmittingTx(true);
-    setTxStatus("Preparing Soroban transaction...");
+    setOptimisticResolution({
+      action: actionType,
+      label: splitLabel,
+      sellerGetsBps,
+      correlationId,
+      isPending: true,
+    });
+    setTxStatus(`Optimistic update applied: Dispute marked as ${splitLabel}. Submitting on-chain transaction…`);
+
+    const actionVerb =
+      actionType === "accept"
+        ? "Accepted dispute claim"
+        : actionType === "reject"
+          ? "Rejected dispute claim"
+          : `Resolved dispute (${splitLabel})`;
+
+    toast?.addToastWithCorrelation?.(
+      TOAST_CONTRACT.pending(
+        `${actionVerb}. Submitting on-chain transaction…`,
+        correlationId,
+      ),
+    );
 
     try {
       const networkPassphrase =
@@ -363,10 +427,30 @@ export default function MediatorPanelClient({ disputeId }: Props) {
         );
       }
 
+      // Success — confirm optimistic update
+      setOptimisticResolution((prev) =>
+        prev ? { ...prev, isPending: false } : null,
+      );
       setTxStatus(`Submitted. Hash: ${sendResponse.hash}`);
+      toast?.updateToast?.(
+        correlationId,
+        TOAST_CONTRACT.success(
+          `Dispute resolution confirmed on-chain! Hash: ${sendResponse.hash.slice(0, 8)}…`,
+          correlationId,
+        ),
+      );
     } catch (error) {
-      setTxStatus(
-        error instanceof Error ? error.message : "Soroban execution failed",
+      // ── Failure-mid-flight: snapshot-based rollback ─────────────────────────
+      setOptimisticResolution(prevOptimisticResolution);
+      const errorMsg =
+        error instanceof Error ? error.message : "Soroban execution failed";
+      setTxStatus(`Resolution reverted: ${errorMsg}`);
+      toast?.updateToast?.(
+        correlationId,
+        TOAST_CONTRACT.error(
+          `Resolution failed: ${errorMsg}. Changes reverted.`,
+          correlationId,
+        ),
       );
     } finally {
       submittingRef.current = false;
@@ -490,7 +574,13 @@ export default function MediatorPanelClient({ disputeId }: Props) {
                     Switch gateway
                   </button>
                 )}
-              {isMediator ? (
+              {optimisticResolution ? (
+                <Badge variant="success">
+                  {optimisticResolution.isPending
+                    ? "Resolved (Optimistic)"
+                    : "Resolved"}
+                </Badge>
+              ) : isMediator ? (
                 <Badge variant="success">Authorized Mediator</Badge>
               ) : (
                 <Badge variant="danger">Unauthorized</Badge>
@@ -524,9 +614,37 @@ export default function MediatorPanelClient({ disputeId }: Props) {
                 Resolve Dispute
               </h3>
               <p className="text-sm text-text-secondary mt-1">
-                Select a loss-ratio split to settle this trade on-chain.
+                Accept or reject the dispute claim, or select a custom loss-ratio split.
               </p>
             </div>
+
+            {optimisticResolution && (
+              <div
+                data-testid="optimistic-resolution-banner"
+                className="rounded-lg border border-emerald/30 bg-surface-2 p-3 text-sm space-y-1.5 animate-fadeIn"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-text-primary flex items-center gap-1.5 text-xs">
+                    <span
+                      className={`w-2 h-2 rounded-full ${
+                        optimisticResolution.isPending
+                          ? "bg-emerald animate-pulse"
+                          : "bg-emerald"
+                      }`}
+                    />
+                    Resolution: {optimisticResolution.label}
+                  </span>
+                  <span className="text-[11px] px-2 py-0.5 rounded-full font-medium bg-emerald/15 text-emerald">
+                    {optimisticResolution.isPending ? "Pending on-chain" : "Confirmed"}
+                  </span>
+                </div>
+                <p className="text-xs text-text-secondary">
+                  {optimisticResolution.isPending
+                    ? "UI updated immediately. Submitting Soroban transaction…"
+                    : "Dispute resolution confirmed on-chain."}
+                </p>
+              </div>
+            )}
 
             <div className="rounded-md border border-border-default bg-bg-elevated p-3">
               <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-secondary">
@@ -561,22 +679,87 @@ export default function MediatorPanelClient({ disputeId }: Props) {
               </Badge>
             )}
 
-            {/* Primary actions */}
-            <div className="grid grid-cols-1 gap-3">
+            {/* Primary actions: Accept and Reject dispute */}
+            <div className="grid grid-cols-1 gap-2.5">
               <button
-                disabled={!isMediator || isSubmittingTx}
-                onClick={() => openConfirmationModal(5000, "50/50")}
-                className="w-full rounded-md bg-emerald-700 text-white px-3 py-2.5 text-sm font-medium disabled:opacity-50 hover:bg-emerald-800 transition"
+                data-testid="mediator-accept-button"
+                disabled={!isMediator || isSubmittingTx || (optimisticResolution !== null && !optimisticResolution.isPending)}
+                onClick={() =>
+                  openConfirmationModal(
+                    0,
+                    "Accept Dispute (100% Refund Buyer)",
+                    "accept",
+                  )
+                }
+                className="w-full flex items-center justify-between rounded-lg bg-emerald px-4 py-3 text-sm font-semibold text-text-inverse hover:opacity-90 disabled:opacity-50 transition shadow-sm"
               >
-                Resolve — Equal Split (50/50)
+                <div className="flex items-center gap-2">
+                  <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                  </svg>
+                  <span>Accept Dispute</span>
+                </div>
+                <span className="text-xs font-normal opacity-90">100% Refund to Buyer</span>
               </button>
 
               <button
-                disabled={!isMediator || isSubmittingTx}
-                onClick={() => openConfirmationModal(7000, "70/30")}
-                className="w-full rounded-md bg-emerald-700 text-white px-3 py-2.5 text-sm font-medium disabled:opacity-50 hover:bg-emerald-800 transition"
+                data-testid="mediator-reject-button"
+                disabled={!isMediator || isSubmittingTx || (optimisticResolution !== null && !optimisticResolution.isPending)}
+                onClick={() =>
+                  openConfirmationModal(
+                    10000,
+                    "Reject Dispute (100% Release Seller)",
+                    "reject",
+                  )
+                }
+                className="w-full flex items-center justify-between rounded-lg bg-gold px-4 py-3 text-sm font-semibold text-text-inverse hover:bg-gold-hover disabled:opacity-50 transition shadow-sm"
               >
-                Resolve — Seller Favoured (70/30)
+                <div className="flex items-center gap-2">
+                  <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                  </svg>
+                  <span>Reject Dispute</span>
+                </div>
+                <span className="text-xs font-normal opacity-90">100% Release to Seller</span>
+              </button>
+            </div>
+
+            {/* Split options divider */}
+            <div className="relative my-1">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-border-default/60" />
+              </div>
+              <div className="relative flex justify-center text-[11px] uppercase tracking-wider">
+                <span className="bg-bg-card px-2 text-text-muted">Or custom loss-ratio split</span>
+              </div>
+            </div>
+
+            {/* Secondary split actions */}
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                data-testid="mediator-resolve-50-50"
+                disabled={!isMediator || isSubmittingTx || (optimisticResolution !== null && !optimisticResolution.isPending)}
+                onClick={() =>
+                  openConfirmationModal(5000, "50/50 Equal Split", "split")
+                }
+                className="rounded-lg border border-border-default bg-surface-2 px-3 py-2 text-xs font-medium text-text-primary hover:bg-surface-1 hover:border-gold/50 disabled:opacity-50 transition text-center"
+              >
+                Equal Split (50/50)
+              </button>
+
+              <button
+                data-testid="mediator-resolve-70-30"
+                disabled={!isMediator || isSubmittingTx || (optimisticResolution !== null && !optimisticResolution.isPending)}
+                onClick={() =>
+                  openConfirmationModal(
+                    7000,
+                    "70/30 Seller Favoured",
+                    "split",
+                  )
+                }
+                className="rounded-lg border border-border-default bg-surface-2 px-3 py-2 text-xs font-medium text-text-primary hover:bg-surface-1 hover:border-gold/50 disabled:opacity-50 transition text-center"
+              >
+                Seller Favoured (70/30)
               </button>
             </div>
 
@@ -714,11 +897,13 @@ export default function MediatorPanelClient({ disputeId }: Props) {
               <button
                 onClick={() => {
                   const bps = modal.sellerGetsBps!;
+                  const label = modal.splitLabel;
+                  const actionType = modal.actionType;
                   closeModal();
-                  void executeResolution(bps);
+                  void executeResolution(bps, label, actionType);
                 }}
                 disabled={isSubmittingTx}
-                className="px-3 sm:px-4 py-2.5 bg-emerald-700 text-white text-sm font-medium rounded-md hover:bg-emerald-800 disabled:opacity-50 transition"
+                className="px-3 sm:px-4 py-2.5 bg-emerald text-text-inverse text-sm font-medium rounded-md hover:opacity-90 disabled:opacity-50 transition"
                 aria-label="Confirm and sign resolution"
               >
                 {isSubmittingTx ? "Processing..." : "Confirm & Sign"}

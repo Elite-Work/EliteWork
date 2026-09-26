@@ -1,5 +1,5 @@
 import { createQueryString, request } from "./client";
-import type { DisputeListResponse } from "./types";
+import type { DisputeListResponse, DisputeResponse, DisputeStatus } from "./types";
 
 export const disputesApi = {
   list: (token: string, params?: { status?: string; page?: number; limit?: number }) =>
@@ -11,4 +11,10 @@ export const disputesApi = {
       })}`,
       { token },
     ),
-};
+  transition: (token: string, tradeId: string, status: DisputeStatus) =>
+    request<DisputeResponse>(`/disputes/${tradeId}/transition`, {
+      method: "POST",
+      token,
+      body: JSON.stringify({ status }),
+    }),
+};

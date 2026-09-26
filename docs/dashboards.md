@@ -44,6 +44,13 @@ backend/infra signals instead.
 | **SLO error budget consumed (28d)** | SLO | `slo:<id>:error_budget_consumed:ratio28d` |
 | **SLO good ratio (28d)** | SLO | `slo:<id>:good_ratio:*28d` |
 | **SLO burn rate (current 6h)** | SLO | `slo:<id>:error_budget_consumed:ratio6h` |
+| Admin streams list latency p95 | Latency | `http_server_duration_milliseconds_bucket{http_route=~"/api/admin/streams\|/admin/streams"}` |
+
+The admin-streams panel exists because the list endpoint can return the
+largest result sets in the app while only showing up inside the
+all-routes p95 panel above. It gives that one endpoint its own number so
+a before/after comparison (issue #105) is a concrete reading rather than
+"should be faster".
 
 The last three panels derive from the SLO recording rules in
 [`infra/prometheus/slo-recording-rules.yml`](../infra/prometheus/slo-recording-rules.yml),

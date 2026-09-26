@@ -1,4 +1,4 @@
-import { PrismaClient, TradeStatus } from "@prisma/client";
+import { Prisma, PrismaClient, TradeStatus } from "@prisma/client";
 import { Response, Router } from "express";
 import { z } from "zod";
 import { prisma as defaultPrisma } from "../lib/db";
@@ -23,7 +23,7 @@ const milestoneBodySchema = z.object({
 
 type ReleasePrisma = PrismaClient & {
   escrowReleaseMilestone?: {
-    findMany: (args: any) => Promise<Array<{
+    findMany: (args: Prisma.EscrowReleaseMilestoneFindManyArgs) => Promise<Array<{
       milestoneIndex: number;
       amountUsdc: string;
       dueAt: Date;

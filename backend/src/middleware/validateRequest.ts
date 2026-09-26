@@ -15,12 +15,12 @@ function getZodLikeIssues(error: unknown): ZodLikeIssue[] | null {
     return null;
   }
 
-  const err = error as any;
+  const err = error as Record<string, unknown>;
   if (Array.isArray(err.issues)) {
-    return err.issues;
+    return err.issues as ZodLikeIssue[];
   }
   if (Array.isArray(err.errors)) {
-    return err.errors;
+    return err.errors as ZodLikeIssue[];
   }
 
   return null;
@@ -78,7 +78,7 @@ export const validateRequest = (schema: {
       }
       if (schema.params) {
         const parsed = await schema.params.parseAsync(req.params);
-        req.params = sanitizeValue(parsed) as any;
+        req.params = sanitizeValue(parsed) as unknown as Request["params"];
       }
       next();
     } catch (error) {

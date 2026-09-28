@@ -12,12 +12,8 @@ function redisKey(streamId: string): string {
   return `${REDIS_CLAWBACK_PREFIX}${streamId}`;
 }
 
-function getRedisStatus(): string | undefined {
-  return (redis as unknown as { status?: string }).status;
-}
-
 function isRedisReady(): boolean {
-  const status = getRedisStatus();
+  const status = redis.status;
   // ioredis statuses: wait, connecting, connect, ready, close, end, reconnecting
   // Treat 'ready' as available; others as unavailable for fail-closed
   return status === "ready";
@@ -40,7 +36,7 @@ export class StreamClawbackService {
     }
     // Fail-closed: if Redis is not ready, deny clawback to avoid split-brain
     if (!isRedisReady()) {
-      appLogger.error({ streamId, redisStatus: getRedisStatus() }, "Clawback denied — Redis unavailable (fail-closed)");
+      appLogger.error({ streamId, redisStatus: redis.status }, "Clawback denied — Redis unavailable (fail-closed)");
       throw new AppError(
         ErrorCode.DOMAIN_ERROR,
         `Clawback temporarily unavailable: Redis required for payout safety (stream ${streamId})`,
@@ -55,7 +51,7 @@ export class StreamClawbackService {
     // If Redis op errors, we remain holding in-memory and log; the lock will be released via TTL + release()
     void redis
       .set(redisKey(streamId), "1", "NX", "EX", REDIS_CLAWBACK_TTL_SECONDS)
-      .then((result: unknown) => {
+      .then((result) => {
         if (result !== "OK") {
           // Redis indicates another pod holds lock — we already added to local set, so we are actually double-holding
           // In practice this means two pods raced; our in-memory add succeeded but Redis says someone else won.
@@ -64,7 +60,7 @@ export class StreamClawbackService {
           appLogger.warn({ streamId, result }, "Redis clawback lock race — local lock held, Redis not acquired");
         }
       })
-      .catch((err: unknown) => {
+      .catch((err) => {
         appLogger.warn({ err, streamId }, "Failed to acquire Redis clawback lock (in-memory lock still held)");
       });
   }
@@ -107,7 +103,7 @@ export class StreamClawbackService {
 
   release(streamId: string): void {
     activeClawbacks.delete(streamId);
-    void redis.del(redisKey(streamId)).catch((err: unknown) =>
+    void redis.del(redisKey(streamId)).catch((err) =>
       appLogger.warn({ err, streamId }, "Failed to release Redis clawback lock (will expire via TTL)"),
     );
   }

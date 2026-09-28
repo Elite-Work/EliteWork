@@ -10,7 +10,7 @@ export interface ExternalServiceError {
   status?: number;
   response?: {
     status?: number;
-    data?: any;
+    data?: unknown;
     statusText?: string;
   };
   network?: boolean;

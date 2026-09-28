@@ -394,7 +394,7 @@ describe("Date Filtering & Pagination Logic", () => {
       },
     ) => {
       // Apply filters
-      let result = trades.filter((t) => {
+      const result = trades.filter((t) => {
         if (filters.status && t.status !== filters.status) return false;
         if (filters.after && t.createdAt < filters.after) return false;
         if (filters.before && t.createdAt > filters.before) return false;

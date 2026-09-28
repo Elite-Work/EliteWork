@@ -12,8 +12,13 @@
  * - No split-brain double payout: DB-backed locks remain source of truth.
  */
 
+import { EventEmitter } from "events";
 import { redis } from "./redis";
 import { appLogger } from "../middleware/logger";
+
+// ioredis's TS types don't surface EventEmitter/command methods here due to the
+// constructor overload workaround in redis.ts (see the @ts-expect-error there).
+const redisEvents = redis as unknown as EventEmitter;
 
 export type RedisConsumer =
   | "stream-lock" // DB-backed, not Redis — listed for completeness
@@ -98,25 +103,42 @@ export function getRedisAvailability() {
 }
 
 // Wire up availability tracking without interfering with existing listeners in redis.ts
-if (typeof (redis as any).on === "function") {
-  (redis as any).on("ready", () => {
+if (typeof redisEvents.on === "function") {
+  redisEvents.on("ready", () => {
     if (!redisAvailable) {
       appLogger.info("Redis recovered — marking available");
     }
     redisAvailable = true;
     lastTransitionAt = Date.now();
   });
-  (redis as any).on("close", () => {
+  redisEvents.on("close", () => {
     redisAvailable = false;
     lastTransitionAt = Date.now();
   });
-  (redis as any).on("error", () => {
+  redisEvents.on("error", () => {
     // do not immediately mark unavailable on transient error; close event is authoritative
   });
-  (redis as any).on("end", () => {
+  redisEvents.on("end", () => {
     redisAvailable = false;
     lastTransitionAt = Date.now();
   });
+}
+
+/**
+ * Error thrown by `withRedisFailClosed` when a fail-closed consumer is denied
+ * due to Redis unavailability. Carries an HTTP status so `errorHandler`
+ * can respond with 503 without special-casing this module.
+ */
+export class RedisUnavailableError extends Error {
+  readonly status = 503;
+  readonly code = "REDIS_UNAVAILABLE";
+  readonly consumer: RedisConsumer;
+
+  constructor(consumer: RedisConsumer) {
+    super(`Service temporarily unavailable: Redis required for ${consumer}`);
+    this.name = "RedisUnavailableError";
+    this.consumer = consumer;
+  }
 }
 
 /**
@@ -136,11 +158,7 @@ export async function withRedisFailClosed<T>(consumer: RedisConsumer, fn: () => 
     redisAvailable = false;
     if (policy.onRedisDown === "fail-closed") {
       appLogger.error({ consumer }, "Fail-closed Redis consumer denied due to Redis unavailability");
-      const err: any = new Error(`Service temporarily unavailable: Redis required for ${consumer}`);
-      err.status = 503;
-      err.code = "REDIS_UNAVAILABLE";
-      err.consumer = consumer;
-      throw err;
+      throw new RedisUnavailableError(consumer);
     }
     // for graceful consumers, let caller handle fallback
     throw new Error(`Redis unavailable for ${consumer}`);
@@ -158,12 +176,14 @@ export async function withQueueResilience<T>(fn: () => Promise<T>, opts?: { retr
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
       return await fn();
-    } catch (err: any) {
+    } catch (err: unknown) {
       lastErr = err;
-      const isRedisErr = err?.message?.toLowerCase().includes("redis") || err?.code === "ECONNREFUSED";
+      const message = err instanceof Error ? err.message : String(err);
+      const code = err && typeof err === "object" ? (err as { code?: unknown }).code : undefined;
+      const isRedisErr = message.toLowerCase().includes("redis") || code === "ECONNREFUSED";
       if (!isRedisErr || attempt === retries) throw err;
       const delay = Math.min(1000 * 2 ** attempt, 5000);
-      appLogger.warn({ attempt, delay, err: err.message }, "Queue Redis transient failure, retrying");
+      appLogger.warn({ attempt, delay, err: message }, "Queue Redis transient failure, retrying");
       await new Promise((r) => setTimeout(r, delay));
     }
   }

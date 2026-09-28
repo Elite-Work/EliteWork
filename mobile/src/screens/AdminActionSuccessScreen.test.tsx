@@ -7,7 +7,6 @@
  *  - Navigation buttons are present and trigger correct navigation calls.
  *  - Accessibility attributes (accessibilityLabel, accessibilityRole) are present.
  */
-import React from 'react';
 import { render, fireEvent } from '@testing-library/react-native';
 import AdminActionSuccessScreen from './AdminActionSuccessScreen';
 import { useAdminActionHistoryStore } from '../stores/adminActionHistoryStore';
@@ -53,7 +52,7 @@ function buildRoute(
 describe('AdminActionSuccessScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    (useAdminActionHistoryStore as jest.Mock).mockReturnValue({ history: [] });
+    (useAdminActionHistoryStore as unknown as jest.Mock).mockReturnValue({ history: [] });
   });
 
   // ── #85.1: Success state clearly shows the completed action ────────────
@@ -117,7 +116,7 @@ describe('AdminActionSuccessScreen', () => {
   });
 
   it('renders history rows when the store has entries', () => {
-    (useAdminActionHistoryStore as jest.Mock).mockReturnValue({
+    (useAdminActionHistoryStore as unknown as jest.Mock).mockReturnValue({
       history: [
         { actionType: 'Clawback', streamId: 'stream-001', timestamp: FIXED_TIMESTAMP },
         { actionType: 'Lock', streamId: 'stream-002', timestamp: FIXED_TIMESTAMP },
@@ -229,7 +228,12 @@ describe('AdminActionSuccessScreen', () => {
         route={buildRoute() as any}
       />,
     );
-    const header = UNSAFE_queryByProps({ accessibilityRole: 'header' });
+    // Two elements carry accessibilityRole="header" (the hero and the
+    // "Recent admin actions" section title), so target the hero by its label.
+    const header = UNSAFE_queryByProps({
+      accessibilityRole: 'header',
+      accessibilityLabel: 'Admin action completed successfully',
+    });
     expect(header).not.toBeNull();
   });
 });

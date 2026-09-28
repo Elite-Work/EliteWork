@@ -112,6 +112,7 @@ export function createOutboxRoutes(): Router {
     isAdmin,
     async (req: Request, res: Response, next: NextFunction) => {
       try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports -- lazy require avoids a route-layer circular import
         const prisma = require("../lib/db").prisma;
 
         // Fetch outbox stats
@@ -178,6 +179,7 @@ export function createOutboxRoutes(): Router {
           });
         }
 
+        // eslint-disable-next-line @typescript-eslint/no-require-imports -- lazy require avoids a route-layer circular import
         const prisma = require("../lib/db").prisma;
 
         const event = await prisma.chainEventOutbox.findFirst({

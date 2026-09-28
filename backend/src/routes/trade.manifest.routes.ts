@@ -131,7 +131,7 @@ export function createTradeManifestRouter(
         error instanceof ManifestTradeStatusError ||
         error instanceof ManifestTradeNotFoundError
       ) {
-        res.status((error as any).status).json({ error: error.message });
+        res.status(error.status).json({ error: error.message });
         return;
       }
       next(error);

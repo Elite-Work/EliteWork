@@ -122,7 +122,11 @@ async function freezePageDynamics(page: Page): Promise<void> {
     const FROZEN_DATE = new Date('2026-03-01T12:00:00.000Z').getTime();
     const OrigDate = window.Date;
     class FrozenDate extends OrigDate {
-      constructor(...args: ConstructorParameters<typeof OrigDate>) {
+      // `Date`'s constructor is overloaded, so `ConstructorParameters` collapses
+      // to a single-argument tuple; a rest-args signature keeps the zero-arg and
+      // one-arg calls both valid.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      constructor(...args: any[]) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         if (args.length === 0) super(FROZEN_DATE as any);
         // eslint-disable-next-line @typescript-eslint/no-explicit-any

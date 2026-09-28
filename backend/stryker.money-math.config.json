@@ -33,13 +33,7 @@
   "concurrency": 2,
   "disableBail": false,
   "plugins": [
-    "@stryker-mutator/jest-runner",
-    "@stryker-mutator/typescript-checker"
+    "@stryker-mutator/jest-runner"
   ],
-  "checkers": ["typescript"],
-  "mutator": {
-    "excludedMutations": [
-      "StringLiteral"
-    ]
-  }
+  "checkers": []
 }

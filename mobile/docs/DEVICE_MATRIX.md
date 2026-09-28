@@ -15,20 +15,30 @@ To test a new iOS major version, update both `.detoxrc.js` and this table in the
 
 ## Android
 
-| Device class  | Min API | Target API | CI emulator      |
-| ------------- | ------- | ---------- | ---------------- |
-| Phone         | 31 (12) | 34 (14)    | Pixel 6 API 34   |
-| Tablet        | 31 (12) | 34 (14)    | —                |
+| Device class          | Min API | Target API | CI emulator       |
+| ---------------------- | ------- | ---------- | ------------------ |
+| Phone (default/target) | 31 (12) | 34 (14)    | Pixel 6 API 34      |
+| Phone (low-end, min)   | 31 (12) | 31 (12)    | Pixel 3a API 31     |
+| Tablet                 | 31 (12) | 34 (14)    | —                   |
 
-**Enforcement:** The `.detoxrc.js` `emulator` device config pins `Pixel_6_API_34` (AVD name).
-The AVD must exist on the CI runner; the CI workflow creates it via `avdmanager` if absent.
+**Enforcement:** The `.detoxrc.js` `emulator` device config pins `Pixel_6_API_34` (AVD name),
+and the `emulatorLowEnd` device config pins `Pixel_3a_API_31` — a representative low-end
+device at the *minimum* supported API, run with a constrained memory allocation
+(`-memory 2048`) to approximate real low-end hardware rather than the CI runner's default.
+This matters for this project specifically: rural pilot cooperative members (see the
+Phase 4 pilot program in the README) are more likely to own older, lower-spec Android
+phones than the CI default's modern Pixel 6 profile — a regression that only shows up
+under memory/CPU pressure (dropped frames, OOM, jank) would otherwise go undetected.
+Both AVDs must exist on the CI runner; the CI workflow creates them via `avdmanager` if absent
+(see `.github/workflows/mobile-e2e-nightly.yml`'s `mobile-e2e-android-nightly` and
+`mobile-e2e-android-lowend-nightly` jobs).
 
 ## Adding a new device configuration
 
 1. Add the device entry to the `devices` section of `.detoxrc.js`.
 2. Add a corresponding configuration under `configurations`.
 3. Update this table.
-4. Add the new CI job step in `.github/workflows/mobile-e2e.yml` under the correct matrix entry.
+4. Add the new CI job step in `.github/workflows/mobile-e2e-nightly.yml` under the correct matrix entry.
 
 ## Why these versions?
 

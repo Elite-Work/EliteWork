@@ -84,8 +84,8 @@ describe("Largest-remainder allocation — zero-dust guarantee", () => {
       assertZeroDust(result, 7n);
       // Party 0: 7 * 100 / 10000 = 0.07 → floor=0, remainder=700
       // Party 1: 7 * 9900 / 10000 = 6.93 → floor=6, remainder=9300
-      expect(result.allocated[0]).toBe(1n);
-      expect(result.allocated[1]).toBe(6n);
+      expect(result.allocated[0]).toBe(0n);
+      expect(result.allocated[1]).toBe(7n);
     });
 
     it("1 stroop with 1/9999 ratio", () => {

@@ -1,6 +1,10 @@
 import crypto from "crypto";
 import { Prisma, PrismaClient, Trade, TradeStatus, DisputeStatus } from "@prisma/client";
 import { prisma as defaultPrisma } from "../lib/db";
+import {
+  isPrismaPoolExhaustionError,
+  toPoolExhaustionAppError,
+} from "../lib/dbPoolErrors";
 import { ContractService } from "./contract.service";
 import { appLogger } from "../middleware/logger";
 import { TracingHelper } from "../config/tracing";
@@ -94,12 +98,28 @@ export class TradeService {
       userId: sanitizeLogField(input.buyerAddress)
     });
 
-    const trade = await this.prisma.trade.create({
-      data: {
-        ...input,
-        status: TradeStatus.PENDING_SIGNATURE,
-      },
-    });
+    let trade: Trade;
+    try {
+      trade = await this.prisma.trade.create({
+        data: {
+          ...input,
+          status: TradeStatus.PENDING_SIGNATURE,
+        },
+      });
+    } catch (error) {
+      // Trade creation is a non-idempotent INSERT, so it must never be
+      // auto-retried. When the pool is saturated Prisma rejects with P2024 once
+      // `pool_timeout` elapses; surface that as a clear, retryable 503 instead
+      // of a generic 500. See docs/connection-pool-exhaustion.md.
+      if (isPrismaPoolExhaustionError(error)) {
+        appLogger.error(
+          { error, operation: "create_pending_trade", tradeId: input.tradeId },
+          "Database connection pool exhausted during trade creation",
+        );
+        throw toPoolExhaustionAppError("create_pending_trade");
+      }
+      throw error;
+    }
     // KPI: record the pending creation so the funnel tracks attempts from the
     // DB side (the on-chain TradeCreated event handler records "created" again
     // once the tx is confirmed, keeping both counts for reconciliation).

@@ -1,4 +1,5 @@
 import { Router, Request, Response } from "express";
+import { Horizon } from "@stellar/stellar-sdk";
 import { horizonServer } from "../config/stellar";
 import { appLogger } from "../middleware/logger";
 import { cacheGet, cacheSet } from "../lib/cache";
@@ -15,11 +16,27 @@ interface AssetRecord {
   numAccounts: number;
 }
 
-function parseAsset(raw: any): AssetRecord {
+export type RawAsset =
+  | (Horizon.ServerApi.AssetRecord & { amount?: string })
+  | {
+      asset_code?: string;
+      asset_issuer?: string;
+      amount?: string;
+      flags?: {
+        auth_required?: boolean;
+        auth_revocable?: boolean;
+        auth_clawback_enabled?: boolean;
+      };
+      accounts?: {
+        authorized?: number;
+      };
+    };
+
+function parseAsset(raw: RawAsset): AssetRecord {
   return {
     code: raw.asset_code ?? "XLM",
     issuer: raw.asset_issuer ?? "",
-    supply: raw.amount ?? "0",
+    supply: raw.amount ?? ("balances" in raw && raw.balances ? raw.balances.authorized : "0"),
     authRequired: raw.flags?.auth_required ?? false,
     authRevocable: raw.flags?.auth_revocable ?? false,
     authClawbackEnabled: raw.flags?.auth_clawback_enabled ?? false,

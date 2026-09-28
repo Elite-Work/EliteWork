@@ -11,7 +11,16 @@
  * The flag names in FLAG_CATALOG MUST stay in sync with the backend's
  * feature-flags service. A CI script (`scripts/check-flag-catalog-drift.ts`)
  * enforces this by comparing against the backend endpoint.
+ *
+ * Observability:
+ *  `fetchServerFlags()` keeps monotonic counters for every cache path it
+ *  takes (fresh hit, cold miss, stale serve, in-flight coalesce) plus the
+ *  network requests each of those saved. Read them with
+ *  `getFlagCacheMetrics()` and publish them with
+ *  `reportFlagCacheMetrics()`.
  */
+
+import { trackEvent } from "@/lib/analytics";
 
 // ---------------------------------------------------------------------------
 // Catalog — edit only here; both client code and CI drift-check use this.
@@ -86,6 +95,124 @@ export function isAdminUIEnabled(): boolean {
 }
 
 // ---------------------------------------------------------------------------
+// Cache instrumentation
+// ---------------------------------------------------------------------------
+
+/**
+ * Point-in-time snapshot of how the SWR cache is performing. Every rate is a
+ * 0..1 fraction; `hitRate` and friends are 0 when nothing has been measured.
+ */
+export interface FlagCacheMetrics {
+  /** Lookups served from a fresh entry (age < TTL) — no network. */
+  hits: number;
+  /** Lookups with no cache entry that had to await the server. */
+  misses: number;
+  /** Lookups served from a stale entry while revalidating in the background. */
+  staleServes: number;
+  /** Lookups coalesced onto an already in-flight cold-start request. */
+  inFlightDedupes: number;
+  /** Every call to `fetchServerFlags()`. */
+  totalLookups: number;
+  /** Network requests actually issued to /api/flags. */
+  serverRequests: number;
+  /** Network requests that threw or returned a non-OK status. */
+  serverErrors: number;
+  /** hits / totalLookups. */
+  hitRate: number;
+  /** misses / totalLookups. */
+  missRate: number;
+  /** Lookups answered without awaiting a network round trip / totalLookups. */
+  servedFromCacheRate: number;
+  /** totalLookups - serverRequests: round trips the cache avoided. */
+  networkRequestsSaved: number;
+  /** `Date.now()` of the most recent lookup, or null if never called. */
+  lastLookupAt: number | null;
+}
+
+/** Mutable counters — mutated in place so hot paths stay allocation-free. */
+const _counters = {
+  hits: 0,
+  misses: 0,
+  staleServes: 0,
+  inFlightDedupes: 0,
+  serverRequests: 0,
+  serverErrors: 0,
+  lastLookupAt: null as number | null,
+};
+
+function safeRate(numerator: number, denominator: number): number {
+  if (denominator <= 0) return 0;
+  return numerator / denominator;
+}
+
+/** Round to 4 decimals so dashboards and log lines stay stable/diffable. */
+function round4(value: number): number {
+  return Math.round(value * 10_000) / 10_000;
+}
+
+/**
+ * Read the current cache-effectiveness counters.
+ *
+ * Cheap enough to call from a dashboard panel, a debug overlay, or a test —
+ * it performs no I/O and mutates nothing.
+ */
+export function getFlagCacheMetrics(): FlagCacheMetrics {
+  const totalLookups =
+    _counters.hits +
+    _counters.misses +
+    _counters.staleServes +
+    _counters.inFlightDedupes;
+
+  return {
+    hits: _counters.hits,
+    misses: _counters.misses,
+    staleServes: _counters.staleServes,
+    inFlightDedupes: _counters.inFlightDedupes,
+    totalLookups,
+    serverRequests: _counters.serverRequests,
+    serverErrors: _counters.serverErrors,
+    hitRate: round4(safeRate(_counters.hits, totalLookups)),
+    missRate: round4(safeRate(_counters.misses, totalLookups)),
+    servedFromCacheRate: round4(
+      safeRate(
+        _counters.hits + _counters.staleServes + _counters.inFlightDedupes,
+        totalLookups,
+      ),
+    ),
+    networkRequestsSaved: totalLookups - _counters.serverRequests,
+    lastLookupAt: _counters.lastLookupAt,
+  };
+}
+
+/**
+ * Zero the counters without touching the cached value.
+ * Intended for tests and for a dashboard that wants a per-window rate.
+ */
+export function resetFlagCacheMetrics(): void {
+  _counters.hits = 0;
+  _counters.misses = 0;
+  _counters.staleServes = 0;
+  _counters.inFlightDedupes = 0;
+  _counters.serverRequests = 0;
+  _counters.serverErrors = 0;
+  _counters.lastLookupAt = null;
+}
+
+/**
+ * Publish a cache-effectiveness snapshot to the analytics pipeline.
+ *
+ * Called automatically after every background revalidation, so at most one
+ * event is emitted per TTL window, and always as a cumulative snapshot —
+ * the dashboard can graph `hitRate` over time without client-side differencing.
+ * Safe to call manually (tests, an admin diagnostics panel).
+ */
+export function reportFlagCacheMetrics(): FlagCacheMetrics {
+  const metrics = getFlagCacheMetrics();
+  trackEvent("feature_flag_cache", { ...metrics });
+  return metrics;
+}
+
+// ---------------------------------------------------------------------------
 // Server-fetched cache with stale-while-revalidate semantics
 // ---------------------------------------------------------------------------
 
@@ -110,6 +237,7 @@ let _inFlight: Promise<FeatureFlags> | null = null;
  * crashing the app.
  */
 async function fetchFlagsFromServer(): Promise<FeatureFlags> {
+  _counters.serverRequests += 1;
   try {
     const res = await fetch("/api/flags", {
       // No-store so the browser does not cache this behind Next.js; the
@@ -119,6 +247,7 @@ async function fetchFlagsFromServer(): Promise<FeatureFlags> {
     });
 
     if (!res.ok) {
+      _counters.serverErrors += 1;
       console.warn(
         `[featureFlags] /api/flags responded ${res.status} — using catalog defaults`,
       );
@@ -129,6 +258,7 @@ async function fetchFlagsFromServer(): Promise<FeatureFlags> {
     return mergeFlagsWithDefaults(json.flags ?? {});
   } catch (err) {
     // Network error, parse error, etc. — fail safe.
+    _counters.serverErrors += 1;
     console.warn(
       "[featureFlags] Failed to fetch server flags — using catalog defaults",
       err,
@@ -159,31 +289,43 @@ function catalogDefaults(): FeatureFlags {
  * - Subsequent calls within TTL: returns cached flags immediately.
  * - After TTL: returns stale cache immediately and revalidates in background.
  * - On failure at any point: falls back to catalog defaults.
+ *
+ * Each branch bumps its counter in {@link getFlagCacheMetrics}.
  */
 export async function fetchServerFlags(): Promise<FeatureFlags> {
   const now = Date.now();
+  _counters.lastLookupAt = now;
 
   if (_cache) {
     const age = now - _cache.fetchedAt;
 
     if (age < SERVER_FLAGS_TTL_MS) {
       // Fresh — return immediately.
+      _counters.hits += 1;
       return _cache.flags;
     }
 
     // Stale — return cached flags now, revalidate in background.
+    _counters.staleServes += 1;
     if (!_cache.revalidating) {
       _cache.revalidating = true;
       void fetchFlagsFromServer().then((fresh) => {
         _cache = { flags: fresh, fetchedAt: Date.now(), revalidating: false };
+        // One cumulative snapshot per revalidation — the periodic heartbeat
+        // that makes cache effectiveness visible on the metrics dashboard.
+        reportFlagCacheMetrics();
       });
     }
     return _cache.flags;
   }
 
   // No cache — deduplicate concurrent cold-start requests.
-  if (_inFlight) return _inFlight;
+  if (_inFlight) {
+    _counters.inFlightDedupes += 1;
+    return _inFlight;
+  }
 
+  _counters.misses += 1;
   _inFlight = fetchFlagsFromServer().then((flags) => {
     _cache = { flags, fetchedAt: Date.now(), revalidating: false };
     _inFlight = null;

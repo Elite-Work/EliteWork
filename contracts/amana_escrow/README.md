@@ -4,6 +4,7 @@ This crate contains the Soroban escrow contract used by Amana.
 
 ## Documentation
 
+- [Public Interface](INTERFACE.md): every public entrypoint, its parameters, required auth, and the trade state transitions it allows — start here if you are integrating without reading the Rust source
 - [Admin Governance Flow](docs/admin-governance.md): Comprehensive documentation on admin clawback operations, compliance requirements, and governance workflows
 
 ## Clawback amount bounds

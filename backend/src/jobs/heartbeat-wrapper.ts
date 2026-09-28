@@ -88,8 +88,17 @@ export function withHeartbeat(
  *   async process(job: Job) { ... }
  * }
  */
+type HeartbeatDecoratedTarget = {
+  prototype: {
+    process: (
+      this: unknown,
+      job: Job,
+    ) => Promise<Record<string, unknown> | undefined>;
+  };
+};
+
 export function JobHeartbeatDecorator(jobType: JobType) {
-  return function (constructor: Function) {
+  return function (constructor: HeartbeatDecoratedTarget) {
     const originalProcess = constructor.prototype.process;
 
     constructor.prototype.process = async function (job: Job) {

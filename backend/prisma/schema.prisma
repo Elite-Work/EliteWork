@@ -477,6 +477,8 @@ model NotificationPreference {
   id          Int      @id @default(autoincrement())
   userAddress String   @unique @db.VarChar(255)
   preferences Json
+  /// E.164 phone number for the "sms" notification channel, e.g. "+2348012345678".
+  phoneNumber String?  @db.VarChar(20)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

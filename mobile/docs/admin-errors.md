@@ -31,10 +31,12 @@ Each admin screen follows the same pattern: typed API wrapper, role gate, dual-s
 
 | Screen | Endpoints | Error slot model | Notes |
 | --- | --- | --- | --- |
-| `AdminStreamsOverviewScreen` | `GET /admin/streams` (list) | `errorView` (single) | SEED list rendered before fetch resolves. |
+| `AdminStreamsOverviewScreen` | `GET /admin/streams` (list) | `errorView` (single) | SEED list rendered before fetch resolves. Shows `OfflineBanner` and disables the action buttons while offline. |
 | `AdminTradesBatchScreen` | `POST /admin/trades/batch/status` | `actionErrorView` (single) | Banner's retry button re-fires the batch with the same text input. Inputs survive error. |
 | `AdminContractScreen` | `POST /admin/contract/mediators`, `PATCH /admin/contract/fee` | per-section (`medErrorView`, `feeErrorView`) | Each section has its own banner so failure on one doesn't block the other. Surfaces `unsignedXdr` for the admin to sign externally (TODO: wire Freighter). |
-| `AdminFeaturesScreen` | `GET /admin/features`, `PATCH /admin/features/:name` | `loadErrorView` + `rowErrorView` | Switch uses optimistic update; rolls back to server-state on PATCH failure so the UI matches the backend. |
+| `AdminFeaturesScreen` | `GET /admin/features`, `PATCH /admin/features/:name` | `loadErrorView` + `rowErrorView` | Switch uses optimistic update; rolls back to the previous value on PATCH failure so the UI matches the backend. The banner's retry only reloads after a failed load; after a failed toggle the admin flips the switch again. |
+
+See `mobile/src/screens/ADMIN_SCREENS.md` for each screen's error and empty states. `AdminStreamScreen` (audit trail, not registered in `AppNavigator`) predates this pattern and still shows a plain error message with a Retry button instead of `AdminErrorBanner`.
 
 ## How it flows
 

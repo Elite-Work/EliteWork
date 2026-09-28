@@ -9,6 +9,7 @@ import { ErrorState } from "@/components/ui/ErrorState";
 import { SkeletonList } from "@/components/ui/SkeletonList";
 import { Tabs } from "@/components/ui/Tabs";
 import { Button } from "@/components/ui/Button";
+import { useDisputeStore } from "@/stores/disputeStore";
 import { getMediatorAddresses, isMediatorAddress, formatDate, formatAddress } from "./helpers";
 
 type DisputeStatus = "OPEN" | "UNDER_REVIEW" | "RESOLVED" | "CLOSED";
@@ -33,6 +34,7 @@ const PAGE_SIZE = 10;
 export default function MediatorDisputesPage() {
   const { token, isAuthenticated } = useAuth();
   const { address } = useFreighterIdentity();
+  const storeDisputes = useDisputeStore((s) => s.disputes);
   const [activeFilter, setActiveFilter] = useState<DisputeStatus | "all">("all");
   const [page, setPage] = useState(1);
   const [disputes, setDisputes] = useState<DisputeResponse[]>([]);
@@ -62,6 +64,7 @@ export default function MediatorDisputesPage() {
       });
 
       setDisputes(response.items);
+      useDisputeStore.setState({ disputes: response.items, total: response.pagination.total });
       setTotalPages(response.pagination.totalPages);
     } catch (err) {
       let errorMessage = "Unable to reach the server. Check your connection and try again.";
@@ -144,24 +147,27 @@ export default function MediatorDisputesPage() {
             No disputes found
           </div>
         ) : (
-          disputes.map((dispute) => (
-            <Link
-              key={dispute.id}
-              href={`/mediator/disputes/${dispute.tradeId}`}
-              className="block p-6 bg-bg-elevated rounded-lg border border-border-default hover:border-border-hover transition-colors"
-            >
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-2">
-                    <span className="text-lg font-semibold text-text-primary">
-                      Trade {dispute.tradeId}
-                    </span>
-                    <span
-                      className={`px-2 py-1 rounded-full text-xs font-medium ${STATUS_STYLES[dispute.status]}`}
-                    >
-                      {dispute.status.replace("_", " ")}
-                    </span>
-                  </div>
+          disputes.map((dispute) => {
+            const storeMatch = storeDisputes.find((d) => d.tradeId === dispute.tradeId);
+            const status = storeMatch?.status ?? dispute.status;
+            return (
+              <Link
+                key={dispute.id}
+                href={`/mediator/disputes/${dispute.tradeId}`}
+                className="block p-6 bg-bg-elevated rounded-lg border border-border-default hover:border-border-hover transition-colors"
+              >
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 mb-2">
+                      <span className="text-lg font-semibold text-text-primary">
+                        Trade {dispute.tradeId}
+                      </span>
+                      <span
+                        className={`px-2 py-1 rounded-full text-xs font-medium ${STATUS_STYLES[status] ?? STATUS_STYLES.OPEN}`}
+                      >
+                        {status.replace("_", " ")}
+                      </span>
+                    </div>
                   <div className="text-sm text-text-secondary mb-2">
                     Initiated by: {formatAddress(dispute.initiator)}
                   </div>
@@ -177,8 +183,9 @@ export default function MediatorDisputesPage() {
                 </div>
               </div>
             </Link>
-          ))
-        )}
+          );
+        })
+      )}
       </div>
 
       {/* Pagination */}

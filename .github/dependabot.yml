@@ -1,5 +1,12 @@
 # Dependabot configuration — grouped update PRs by risk.
 # Complements the blocking audit gate in .github/workflows/security-audit.yml (issue #204).
+#
+# Family groups (issue #116): packages that are released in lockstep are grouped
+# across *all* update types, majors included, so e.g. every @opentelemetry/*
+# bump lands in one PR instead of a dozen. Dependabot assigns each update to the
+# first group it matches, so family groups are listed before the catch-all
+# low-risk groups. Security updates are unaffected (family groups only apply to
+# version updates).
 version: 2
 updates:
   # ---- Backend (npm) ----
@@ -13,6 +20,42 @@ updates:
       - dependencies
       - backend
     groups:
+      backend-opentelemetry:
+        applies-to: version-updates
+        patterns:
+          - "@opentelemetry/*"
+      backend-prisma:
+        applies-to: version-updates
+        patterns:
+          - "prisma"
+          - "@prisma/*"
+      backend-stryker:
+        applies-to: version-updates
+        patterns:
+          - "@stryker-mutator/*"
+      backend-lint:
+        applies-to: version-updates
+        patterns:
+          - "eslint"
+          - "@eslint/*"
+          - "typescript-eslint"
+      backend-test:
+        applies-to: version-updates
+        patterns:
+          - "jest"
+          - "ts-jest"
+          - "@types/jest"
+          - "supertest"
+          - "@types/supertest"
+      backend-pino:
+        applies-to: version-updates
+        patterns:
+          - "pino"
+          - "pino-*"
+      backend-types:
+        applies-to: version-updates
+        patterns:
+          - "@types/*"
       backend-low-risk:
         applies-to: version-updates
         update-types:
@@ -34,6 +77,33 @@ updates:
       - dependencies
       - frontend
     groups:
+      frontend-react-next:
+        applies-to: version-updates
+        patterns:
+          - "next"
+          - "eslint-config-next"
+          - "react"
+          - "react-dom"
+          - "@types/react"
+          - "@types/react-dom"
+      frontend-tailwind:
+        applies-to: version-updates
+        patterns:
+          - "tailwindcss"
+          - "@tailwindcss/*"
+      frontend-test:
+        applies-to: version-updates
+        patterns:
+          - "jest"
+          - "jest-*"
+          - "@types/jest"
+          - "@types/jest-axe"
+          - "@testing-library/*"
+          - "@playwright/test"
+      frontend-types:
+        applies-to: version-updates
+        patterns:
+          - "@types/*"
       frontend-low-risk:
         applies-to: version-updates
         update-types:
@@ -69,6 +139,10 @@ updates:
       - dependencies
       - contracts
     groups:
+      contracts-soroban:
+        applies-to: version-updates
+        patterns:
+          - "soroban-*"
       contracts-low-risk:
         applies-to: version-updates
         update-types:

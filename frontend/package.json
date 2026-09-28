@@ -14,7 +14,8 @@
     "test:coverage": "jest --config jest.config.ts --coverage",
     "test:visual": "playwright test",
     "test:visual:update": "playwright test --update-snapshots",
-    "analyze": "ANALYZE=true next build"
+    "analyze": "ANALYZE=true next build",
+    "analyze:budget": "ANALYZE=true next build && node scripts/check-bundle-budget.mjs"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "1.1.15",

@@ -176,6 +176,7 @@ Key architectural decisions are documented as ADRs in [`docs/adr/`](./docs/adr):
 - [Golden Signals Dashboard](./docs/dashboards.md) — Grafana dashboard stored as code ([`infra/grafana/`](./infra/grafana)) covering API latency/traffic/errors and DB/queue saturation, with deploy annotations wired into staging deploys.
 - [Alert Routing Policy](./docs/alert-routing-policy.md) — page-vs-ticket severity rubric, runbook linkage enforced in CI, per-alert dedup windows, and the [monthly alert review log](./docs/alert-review-log.md).
 - [Synthetic Probes Policy](./docs/synthetic-probes-policy.md) — hourly staging probe of the core escrow journey (auth → create → deposit → release), with failure alerting and a results dashboard log.
+- [Pilot Launch Runbook](./docs/runbooks/pilot-launch.md) — pre-launch checklist, the graded pause ladder for halting the cooperative pilot, and the S1–S4 + pilot-cohort gates that promote it to general availability; grounded in [ADR-005](./docs/adr/ADR-005-pilot-onboarding.md) (onboarding allowlist) and [ADR-009](./docs/adr/ADR-009-pilot-cohort-metrics.md) (cohort metrics).
 - [Incident Response](./docs/runbooks/incident-response.md) — severity levels, incident roles, and channel/ticket conventions; see the [postmortem template](./docs/runbooks/postmortem-template.md), the [postmortem archive](./docs/postmortems/README.md), and a worked [tabletop exercise](./docs/runbooks/tabletop-exercise-escrow-drain.md).
 
 ## 🤝 Contributing

@@ -171,7 +171,7 @@ export function SideNavBar({
               activePath === item.href || activePath.startsWith(`${item.href}/`);
 
             return (
-              <li key={item.href} role="none">
+              <li key={item.href}>
                 <NavLink
                   href={item.href}
                   isActive={isActive}

@@ -14,6 +14,36 @@ const IDEMPOTENCY_LOCK_TTL = 30; // 30 seconds
 const IN_PROGRESS_POLL_MS = 25;
 const IDEMPOTENCY_IN_PROGRESS_MAX_WAIT_MS = IDEMPOTENCY_LOCK_TTL * 1000;
 
+/**
+ * Round-trip budget (see docs/idempotency-redis-roundtrips.md):
+ *   first request, 2xx  -> 2 (ACQUIRE + COMMIT)   previously 5 (GET, SET NX, SET x2, DEL)
+ *   first request, !2xx -> 2 (ACQUIRE + DEL)      previously 3 (GET, SET NX, DEL)
+ *   cached replay       -> 1 (ACQUIRE)            previously 1 (GET)
+ *
+ * Both scripts touch two keys, so on Redis Cluster the cache and lock keys would
+ * need a shared hash tag. The backend currently talks to a single Redis node.
+ */
+
+// Returns the cached response if present; otherwise tries to take the lock and
+// returns 1 when acquired, 0 when another request already holds it.
+export const IDEMPOTENCY_ACQUIRE_SCRIPT = `
+local cached = redis.call("GET", KEYS[1])
+if cached then
+  return cached
+end
+if redis.call("SET", KEYS[2], "1", "NX", "EX", ARGV[1]) then
+  return 1
+end
+return 0
+`;
+
+// Stores the response and releases the lock in a single round trip.
+export const IDEMPOTENCY_COMMIT_SCRIPT = `
+redis.call("SET", KEYS[1], ARGV[1], "EX", ARGV[2])
+redis.call("DEL", KEYS[2])
+return 1
+`;
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -52,9 +82,16 @@ export const idempotencyMiddleware = async (
   const lockKey = `idempotency:lock:${req.method}:${req.path}:${key}`;
 
   try {
-    const cachedResponse = await redis.get(cacheKey);
+    const acquired = (await redis.eval(
+      IDEMPOTENCY_ACQUIRE_SCRIPT,
+      2,
+      cacheKey,
+      lockKey,
+      IDEMPOTENCY_LOCK_TTL,
+    )) as string | number;
 
-    if (cachedResponse) {
+    if (typeof acquired === "string") {
+      const cachedResponse = acquired;
       appLogger.info({ key, path: req.path }, "Idempotency cache hit");
       const { status, body, headers, requestBodyHash } = JSON.parse(cachedResponse);
 
@@ -74,9 +111,7 @@ export const idempotencyMiddleware = async (
       return res.status(status).json(body);
     }
 
-    const lock = await redis.set(lockKey, "1", "NX", "EX", IDEMPOTENCY_LOCK_TTL);
-
-    if (lock !== "OK") {
+    if (acquired !== 1) {
       const replayResponse = await waitForCachedResponse(cacheKey);
       if (replayResponse) {
         appLogger.info({ key, path: req.path }, "Idempotency replay after in-flight request");
@@ -114,7 +149,14 @@ export const idempotencyMiddleware = async (
     const originalJson = res.json.bind(res);
     const originalSend = res.send?.bind(res);
 
+    // Express' res.json() delegates to res.send() with the serialized string, so both
+    // overrides fire for one response. Only the first (un-serialized) body is cached.
+    let responseCached = false;
     const cacheResponse = (body: unknown) => {
+      if (responseCached) {
+        return;
+      }
+      responseCached = true;
       if (res.statusCode >= 200 && res.statusCode < 300) {
         const responseData = {
           status: res.statusCode,
@@ -122,8 +164,23 @@ export const idempotencyMiddleware = async (
           headers: res.getHeaders(),
           requestBodyHash: bodyHash(req.body),
         };
-        redis.set(cacheKey, JSON.stringify(responseData), "EX", IDEMPOTENCY_TTL)
-          .catch((err: unknown) => appLogger.error({ err }, "Failed to cache idempotent response"));
+        // The commit script deletes the lock, so finish/close must not DEL it again.
+        lockReleased = true;
+        redis
+          .eval(
+            IDEMPOTENCY_COMMIT_SCRIPT,
+            2,
+            cacheKey,
+            lockKey,
+            JSON.stringify(responseData),
+            IDEMPOTENCY_TTL,
+          )
+          .catch((err: unknown) => {
+            appLogger.error({ err }, "Failed to cache idempotent response");
+            redis.del(lockKey).catch((delErr: unknown) =>
+              appLogger.error({ err: delErr, key }, "Failed to release idempotency lock"),
+            );
+          });
       }
     };
 

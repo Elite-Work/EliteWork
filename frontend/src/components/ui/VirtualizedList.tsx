@@ -52,6 +52,12 @@ export function VirtualizedList<T>({
 }: VirtualizedListProps<T>) {
   const parentRef = useRef<HTMLDivElement>(null);
 
+  // useVirtualizer() returns functions that cannot be memoized, which causes
+  // react-hooks/incompatible-library warnings with React Compiler. This is
+  // acceptable because the virtualizer is recreated on each render and its
+  // functions are used immediately in the same render cycle, so there's no
+  // risk of stale UI from unmemoized functions.
+  // eslint-disable-next-line react-hooks/incompatible-library
   const virtualizer = useVirtualizer({
     count: items.length,
     getScrollElement: () => parentRef.current,

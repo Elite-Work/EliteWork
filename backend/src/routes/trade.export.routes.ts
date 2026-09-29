@@ -1,4 +1,4 @@
-import { Prisma, PrismaClient, TradeStatus } from "@prisma/client";
+import { Prisma, PrismaClient, Trade, TradeStatus } from "@prisma/client";
 import { Response, Router } from "express";
 import { z } from "zod";
 import { Parser } from "json2csv";
@@ -73,7 +73,7 @@ function buildWhere(walletAddress: string, query: z.infer<typeof exportQuerySche
   return where;
 }
 
-function serializeTrade(trade: Record<string, unknown>) {
+function serializeTrade(trade: Trade) {
   return {
     tradeId: trade.tradeId,
     buyerAddress: trade.buyerAddress,
@@ -146,7 +146,7 @@ export function createTradeExportRouter(prisma: PrismaClient = defaultPrisma) {
             where,
             orderBy: [{ createdAt: "desc" }, { id: "desc" }],
           });
-          const rows = trades.map((trade: unknown) => serializeTrade(trade as any));
+          const rows = trades.map((trade) => serializeTrade(trade));
           const parser = new Parser({ fields: csvFields });
           const csv = parser.parse(rows);
           res.setHeader("Content-Type", "text/csv; charset=utf-8");
@@ -167,7 +167,7 @@ export function createTradeExportRouter(prisma: PrismaClient = defaultPrisma) {
         ]);
 
         res.status(200).json({
-          items: trades.map((trade: unknown) => serializeTrade(trade as any)),
+          items: trades.map((trade) => serializeTrade(trade)),
           pagination: {
             page: query.page,
             limit: query.limit,

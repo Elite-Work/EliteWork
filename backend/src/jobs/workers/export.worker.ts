@@ -6,7 +6,9 @@ import { Parser as CsvParser } from 'json2csv';
 import { attachDeadLetterQueue } from '../deadLetter';
 
 export interface ExportResult {
-  format: 'csv' | 'json';
+  // Mirrors `ExportJobData['format']` so a queued 'pdf' job is not narrowed
+  // away from the worker's result contract.
+  format: 'csv' | 'json' | 'pdf';
   data: string;
   rowCount: number;
   s3Key?: string;

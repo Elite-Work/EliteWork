@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -68,10 +68,7 @@ export default function AdminStreamsOverviewScreen({
   navigation,
 }: Props) {
   const insets = useSafeAreaInsets();
-  const { role, clearAuth } = useAuthStore() as unknown as {
-    role: 'admin' | 'user' | null;
-    clearAuth: () => Promise<void>;
-  };
+  const { role, clearAuth } = useAuthStore();
   const { isOffline } = useNetworkStatus();
   const isAdmin = role === 'admin';
   const { addAction } = useAdminActionHistoryStore();

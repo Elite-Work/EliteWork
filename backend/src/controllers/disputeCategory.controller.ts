@@ -86,7 +86,7 @@ export class DisputeCategoryController {
     next: NextFunction,
   ): Promise<Response | void> => {
     try {
-      const id = Number((req.params as any).id);
+      const { id } = req.params as unknown as z.infer<typeof categoryIdParamSchema>;
       const category = await this.categoryService.getCategoryById(id);
       return res.status(200).json(category);
     } catch (error) {
@@ -111,7 +111,7 @@ export class DisputeCategoryController {
     }
 
     try {
-      const id = Number((req.params as any).id);
+      const { id } = req.params as unknown as z.infer<typeof categoryIdParamSchema>;
       const category = await this.categoryService.updateCategory(id, req.body);
       return res.status(200).json(category);
     } catch (error) {
@@ -139,7 +139,7 @@ export class DisputeCategoryController {
     }
 
     try {
-      const id = Number((req.params as any).id);
+      const { id } = req.params as unknown as z.infer<typeof categoryIdParamSchema>;
       await this.categoryService.deleteCategory(id);
       return res.status(204).send();
     } catch (error) {

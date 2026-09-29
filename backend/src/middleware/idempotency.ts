@@ -102,7 +102,7 @@ export const idempotencyMiddleware = async (
         return;
       }
       lockReleased = true;
-      redis.del(lockKey).catch((err) =>
+      redis.del(lockKey).catch((err: unknown) =>
         appLogger.error({ err, key }, "Failed to release idempotency lock"),
       );
     };
@@ -112,9 +112,9 @@ export const idempotencyMiddleware = async (
 
     // Intercept res.json and res.send to cache successful responses regardless of Express helper used.
     const originalJson = res.json.bind(res);
-    const originalSend = (res.send as any)?.bind(res);
+    const originalSend = res.send?.bind(res);
 
-    const cacheResponse = (body: any) => {
+    const cacheResponse = (body: unknown) => {
       if (res.statusCode >= 200 && res.statusCode < 300) {
         const responseData = {
           status: res.statusCode,
@@ -123,17 +123,17 @@ export const idempotencyMiddleware = async (
           requestBodyHash: bodyHash(req.body),
         };
         redis.set(cacheKey, JSON.stringify(responseData), "EX", IDEMPOTENCY_TTL)
-          .catch(err => appLogger.error({ err }, "Failed to cache idempotent response"));
+          .catch((err: unknown) => appLogger.error({ err }, "Failed to cache idempotent response"));
       }
     };
 
-    res.json = (body: any) => {
+    res.json = (body?: unknown) => {
       cacheResponse(body);
       return originalJson(body);
     };
 
     if (typeof originalSend === "function") {
-      res.send = (body: any) => {
+      res.send = (body?: unknown) => {
         cacheResponse(body);
         return originalSend(body);
       };

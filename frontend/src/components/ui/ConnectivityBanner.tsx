@@ -51,35 +51,49 @@ export function ConnectivityBanner() {
     }
   }, [isOffline, wasOffline, queue.length, replay, retryOnline, addToast, addToastWithCorrelation]);
 
+  // Persistent live region: it stays mounted so screen readers announce both
+  // offline and back-online transitions, including when no visual banner shows.
+  const liveMessage = isOffline
+    ? "You are offline. Actions will be queued and sent when reconnected."
+    : wasOffline
+      ? "Back online."
+      : "";
+  const liveRegion = (
+    <div role="status" aria-live="polite" aria-atomic="true" className="sr-only" data-testid="connectivity-live-region">
+      {liveMessage}
+    </div>
+  );
+
   // Accurate banner states during transition windows
-  if (isOffline) {
-    return (
-      <div role="status" aria-live="polite" className="fixed top-0 left-0 right-0 z-[100] bg-status-warning text-text-inverse px-4 py-2 text-sm text-center flex items-center justify-center gap-3">
-        <span aria-hidden>●</span>
-        <span>You’re offline — actions will be queued and sent when reconnected.</span>
-        {queue.length > 0 && (
-          <span className="bg-white/20 rounded-full px-2 py-0.5 text-xs font-semibold">{queue.length} pending</span>
-        )}
-        <button
-          onClick={() => void retryOnline()}
-          className="ml-2 underline hover:no-underline focus-visible:outline-2 focus-visible:outline-white rounded px-1"
-          aria-label="Retry connection"
-        >
-          Retry
-        </button>
-      </div>
-    );
-  }
+  const showOfflineBanner = isOffline;
+  const showReconnectBanner = !isOffline && wasOffline && queue.length > 0;
 
-  if (wasOffline && queue.length > 0) {
-    return (
-      <div role="status" aria-live="polite" className="fixed top-0 left-0 right-0 z-[100] bg-status-info text-white px-4 py-2 text-sm text-center">
-        Reconnecting — replaying {queue.length} queued action(s)…
-      </div>
-    );
-  }
-
-  return null;
+  return (
+    <>
+      {liveRegion}
+      {showOfflineBanner && (
+        <div className="fixed top-0 left-0 right-0 z-[100] bg-status-warning text-text-inverse px-4 py-2 text-sm text-center flex items-center justify-center gap-3">
+          <span aria-hidden>●</span>
+          <span>You’re offline — actions will be queued and sent when reconnected.</span>
+          {queue.length > 0 && (
+            <span className="bg-white/20 rounded-full px-2 py-0.5 text-xs font-semibold">{queue.length} pending</span>
+          )}
+          <button
+            onClick={() => void retryOnline()}
+            className="ml-2 underline hover:no-underline focus-visible:outline-2 focus-visible:outline-white rounded px-1"
+            aria-label="Retry connection"
+          >
+            Retry
+          </button>
+        </div>
+      )}
+      {showReconnectBanner && (
+        <div className="fixed top-0 left-0 right-0 z-[100] bg-status-info text-white px-4 py-2 text-sm text-center">
+          Reconnecting — replaying {queue.length} queued action(s)…
+        </div>
+      )}
+    </>
+  );
 }
 
 export function PendingBadge() {

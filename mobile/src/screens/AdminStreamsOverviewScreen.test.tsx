@@ -1,4 +1,4 @@
-﻿/**
+/**
  * AdminStreamsOverviewScreen.test.tsx — #86 (accessibility) + #85 (navigation)
  *
  * Covers:
@@ -8,8 +8,7 @@
  *         Stream metadata uses accessibilityRole="text".
  *         Non-admin view has accessible "Go back" button.
  */
-import React from 'react';
-import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import AdminStreamsOverviewScreen from './AdminStreamsOverviewScreen';
 import { useAuthStore } from '../stores/authStore';
 import { useAdminActionHistoryStore } from '../stores/adminActionHistoryStore';
@@ -170,41 +169,44 @@ describe('AdminStreamsOverviewScreen', () => {
     );
   });
 
-  it('navigates to AdminActionSuccess with correct params when Clawback is pressed', () => {
+  it('navigates to AdminActionSuccess with correct params when Clawback is pressed', async () => {
     mockUseAuthStore.mockReturnValue({ role: 'admin' });
+    // Keep SEED_STREAMS on screen: a resolved empty list replaces it and
+    // removes the action buttons before the press.
+    mockListStreams.mockReturnValue(new Promise(() => {}));
     const navigate = jest.fn();
-    const { findAllByText } = render(
+    const { getByTestId } = render(
       <AdminStreamsOverviewScreen navigation={buildNavigation({ navigate }) as any} route={{} as any} />,
     );
 
-    expect(async () => {
-      const buttons = await findAllByText('Clawback');
-      fireEvent.press(buttons[0]);
-      expect(navigate).toHaveBeenCalledWith(
-        'AdminActionSuccess',
-        expect.objectContaining({ actionType: 'Clawback', streamId: 'stream-001' }),
-      );
-    }).not.toThrow();
+    fireEvent.press(getByTestId('action-clawback-stream-001'));
+
+    expect(navigate).toHaveBeenCalledWith(
+      'AdminActionSuccess',
+      expect.objectContaining({ actionType: 'Clawback', streamId: 'stream-001' }),
+    );
   });
 
-  it('records the action in the history store when an action button is pressed', () => {
+  it('records the action in the history store when an action button is pressed', async () => {
     mockUseAuthStore.mockReturnValue({ role: 'admin' });
-    const { findAllByText } = render(
+    mockListStreams.mockReturnValue(new Promise(() => {}));
+    const { getByTestId } = render(
       <AdminStreamsOverviewScreen navigation={buildNavigation() as any} route={{} as any} />,
     );
-    fireEvent.press(findAllByText('Lock')[0]);
+    fireEvent.press(getByTestId('action-lock-stream-001'));
     expect(mockAddAction).toHaveBeenCalledWith(
       expect.objectContaining({ actionType: 'Lock', streamId: 'stream-001' }),
     );
   });
 
-  it('passes a timestamp in the navigation params', () => {
+  it('passes a timestamp in the navigation params', async () => {
     mockUseAuthStore.mockReturnValue({ role: 'admin' });
+    mockListStreams.mockReturnValue(new Promise(() => {}));
     const navigate = jest.fn();
-    const { findAllByText } = render(
+    const { getByTestId } = render(
       <AdminStreamsOverviewScreen navigation={buildNavigation({ navigate }) as any} route={{} as any} />,
     );
-    fireEvent.press(findAllByText('Terminate')[0]);
+    fireEvent.press(getByTestId('action-terminate-stream-001'));
     const params = navigate.mock.calls[0][1];
     expect(typeof params.timestamp).toBe('string');
     expect(new Date(params.timestamp).toISOString()).toBe(params.timestamp);
@@ -228,13 +230,30 @@ describe('AdminStreamsOverviewScreen', () => {
     expect(btn).not.toBeNull();
   });
 
-  it('pending clawback amount text has an accessible label on stream-002', () => {
+  it('pending clawback amount text has an accessible label on stream-002', async () => {
     mockUseAuthStore.mockReturnValue({ role: 'admin' });
-    const { UNSAFE_queryByProps } = render(
+    // SEED_STREAMS has pendingClawback '0' (2500 is stream-002's unclaimed
+    // figure), so drive the label from an explicit fixture instead.
+    mockListStreams.mockResolvedValue({
+      items: [
+        {
+          streamId: 'stream-002',
+          recipient: '',
+          status: 'SUSPENDED',
+          vestingState: 'vesting',
+          totalVested: '2500',
+          claimed: '0',
+          unclaimed: '2500',
+          pendingClawback: '2500',
+          adminTags: [],
+        },
+      ],
+      pagination: { page: 1, limit: 20, total: 1, totalPages: 1 },
+    });
+    const { findByLabelText } = render(
       <AdminStreamsOverviewScreen navigation={buildNavigation() as any} route={{} as any} />,
     );
-    const el = UNSAFE_queryByProps({ accessibilityLabel: 'Pending clawback amount: 2500' });
-    expect(el).not.toBeNull();
+    expect(await findByLabelText('Pending clawback amount: 2500')).toBeTruthy();
   });
 
   it('non-admin "Go back" button calls navigation.goBack when pressed', () => {

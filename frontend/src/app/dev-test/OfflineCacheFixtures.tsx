@@ -18,6 +18,9 @@ import {
   QUOTA_BYTES,
 } from "@/lib/offlineCache";
 
+/** Fixture clock — read once at module load so render stays pure. */
+const DEMO_NOW = Date.now();
+
 export function OfflineCacheFixtures() {
   const [readResult, setReadResult] = useState<string>("—");
   const [usageBytes, setUsageBytes] = useState(0);
@@ -122,6 +125,18 @@ export function OfflineCacheFixtures() {
                 isOffline={true}
                 cachedAt={Date.now() - 12 * 60 * 1000}
               />
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-text-muted w-24">Live:</span>
+              <StalenessIndicator
+                isStale={true}
+                isOffline={false}
+                cachedAt={DEMO_NOW - 8 * 60 * 1000}
+                live
+              />
+              <span className="text-xs text-text-muted italic">
+                opt-in, re-reads the clock every minute
+              </span>
             </div>
           </div>
         </div>

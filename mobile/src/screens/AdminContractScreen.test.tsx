@@ -37,14 +37,14 @@ const STELLAR_PUBKEY = 'G'.padEnd(56, 'A');
 describe('AdminContractScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    (useAuthStore as jest.Mock).mockReturnValue({
+    (useAuthStore as unknown as jest.Mock).mockReturnValue({
       role: 'admin',
       clearAuth: jest.fn().mockResolvedValue(undefined),
     });
   });
 
   it('shows an access message for non-admin users', () => {
-    (useAuthStore as jest.Mock).mockReturnValue({ role: 'user' });
+    (useAuthStore as unknown as jest.Mock).mockReturnValue({ role: 'user' });
     const navigation = { goBack: jest.fn(), navigate: jest.fn() };
     const { getByText } = render(
       <AdminContractScreen

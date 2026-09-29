@@ -4,6 +4,7 @@ import { StrKey } from "@stellar/stellar-sdk";
 import { formatNaira, formatNumber } from "@/lib/i18n";
 import { useTrade } from "../TradeContext";
 import { validateStep1 } from "../validation";
+import { KeyboardHint } from "@/components/ui/KeyboardHint";
 
 const COMMODITIES = ["Maize", "Rice", "Sorghum", "Millet", "Cassava", "Yam", "Groundnut", "Soybean"];
 const UNITS = ["kg", "tonnes", "bags (50kg)", "bags (100kg)"];
@@ -55,7 +56,15 @@ export default function Step1Details() {
   };
 
   return (
-    <div className="flex flex-col gap-6">
+    <form
+      className="flex flex-col gap-6"
+      noValidate
+      onSubmit={(e) => {
+        // Enter anywhere in the form advances the wizard, same as the button.
+        e.preventDefault();
+        handleContinue();
+      }}
+    >
       <div className="flex flex-col gap-1">
         <label htmlFor="commodity" className="text-sm text-text-secondary">Commodity</label>
         <select
@@ -153,12 +162,18 @@ export default function Step1Details() {
       </div>
 
       <button
+        type="submit"
         disabled={!valid}
-        onClick={handleContinue}
         className="mt-2 h-12 rounded-full bg-gradient-gold-cta text-text-inverse font-semibold transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
       >
         Continue to Negotiation
       </button>
-    </div>
+
+      {valid ? (
+        <KeyboardHint keys="Enter">to continue</KeyboardHint>
+      ) : (
+        <KeyboardHint>Complete the required fields to continue</KeyboardHint>
+      )}
+    </form>
   );
 }

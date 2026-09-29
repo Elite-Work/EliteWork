@@ -1,1 +1,29 @@
+# Normalize line endings across the monorepo (frontend, backend, mobile,
+# contracts) so contributors on Windows, macOS and Linux produce identical
+# diffs. Git stores text files with LF in the repository and converts to the
+# platform's native line ending on checkout (see `core.autocrlf`/`core.eol`).
+* text=auto
+
+# Files that must keep LF even on Windows checkouts (executed by POSIX shells
+# or tooling that rejects CRLF).
 *.sh text eol=lf
+.githooks/* text eol=lf
+
+# Vendored third-party files are kept byte-for-byte as published.
+node_modules/** -text
+
+# Binary assets — never touch line endings or attempt text diffs.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
+*.pdf binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.otf binary
+*.wasm binary
+*.zip binary
+*.gz binary

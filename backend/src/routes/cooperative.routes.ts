@@ -8,6 +8,8 @@ import { canViewCooperativeTrades, getCooperativeMembers } from "../lib/cooperat
 import { validateRequest } from "../middleware/validateRequest";
 import { listTradesQuerySchema } from "../schemas/trade.schemas";
 
+import { requireCooperativeMember } from "../middleware/cooperative.middleware";
+
 /**
  * Cooperative pilot routes (issues #43/#44).
  *
@@ -23,22 +25,13 @@ export function createCooperativeRouter(prisma: PrismaClient = defaultPrisma) {
   router.get(
     "/:id/trades",
     authMiddleware,
+    requireCooperativeMember,
     validateRequest({ query: listTradesQuerySchema }),
     async (req: AuthRequest, res: Response, next: NextFunction) => {
-      const caller = req.user?.walletAddress?.trim();
-      if (!caller) {
-        res.status(401).json({ error: "Unauthorized" });
-        return;
-      }
-
       try {
         const cooperativeId = String(
           Array.isArray(req.params.id) ? req.params.id[0] : req.params.id,
         );
-        if (!canViewCooperativeTrades(cooperativeId, caller)) {
-          res.status(403).json({ error: "Forbidden" });
-          return;
-        }
 
         const { status, page, limit, sort } = req.query as any;
         const result = await tradeService.listCooperativeTrades(

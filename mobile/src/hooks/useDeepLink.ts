@@ -40,12 +40,22 @@ interface UseDeepLinkReturn {
   resumePendingDeepLink: (navigation: NavigationContainerRef<RootStackParamList> | null) => void;
 }
 
+/** Widened navigate signature for union screen keys (see DeepLinkTarget). */
+type NavigateFn = (
+  screen: keyof RootStackParamList,
+  params?: Record<string, string>,
+) => void;
+
 function navigate(
   navigation: NavigationContainerRef<RootStackParamList> | null | undefined,
   target: DeepLinkTarget,
 ): void {
   if (!navigation) return;
-  navigation.navigate(target.screen as never, (target.params ?? undefined) as never);
+  // DeepLinkTarget holds a union of screen keys with loosely-typed params.
+  // React Navigation's per-screen param generics cannot correlate the two,
+  // so widen the ref once here instead of casting each argument to `never`.
+  const nav = navigation as unknown as { navigate: NavigateFn };
+  nav.navigate(target.screen, target.params);
 }
 
 export function useDeepLink(): UseDeepLinkReturn {

@@ -3,12 +3,28 @@ import * as SecureStore from 'expo-secure-store';
 
 const REMEMBERED_WALLET_KEY = 'amana_remembered_wallet';
 
+export type AuthRole = 'admin' | 'user' | null;
+
 interface AuthState {
   token: string | null;
   walletAddress: string | null;
   isLoading: boolean;
+  /**
+   * Role of the signed-in wallet, used by the Admin* screens to gate
+   * admin-only UI.
+   *
+   * NOTE: this is currently never populated — the backend JWT carries no
+   * `role` claim (see `AuthService.generateToken`, which signs only
+   * sub/walletAddress/jti/tv/iss/aud/iat/nbf/exp), so there is nothing to
+   * derive this from at login yet. Until role plumbing lands, `role` stays
+   * `null` and the admin screens render their "Admin access required"
+   * fallback. Treat the screens as gated-but-not-yet-wired, not as working
+   * admin UI.
+   */
+  role: AuthRole;
   setToken: (token: string) => Promise<void>;
   setWalletAddress: (address: string) => void;
+  setRole: (role: AuthRole) => void;
   getToken: () => Promise<string | null>;
   /**
    * Returns the last wallet address that successfully connected, even
@@ -24,6 +40,11 @@ export const useAuthStore = create<AuthState>((set) => ({
   token: null,
   walletAddress: null,
   isLoading: true,
+  role: null,
+
+  setRole: (role: AuthRole) => {
+    set({ role });
+  },
 
   setToken: async (token: string) => {
     await SecureStore.setItemAsync('amana_token', token);
@@ -64,6 +85,6 @@ export const useAuthStore = create<AuthState>((set) => ({
     // ends the session, but the biometric-unlock shortcut for this
     // device/wallet pair should still work on the next launch.
     await SecureStore.deleteItemAsync('amana_token');
-    set({ token: null, walletAddress: null });
+    set({ token: null, walletAddress: null, role: null });
   },
 }));

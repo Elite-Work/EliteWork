@@ -12,7 +12,13 @@ const preferencesSchema = z.record(
   z.array(notificationChannelSchema).max(4),
 );
 
-type Preferences = Record<string, Array<"email" | "push" | "in-app" | "sms">>;
+// Derived from the schema so the event-key/channel shape has a single source
+// of truth and stays in sync with `preferencesSchema` automatically.
+type Preferences = z.infer<typeof preferencesSchema>;
+
+// Real Prisma delegate, so argument and result shapes are checked by the
+// compiler instead of being erased behind hand-written `any` signatures.
+type PreferencePrisma = Pick<PrismaClient, "notificationPreference">;
 
 /**
  * E.164-ish phone number, e.g. "+2348012345678". Deliberately permissive
@@ -29,13 +35,6 @@ const smsSettingsBodySchema = z.object({
   phoneNumber: phoneNumberSchema,
 });
 
-type PreferencePrisma = PrismaClient & {
-  notificationPreference?: {
-    findUnique: (args: any) => Promise<{ preferences: unknown; phoneNumber?: string | null } | null>;
-    upsert: (args: any) => Promise<{ preferences: unknown; phoneNumber?: string | null }>;
-  };
-};
-
 function caller(req: AuthRequest, res: Response): string | null {
   const walletAddress = req.user?.walletAddress?.trim();
   if (!walletAddress) {
@@ -51,7 +50,7 @@ function normalizePreferences(value: unknown): Preferences {
 }
 
 export function createNotificationPreferencesRouter(
-  prisma: PreferencePrisma = defaultPrisma as PreferencePrisma,
+  prisma: PreferencePrisma = defaultPrisma,
 ) {
   const router = Router();
 
@@ -60,7 +59,7 @@ export function createNotificationPreferencesRouter(
       const walletAddress = caller(req, res);
       if (!walletAddress) return;
 
-      const record = await prisma.notificationPreference?.findUnique({
+      const record = await prisma.notificationPreference.findUnique({
         where: { userAddress: walletAddress },
       });
 
@@ -89,11 +88,11 @@ export function createNotificationPreferencesRouter(
         if (!walletAddress) return;
 
         const { phoneNumber } = req.body as z.infer<typeof smsSettingsBodySchema>;
-        const existing = await prisma.notificationPreference?.findUnique({
+        const existing = await prisma.notificationPreference.findUnique({
           where: { userAddress: walletAddress },
         });
 
-        const saved = await prisma.notificationPreference?.upsert({
+        const saved = await prisma.notificationPreference.upsert({
           where: { userAddress: walletAddress },
           create: { userAddress: walletAddress, preferences: {}, phoneNumber },
           update: { phoneNumber },
@@ -101,7 +100,7 @@ export function createNotificationPreferencesRouter(
 
         res.status(200).json({
           preferences: normalizePreferences(existing?.preferences ?? {}),
-          phoneNumber: saved?.phoneNumber ?? phoneNumber,
+          phoneNumber: saved.phoneNumber ?? phoneNumber,
         });
       } catch (error) {
         next(error);
@@ -119,7 +118,7 @@ export function createNotificationPreferencesRouter(
         if (!walletAddress) return;
 
         const incoming = req.body as Preferences;
-        const existing = await prisma.notificationPreference?.findUnique({
+        const existing = await prisma.notificationPreference.findUnique({
           where: { userAddress: walletAddress },
         });
         const merged = {
@@ -127,13 +126,13 @@ export function createNotificationPreferencesRouter(
           ...incoming,
         };
 
-        const saved = await prisma.notificationPreference?.upsert({
+        const saved = await prisma.notificationPreference.upsert({
           where: { userAddress: walletAddress },
           create: { userAddress: walletAddress, preferences: merged },
           update: { preferences: merged },
         });
 
-        res.status(200).json({ preferences: normalizePreferences(saved?.preferences ?? merged) });
+        res.status(200).json({ preferences: normalizePreferences(saved.preferences ?? merged) });
       } catch (error) {
         next(error);
       }

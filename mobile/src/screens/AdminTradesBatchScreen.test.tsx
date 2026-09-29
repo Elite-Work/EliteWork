@@ -38,14 +38,14 @@ const mockUpdate = adminApi.updateTradeStatusesBatch as jest.MockedFunction<
 describe('AdminTradesBatchScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    (useAuthStore as jest.Mock).mockReturnValue({
+    (useAuthStore as unknown as jest.Mock).mockReturnValue({
       role: 'admin',
       clearAuth: jest.fn().mockResolvedValue(undefined),
     });
   });
 
   it('shows an access message for non-admin users', () => {
-    (useAuthStore as jest.Mock).mockReturnValue({ role: 'user' });
+    (useAuthStore as unknown as jest.Mock).mockReturnValue({ role: 'user' });
     const navigation = { goBack: jest.fn(), navigate: jest.fn() };
     const { getByText } = render(
       <AdminTradesBatchScreen

@@ -90,6 +90,7 @@ export class ShutdownOrchestrator {
         { forceExitTimeoutMs: this.forceExitTimeoutMs },
         "Force exit — shutdown exceeded deadline",
       );
+      clearTimeout(this.forceExitTimer as ReturnType<typeof setTimeout>);
       process.exit(1);
     }, this.forceExitTimeoutMs);
     this.forceExitTimer.unref();
@@ -114,6 +115,10 @@ export class ShutdownOrchestrator {
         { elapsedMs: elapsed },
         "Shutdown complete — exiting",
       );
+      if (this.forceExitTimer) {
+        clearTimeout(this.forceExitTimer);
+        this.forceExitTimer = null;
+      }
       process.exit(0);
     } catch (err) {
       const elapsed = Date.now() - startMs;
@@ -121,6 +126,10 @@ export class ShutdownOrchestrator {
         { err, elapsedMs: elapsed },
         "Error during shutdown — forcing exit",
       );
+      if (this.forceExitTimer) {
+        clearTimeout(this.forceExitTimer);
+        this.forceExitTimer = null;
+      }
       process.exit(1);
     }
   }

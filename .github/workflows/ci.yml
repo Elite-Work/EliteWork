@@ -141,6 +141,10 @@ jobs:
         if: needs.changes.outputs.frontend == 'true'
         run: pnpm build
 
+      - name: Bundle budget guard
+        if: needs.changes.outputs.frontend == 'true'
+        run: pnpm analyze:budget
+
       - name: Test
         if: needs.changes.outputs.frontend == 'true'
         # --json writes a machine-readable result file used by the flake reporter

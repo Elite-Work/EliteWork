@@ -277,6 +277,29 @@ jobs:
     name: Backend Required Gate
     runs-on: ubuntu-latest
     needs: [changes, validate-quarantine]
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U test -d test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     defaults:
       run:
         working-directory: backend
@@ -301,13 +324,21 @@ jobs:
         if: needs.changes.outputs.backend == 'true'
         run: pnpm build
 
+      - name: Prepare backend test database
+        if: needs.changes.outputs.backend == 'true'
+        env:
+          DATABASE_URL: postgresql://test:test@localhost:5432/test
+        run: pnpm exec prisma db push
+
       - name: Test
         if: needs.changes.outputs.backend == 'true'
         env:
           NODE_ENV: test
           JWT_SECRET: test-jwt-secret-value-with-minimum-length-32
+          DATABASE_URL: postgresql://test:test@localhost:5432/test
+          REDIS_URL: redis://localhost:6379
         # --json writes a machine-readable result file used by the flake reporter
-        run: pnpm test -- --json --outputFile=jest-results.json || true
+        run: pnpm exec jest --config jest.config.js --forceExit --detectOpenHandles --json --outputFile=jest-results.json || true
 
       - name: Detect flake candidates (backend)
         if: needs.changes.outputs.backend == 'true'

@@ -1,4 +1,5 @@
 import express from "express";
+import { PrismaClient } from "@prisma/client";
 import jwt from "jsonwebtoken";
 import request from "supertest";
 import * as StellarSdk from "@stellar/stellar-sdk";
@@ -25,11 +26,11 @@ describe("Trade export route", () => {
       findMany: jest.fn(),
       count: jest.fn(),
     },
-  } as any;
+  };
 
   const app = express();
   app.use(express.json());
-  app.use("/trades", createTradeExportRouter(mockPrisma));
+  app.use("/trades", createTradeExportRouter(mockPrisma as unknown as PrismaClient));
   app.use(errorHandler);
 
   const trade = {

@@ -3,8 +3,10 @@ import jwt from "jsonwebtoken";
 import request from "supertest";
 import * as StellarSdk from "@stellar/stellar-sdk";
 import { createTradeManifestRouter } from "../routes/trade.manifest.routes";
+import { ManifestService } from "../services/manifest.service";
 import { AuthService } from "../services/auth.service";
-import { ServiceUnavailableError } from "../services/ipfs.service";
+import { IPFSService, ServiceUnavailableError } from "../services/ipfs.service";
+import { ContractService } from "../services/contract.service";
 import { errorHandler } from "../middleware/errorHandler";
 
 jest.mock("../services/auth.service", () => ({
@@ -35,7 +37,11 @@ describe("Trade manifest submission route", () => {
   app.use(express.json());
   app.use(
     "/trades/:id/manifest",
-    createTradeManifestRouter(manifestService as any, contractService as any, ipfsService as any),
+    createTradeManifestRouter(
+      manifestService as unknown as ManifestService,
+      contractService as unknown as Pick<ContractService, "buildSubmitTradeManifestTx">,
+      ipfsService as unknown as Pick<IPFSService, "uploadFile">,
+    ),
   );
   app.use(errorHandler);
 

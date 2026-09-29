@@ -194,7 +194,9 @@ async function bootstrap() {
     const services: Shutdownable[] = [
       {
         name: "event-listener",
-        stop: () => eventListenerService.drain(),
+        stop: async () => {
+          await eventListenerService.drain();
+        },
       },
       {
         name: "reconciliation-worker",
@@ -218,7 +220,12 @@ async function bootstrap() {
           await closeAllQueueConnections();
         },
       },
-      { name: "redis", stop: () => redis.quit() },
+      {
+        name: "redis",
+        stop: async () => {
+          await redis.quit();
+        },
+      },
       { name: "database", stop: () => prisma.$disconnect() },
     ];
     await shutDownOrchestrator.shutdown(signal, server, services);

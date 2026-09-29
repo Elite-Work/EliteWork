@@ -12,6 +12,14 @@ import { __resetRetrySleepForTests, __setRetrySleepForTests } from "../lib/retry
 import { StellarService } from "../services/stellar.service";
 import { StrKey } from "@stellar/stellar-sdk";
 
+beforeEach(() => {
+  __setRetrySleepForTests(async () => undefined);
+});
+
+afterEach(() => {
+  __resetRetrySleepForTests();
+});
+
 // ── Module mocks ──────────────────────────────────────────────────────────────
 
 jest.mock("../config/stellar", () => ({
@@ -21,7 +29,7 @@ jest.mock("../config/stellar", () => ({
 }));
 
 jest.mock("../middleware/logger", () => ({
-  appLogger: { info: jest.fn(), error: jest.fn(), warn: jest.fn() },
+  appLogger: { debug: jest.fn(), info: jest.fn(), error: jest.fn(), warn: jest.fn() },
 }));
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

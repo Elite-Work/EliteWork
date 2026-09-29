@@ -29,6 +29,10 @@ export function createExportWorker(): Worker<ExportJobData> {
       const { requestedBy, format, tradeIds, filters } = job.data;
       appLogger.info({ jobId: job.id, requestedBy, format }, 'Processing export job');
 
+      if (format === 'pdf') {
+        throw new Error('PDF exports are not supported by the background export worker');
+      }
+
       const where: Record<string, unknown> = { ...filters };
       if (tradeIds?.length) {
         where['tradeId'] = { in: tradeIds };

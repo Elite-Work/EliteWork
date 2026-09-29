@@ -14,19 +14,34 @@ import { TradeStatus, DisputeStatus } from '@prisma/client';
 // Mock factory
 // ---------------------------------------------------------------------------
 
+type LifecycleTradeData = {
+  tradeId: string;
+  buyerAddress: string;
+  sellerAddress: string;
+  amountUsdc: string;
+  status: TradeStatus;
+  buyerLossBps: number;
+  sellerLossBps: number;
+};
+
+type LifecycleTrade = LifecycleTradeData & { id: number };
+
 function createMockPrisma() {
-  const store: Map<string, any> = new Map();
+  const store = new Map<string, LifecycleTrade>();
 
   const tradeMock = {
-    create: jest.fn().mockImplementation(({ data }: { data: any }) => {
-      const t = { id: Date.now(), ...data };
+    create: jest.fn().mockImplementation(({ data }: { data: LifecycleTradeData }) => {
+      const t: LifecycleTrade = { id: Date.now(), ...data };
       store.set(data.tradeId, t);
       return Promise.resolve(t);
     }),
-    findUnique: jest.fn().mockImplementation(({ where }: { where: any }) =>
+    findUnique: jest.fn().mockImplementation(({ where }: { where: { tradeId: string } }) =>
       Promise.resolve(store.get(where.tradeId) ?? null),
     ),
-    update: jest.fn().mockImplementation(({ where, data }: { where: any; data: any }) => {
+    update: jest.fn().mockImplementation(({ where, data }: {
+      where: { tradeId: string };
+      data: Partial<LifecycleTradeData>;
+    }) => {
       const existing = store.get(where.tradeId);
       if (!existing) return Promise.reject(new Error('record not found'));
       const updated = { ...existing, ...data };
@@ -38,7 +53,9 @@ function createMockPrisma() {
   };
 
   const disputeMock = {
-    create: jest.fn(),
+    create: jest.fn().mockImplementation(({ data }: { data: { tradeId: string; status: DisputeStatus } }) =>
+      Promise.resolve({ id: 1, ...data }),
+    ),
     findUnique: jest.fn(),
     update: jest.fn(),
   };
@@ -193,7 +210,7 @@ describe('Trade lifecycle — dispute', () => {
     });
 
     const dispute = await prisma.dispute.create({
-      data: { tradeId: 'T-dispute-3', status: DisputeStatus.OPEN } as any,
+      data: { tradeId: 'T-dispute-3', status: DisputeStatus.OPEN },
     });
     expect(dispute.status).toBe(DisputeStatus.OPEN);
   });

@@ -1,3 +1,4 @@
+import { PrismaClient } from "@prisma/client";
 import { TradeWatchlistService } from "../services/trade.watchlist.service";
 
 describe("TradeWatchlistService", () => {
@@ -7,7 +8,9 @@ describe("TradeWatchlistService", () => {
     trade: { findUnique: jest.fn() },
     userWatchlist: { upsert: jest.fn(), deleteMany: jest.fn(), findMany: jest.fn() },
   };
-  const service = new TradeWatchlistService(prisma as any);
+  const service = new TradeWatchlistService(
+    prisma as unknown as Pick<PrismaClient, "trade" | "userWatchlist">,
+  );
 
   beforeEach(() => jest.clearAllMocks());
 

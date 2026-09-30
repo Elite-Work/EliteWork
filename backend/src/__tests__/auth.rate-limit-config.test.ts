@@ -1,4 +1,6 @@
-const mockCreateIpRateLimiter: jest.Mock = jest.fn((_preset: unknown) => (_req: any, _res: any, next: any) => next());
+import { Request, Response, NextFunction } from 'express';
+
+const mockCreateIpRateLimiter: jest.Mock = jest.fn((_preset: unknown) => (_req: Request, _res: Response, next: NextFunction) => next());
 
 jest.mock('../config/rateLimit', () => ({
   RATE_LIMIT_CONFIG: {
@@ -24,7 +26,7 @@ jest.mock(
   () => ({
     z: {
       object: () => ({
-        parse: (value: any) => value,
+        parse: <T>(value: T): T => value,
       }),
       string: () => ({
         refine: () => ({}),
@@ -44,7 +46,7 @@ jest.mock('../services/auth.service', () => ({
 }));
 
 jest.mock('../middleware/auth.middleware', () => ({
-  authMiddleware: (_req: any, _res: any, next: any) => next(),
+  authMiddleware: (_req: Request, _res: Response, next: NextFunction) => next(),
 }));
 
 describe('auth route rate limiting', () => {

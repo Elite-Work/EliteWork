@@ -18,6 +18,10 @@ export interface TradeResponse {
   updatedAt: string;
   eta?: string;
   carrier?: string;
+  /** Persisted escrow deadline (ISO); the assets page uses it for deadline ranking. */
+  expiresAt?: string | null;
+  /** Delivery window in days captured at creation time; fallback deadline source. */
+  deliveryDays?: number;
 }
 
 export interface TradeListResponse {

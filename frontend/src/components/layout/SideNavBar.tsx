@@ -4,6 +4,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui/Button";
 import { NavLink } from "@/components/ui/Navigation";
+import { LocaleSwitcher } from "@/components/ui/LocaleSwitcher";
 
 export interface SideNavBarProps {
   activePath: string;
@@ -170,7 +171,7 @@ export function SideNavBar({
               activePath === item.href || activePath.startsWith(`${item.href}/`);
 
             return (
-              <li key={item.href} role="none">
+              <li key={item.href}>
                 <NavLink
                   href={item.href}
                   isActive={isActive}
@@ -189,6 +190,7 @@ export function SideNavBar({
       </nav>
 
       <div className="p-4 border-t border-border-default">
+        {!collapsed && <LocaleSwitcher className="mb-3 w-full [&_select]:w-full" />}
         {isConnected ? (
           <div
             className={`rounded-lg bg-surface-2 border border-border-raised ${

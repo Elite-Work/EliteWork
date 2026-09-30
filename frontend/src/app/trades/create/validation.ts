@@ -78,3 +78,48 @@ export function validateStep2(data: { buyerRatio: number; sellerRatio: number; d
   }
   return errors;
 }
+
+export interface SubmitBlockerData {
+  commodity: string;
+  quantity: string;
+  pricePerUnit: string;
+  sellerAddress: string;
+  buyerRatio: number;
+  sellerRatio: number;
+}
+
+/**
+ * Everything still blocking the review-step submit button, in wizard order.
+ *
+ * This is the single source of truth for the button's disabled state: the
+ * button is disabled exactly when this returns a non-empty list, and the
+ * "why is this disabled" tooltip reads the same list, so the two can never
+ * disagree about which field needs attention.
+ */
+export function submitBlockers(data: SubmitBlockerData): string[] {
+  const blockers: string[] = [];
+
+  const qty = parseFloat(data.quantity);
+  const price = parseFloat(data.pricePerUnit);
+
+  if (data.commodity === "") {
+    blockers.push("Select a commodity");
+  }
+  if (isNaN(qty) || qty <= 0) {
+    blockers.push("Quantity must be greater than 0");
+  }
+  if (isNaN(price) || price <= 0) {
+    blockers.push("Price must be greater than 0");
+  }
+  if (
+    data.sellerAddress === "" ||
+    !StrKey.isValidEd25519PublicKey(data.sellerAddress.trim())
+  ) {
+    blockers.push("Seller address must be a valid Stellar public key");
+  }
+  if (data.buyerRatio + data.sellerRatio !== 100) {
+    blockers.push("Loss ratios must sum to 100%");
+  }
+
+  return blockers;
+}

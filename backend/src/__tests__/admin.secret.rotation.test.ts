@@ -4,6 +4,7 @@ import { env } from "../config/env";
 
 describe("Admin Secret Rotation & Validation Unit Tests", () => {
   let originalEnv: string | undefined;
+  const mutableEnv = env as { ADMIN_SECRET_KEY: string };
 
   beforeAll(() => {
     originalEnv = process.env.ADMIN_SECRET_KEY;
@@ -12,17 +13,17 @@ describe("Admin Secret Rotation & Validation Unit Tests", () => {
   afterEach(() => {
     if (originalEnv !== undefined) {
       process.env.ADMIN_SECRET_KEY = originalEnv;
-      (env as any).ADMIN_SECRET_KEY = originalEnv;
+      mutableEnv.ADMIN_SECRET_KEY = originalEnv;
     } else {
       delete process.env.ADMIN_SECRET_KEY;
-      (env as any).ADMIN_SECRET_KEY = "";
+      mutableEnv.ADMIN_SECRET_KEY = "";
     }
   });
 
   it("successfully validates a fresh, newly rotated Stellar ADMIN_SECRET_KEY", async () => {
     const freshKeypair = Keypair.random();
     process.env.ADMIN_SECRET_KEY = freshKeypair.secret();
-    (env as any).ADMIN_SECRET_KEY = freshKeypair.secret();
+    mutableEnv.ADMIN_SECRET_KEY = freshKeypair.secret();
 
     const healthService = new HealthService();
     const result = await healthService.checkAdminSigningKey();
@@ -33,7 +34,7 @@ describe("Admin Secret Rotation & Validation Unit Tests", () => {
 
   it("fails health check if ADMIN_SECRET_KEY is removed or empty", async () => {
     process.env.ADMIN_SECRET_KEY = "";
-    (env as any).ADMIN_SECRET_KEY = "";
+    mutableEnv.ADMIN_SECRET_KEY = "";
 
     const healthService = new HealthService();
     const result = await healthService.checkAdminSigningKey();
@@ -43,7 +44,7 @@ describe("Admin Secret Rotation & Validation Unit Tests", () => {
 
   it("fails health check if ADMIN_SECRET_KEY is corrupted or invalid base32", async () => {
     process.env.ADMIN_SECRET_KEY = "SINVALIDKEYNOTBASE32FORMATTED12345678900000000000000000";
-    (env as any).ADMIN_SECRET_KEY = "SINVALIDKEYNOTBASE32FORMATTED12345678900000000000000000";
+    mutableEnv.ADMIN_SECRET_KEY = "SINVALIDKEYNOTBASE32FORMATTED12345678900000000000000000";
 
     const healthService = new HealthService();
     const result = await healthService.checkAdminSigningKey();

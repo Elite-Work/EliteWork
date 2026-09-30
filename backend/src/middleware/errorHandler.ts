@@ -5,6 +5,14 @@ import { AppError, ErrorCode, StructuredErrorPayload, isAppError } from '../erro
 import { CORRELATION_ID_HEADER, REQUEST_ID_HEADER, TracedRequest } from './correlationId.middleware';
 import { appLogger } from './logger';
 
+function hasNumericStatus(err: unknown): err is { status: number } {
+  return (
+    typeof err === 'object' &&
+    err !== null &&
+    typeof (err as { status?: unknown }).status === 'number'
+  );
+}
+
 export function errorHandler(
   err: unknown,
   req: Request,
@@ -46,7 +54,7 @@ export function errorHandler(
     return res.status(400).json(payload);
   }
 
-  const status = (err && typeof (err as any).status === 'number') ? (err as any).status : 500;
+  const status = hasNumericStatus(err) ? err.status : 500;
   const message = env.NODE_ENV === 'production' ? 'Internal server error' : (err instanceof Error ? err.message : String(err));
 
   const errForLogging = err instanceof Error ? err : new Error(String(err));

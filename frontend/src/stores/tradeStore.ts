@@ -30,6 +30,23 @@ interface TradeState {
     serverFn: () => Promise<void>,
     opts?: { correlationId?: string; idempotencyKey?: string },
   ) => Promise<{ correlationId: string; idempotencyKey: string }>;
+  /** Optimistic dispute resolution actions (Issue #112) */
+  resolveDisputeOptimistic: (
+    tradeId: string,
+    action: "accept" | "reject" | string,
+    serverFn: () => Promise<void>,
+    opts?: { correlationId?: string; idempotencyKey?: string },
+  ) => Promise<{ correlationId: string; idempotencyKey: string }>;
+  acceptDispute: (
+    tradeId: string,
+    serverFn: () => Promise<void>,
+    opts?: { correlationId?: string; idempotencyKey?: string },
+  ) => Promise<{ correlationId: string; idempotencyKey: string }>;
+  rejectDispute: (
+    tradeId: string,
+    serverFn: () => Promise<void>,
+    opts?: { correlationId?: string; idempotencyKey?: string },
+  ) => Promise<{ correlationId: string; idempotencyKey: string }>;
   /** Unified dedup wrapper for any trade mutation — prevents double-submit window */
   withDedup: <T>(actionKey: string, fn: (ids: { correlationId: string; idempotencyKey: string }) => Promise<T>) => Promise<T | null>;
 }
@@ -196,6 +213,18 @@ export const useTradeStore = create<TradeState>((set, get) => ({
         return { pendingActions: n };
       });
     }
+  },
+
+  resolveDisputeOptimistic: async (tradeId, action, serverFn, opts) => {
+    return get().updateTradeOptimistic(tradeId, { status: "SETTLED" }, serverFn, opts);
+  },
+
+  acceptDispute: async (tradeId, serverFn, opts) => {
+    return get().resolveDisputeOptimistic(tradeId, "accept", serverFn, opts);
+  },
+
+  rejectDispute: async (tradeId, serverFn, opts) => {
+    return get().resolveDisputeOptimistic(tradeId, "reject", serverFn, opts);
   },
 
   withDedup: async (actionKey, fn) => {

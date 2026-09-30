@@ -1,4 +1,5 @@
 import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import AdminAuditHistoryPage from "../page";
 import { useAuth } from "@/hooks/useAuth";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
@@ -7,6 +8,37 @@ import { trackAdminEvent } from "@/lib/analytics";
 
 jest.mock("@/hooks/useAuth");
 jest.mock("@/hooks/useIsAdmin");
+// The real virtualizer measures the DOM, so it renders no rows under jsdom.
+// Render every item in order instead — that is what makes the sort assertions
+// (and the entry assertions below) observable.
+jest.mock("@/components/ui/VirtualizedList", () => ({
+  VirtualizedList: ({
+    items,
+    isEmpty,
+    emptyState,
+    renderItem,
+    keyExtractor,
+  }: {
+    items: { id: number }[];
+    isEmpty?: boolean;
+    emptyState?: React.ReactNode;
+    renderItem: (item: unknown, index: number) => React.ReactNode;
+    keyExtractor: (item: unknown, index: number) => string;
+  }) =>
+    isEmpty ? (
+      <div role="list" aria-label="Empty list">
+        {emptyState}
+      </div>
+    ) : (
+      <div role="list" aria-label="Virtualized list">
+        {items.map((item, index) => (
+          <div key={keyExtractor(item, index)} role="listitem">
+            {renderItem(item, index)}
+          </div>
+        ))}
+      </div>
+    ),
+}));
 jest.mock("@/lib/analytics", () => ({
   trackAdminEvent: jest.fn(),
 }));
@@ -123,6 +155,159 @@ describe("AdminAuditHistoryPage", () => {
 
     await waitFor(() => {
       expect(screen.getByText("No admin actions recorded yet")).toBeInTheDocument();
+    });
+  });
+
+  describe("column sorting", () => {
+    const sortableEntries = [
+      makeEntry({
+        id: 3,
+        action: "STREAM_TERMINATE",
+        actorAddress: "GCHARLIE000000000",
+        createdAt: "2026-07-03T12:00:00.000Z",
+      }),
+      makeEntry({
+        id: 1,
+        action: "TREASURY_WITHDRAW",
+        actorAddress: "GALPHA0000000000",
+        createdAt: "2026-07-01T12:00:00.000Z",
+      }),
+      makeEntry({
+        id: 2,
+        action: "CLAWBACK_APPROVED",
+        actorAddress: "GBRAVO0000000000",
+        createdAt: "2026-07-05T12:00:00.000Z",
+      }),
+    ];
+
+    async function renderSortable() {
+      mockList.mockResolvedValue({
+        items: sortableEntries,
+        pagination: { page: 1, limit: 20, total: 3, totalPages: 2 },
+      });
+
+      const user = userEvent.setup();
+      render(<AdminAuditHistoryPage />);
+
+      await waitFor(() => {
+        expect(screen.getByText("Treasury Withdraw")).toBeInTheDocument();
+      });
+      return user;
+    }
+
+    /** Rendered action labels, in list order. */
+    function renderedActions(): string[] {
+      return screen
+        .getAllByTestId("audit-action")
+        .map((el) => el.textContent ?? "");
+    }
+
+    it("defaults to newest first and marks the date column as sorted", async () => {
+      await renderSortable();
+
+      expect(renderedActions()).toEqual([
+        "Clawback Approved",
+        "Stream Terminate",
+        "Treasury Withdraw",
+      ]);
+      expect(
+        screen.getByRole("columnheader", { name: /date/i }),
+      ).toHaveAttribute("aria-sort", "descending");
+      expect(
+        screen.getByRole("columnheader", { name: /action type/i }),
+      ).toHaveAttribute("aria-sort", "none");
+      expect(screen.getByTestId("audit-sort-status")).toHaveTextContent(
+        "sorted by Date descending",
+      );
+    });
+
+    it("sorts by date ascending when the date column is clicked", async () => {
+      const user = await renderSortable();
+
+      await user.click(screen.getByRole("button", { name: /sort by date/i }));
+
+      expect(renderedActions()).toEqual([
+        "Treasury Withdraw",
+        "Stream Terminate",
+        "Clawback Approved",
+      ]);
+      expect(
+        screen.getByRole("columnheader", { name: /date/i }),
+      ).toHaveAttribute("aria-sort", "ascending");
+    });
+
+    it("sorts by actor alphabetically and toggles direction on a second click", async () => {
+      const user = await renderSortable();
+      const actorHeader = screen.getByRole("columnheader", { name: /actor/i });
+
+      await user.click(screen.getByRole("button", { name: /sort by actor/i }));
+      expect(actorHeader).toHaveAttribute("aria-sort", "ascending");
+      expect(screen.getByTestId("audit-sort-status")).toHaveTextContent(
+        "sorted by Actor ascending",
+      );
+
+      await user.click(screen.getByRole("button", { name: /sort by actor/i }));
+      expect(actorHeader).toHaveAttribute("aria-sort", "descending");
+    });
+
+    it("sorts by action type", async () => {
+      const user = await renderSortable();
+
+      await user.click(screen.getByRole("button", { name: /sort by action type/i }));
+
+      // CLAWBACK_APPROVED < STREAM_TERMINATE < TREASURY_WITHDRAW
+      expect(renderedActions()).toEqual([
+        "Clawback Approved",
+        "Stream Terminate",
+        "Treasury Withdraw",
+      ]);
+      expect(
+        screen.getByRole("columnheader", { name: /action type/i }),
+      ).toHaveAttribute("aria-sort", "ascending");
+    });
+
+    it("emits a sort analytics event with the new key and direction", async () => {
+      const user = await renderSortable();
+
+      await user.click(screen.getByRole("button", { name: /sort by actor/i }));
+
+      expect(mockTrackAdminEvent).toHaveBeenCalledWith("admin_audit_sort", "success", {
+        sortBy: "actorAddress",
+        sortDirection: "asc",
+      });
+    });
+
+    it("keeps the chosen sort after paging to the next page", async () => {
+      const user = await renderSortable();
+
+      await user.click(screen.getByRole("button", { name: /sort by action type/i }));
+
+      mockList.mockResolvedValue({
+        items: [makeEntry({ id: 9, action: "ACCOUNT_FLAGGED" })],
+        pagination: { page: 2, limit: 20, total: 21, totalPages: 2 },
+      });
+      await user.click(screen.getByRole("button", { name: /next/i }));
+
+      await waitFor(() => {
+        expect(screen.getByText("Account Flagged")).toBeInTheDocument();
+      });
+      expect(
+        screen.getByRole("columnheader", { name: /action type/i }),
+      ).toHaveAttribute("aria-sort", "ascending");
+    });
+
+    it("does not render sort controls when there is nothing to sort", async () => {
+      mockList.mockResolvedValue({
+        items: [],
+        pagination: { page: 1, limit: 20, total: 0, totalPages: 1 },
+      });
+
+      render(<AdminAuditHistoryPage />);
+
+      await waitFor(() => {
+        expect(screen.getByText("No admin actions recorded yet")).toBeInTheDocument();
+      });
+      expect(screen.queryByRole("columnheader")).not.toBeInTheDocument();
     });
   });
 });

@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { authMiddleware } from "../middleware/auth.middleware";
+import { AuthRequest } from "../services/auth.service";
 import { WalletService } from "../services/wallet.service";
 import { PathPaymentService } from "../services/pathPayment.service";
 import { TOKEN_CONFIG } from "../config/token";
@@ -8,7 +9,11 @@ export const walletRoutes = Router();
 const walletService = new WalletService();
 const pathPaymentService = new PathPaymentService();
 
-walletRoutes.get("/balance", authMiddleware, async (req: any, res) => {
+function queryString(value: unknown): string | undefined {
+  return typeof value === "string" ? value : undefined;
+}
+
+walletRoutes.get("/balance", authMiddleware, async (req: AuthRequest, res) => {
   try {
     const walletAddress = req.user?.walletAddress;
     if (!walletAddress) {
@@ -24,15 +29,17 @@ walletRoutes.get("/balance", authMiddleware, async (req: any, res) => {
 
 walletRoutes.get("/path-payment-quote", authMiddleware, async (req, res) => {
   try {
-    const { sourceAmount, sourceAsset, sourceAssetIssuer } = req.query;
+    const sourceAmount = queryString(req.query.sourceAmount);
+    const sourceAsset = queryString(req.query.sourceAsset);
+    const sourceAssetIssuer = queryString(req.query.sourceAssetIssuer);
     if (!sourceAmount || !sourceAsset) {
       return res.status(400).json({ error: "Missing sourceAmount or sourceAsset" });
     }
     
     const quotes = await pathPaymentService.getPathPaymentQuote(
-      sourceAmount as string,
-      sourceAsset as string,
-      sourceAssetIssuer as string
+      sourceAmount,
+      sourceAsset,
+      sourceAssetIssuer,
     );
     res.json({ routes: quotes });
   } catch (error) {

@@ -5,7 +5,7 @@ import * as authStore from '../stores/authStore';
 jest.mock('../stores/authStore', () => ({ useAuthStore: jest.fn() }));
 
 const setAuth = (token: string | null) =>
-  (authStore.useAuthStore as jest.Mock).mockReturnValue({ token });
+  (authStore.useAuthStore as unknown as jest.Mock).mockReturnValue({ token });
 
 describe('useDeepLink (auth-aware routing)', () => {
   beforeEach(() => {
@@ -45,7 +45,9 @@ describe('useDeepLink (auth-aware routing)', () => {
 
     // user logs in
     setAuth('tok');
-    rerender();
+    // useDeepLink takes no props, so re-render with an explicit undefined
+    // (this RNTL version types rerender as requiring an argument).
+    rerender(undefined);
 
     act(() => {
       result.current.resumePendingDeepLink(nav);

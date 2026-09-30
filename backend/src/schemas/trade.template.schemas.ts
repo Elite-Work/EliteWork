@@ -17,7 +17,7 @@ export const createTradeTemplateSchema = z
     buyerLossBps: z.number().int().min(0).max(10000).default(5000),
     sellerLossBps: z.number().int().min(0).max(10000).default(5000),
   })
-  .superRefine((value: { buyerLossBps: number; sellerLossBps: number }, ctx: any) => {
+  .superRefine((value: { buyerLossBps: number; sellerLossBps: number }, ctx: z.RefinementCtx) => {
     if (value.buyerLossBps + value.sellerLossBps !== 10000) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,

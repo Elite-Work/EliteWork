@@ -1,4 +1,5 @@
 import { TreasuryService } from "../services/treasury.service";
+import { createMockPrisma } from "./factories/mockFactories";
 
 jest.mock("../services/stellar.service", () => ({
   StellarService: jest.fn().mockImplementation(() => ({
@@ -14,16 +15,13 @@ const ADMIN_ADDRESS = "GADMIN1234567890";
 const DESTINATION = "GDEST1234567890";
 
 describe("TreasuryService.withdraw", () => {
-  let mockPrisma: { adminActionAudit: { create: jest.Mock } };
+  let mockPrisma: ReturnType<typeof createMockPrisma>;
   let treasuryService: TreasuryService;
 
   beforeEach(() => {
-    mockPrisma = {
-      adminActionAudit: {
-        create: jest.fn().mockResolvedValue({}),
-      },
-    };
-    treasuryService = new TreasuryService(mockPrisma as any);
+    mockPrisma = createMockPrisma();
+    mockPrisma.adminActionAudit.create.mockResolvedValue({});
+    treasuryService = new TreasuryService(mockPrisma);
   });
 
   it("persists an admin action audit record without a note", async () => {

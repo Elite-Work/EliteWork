@@ -84,6 +84,7 @@ describe("Redis resilience invariants (kill-test)", () => {
     it("clawback acquire async fails closed on Redis error", async () => {
       const svc = new StreamClawbackService();
       mockRedis.set.mockRejectedValue(new Error("ECONNREFUSED Redis unavailable"));
+      mockRedis.get.mockRejectedValue(new Error("ECONNREFUSED Redis unavailable"));
 
       await expect(svc.acquireAsync("stream-456")).rejects.toMatchObject({ statusCode: 503 });
       // isLockedAsync should be true (fail-closed assumption) when Redis is down — prevents new attempts from racing

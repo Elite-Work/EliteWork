@@ -10,7 +10,7 @@
  *   - streamId:   the stream the action was applied to
  *   - timestamp:  ISO string when the action completed
  */
-import React, { useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import {
   AccessibilityInfo,
   Animated,

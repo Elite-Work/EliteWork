@@ -66,7 +66,7 @@ export function createMockResponse(): Response & EventEmitter & { body?: unknown
       this.emit("finish");
       return this;
     }),
-  } as Response & EventEmitter & { body?: unknown };
+  } as unknown as Response & EventEmitter & { body?: unknown };
 }
 
 /**

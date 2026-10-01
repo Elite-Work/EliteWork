@@ -1,6 +1,7 @@
 import { Prisma, Trade, TradeStatus } from "@prisma/client";
 import { ContractService } from "../services/contract.service";
 import { TradeAccessDeniedError, TradeService } from "../services/trade.service";
+import { ContractService } from "../services/contract.service";
 
 function makeTrade(overrides: Partial<Trade> = {}): Trade {
   return {
@@ -88,10 +89,7 @@ describe("TradeService", () => {
 
   beforeEach(() => {
     prisma = createMockPrisma();
-    service = new TradeService(
-      asTradeDatabase(prisma),
-      asContractService(createMockContractService()),
-    );
+    service = new TradeService(prisma, {} as unknown as ContractService);
   });
 
   it("stores a pending trade with PENDING_SIGNATURE status", async () => {

@@ -131,7 +131,7 @@ describe("ShutdownOrchestrator", () => {
     const exitSpy = jest
       .spyOn(process, "exit")
       .mockImplementation(((
-        code?: number,
+        code?: string | number | null,
       ) => undefined) as unknown as (code?: string | number | null) => never);
 
     await orchestrator.shutdown("SIGTERM", server, [hangy]);

@@ -1,29 +1,23 @@
 import express from "express";
 import jwt from "jsonwebtoken";
 import request from "supertest";
+import { PrismaClient } from "@prisma/client";
 import { createDisputeCategoryRouter } from "../controllers/disputeCategory.controller";
 import { AuthService } from "../services/auth.service";
 import type { JWTPayload } from "../services/auth.service";
 import { DisputeCategory, Prisma } from "@prisma/client";
 
-type CategoryPrismaMock = {
-  disputeCategory: {
-    create: jest.MockedFunction<
-      (args: Prisma.DisputeCategoryCreateArgs) => Promise<DisputeCategory>
-    >;
-    findMany: jest.MockedFunction<
-      (args: Prisma.DisputeCategoryFindManyArgs) => Promise<DisputeCategory[]>
-    >;
-    findUnique: jest.MockedFunction<
-      (args: Prisma.DisputeCategoryFindUniqueArgs) => Promise<DisputeCategory | null>
-    >;
-    update: jest.MockedFunction<
-      (args: Prisma.DisputeCategoryUpdateArgs) => Promise<DisputeCategory>
-    >;
-  };
-};
+jest.mock("../services/auth.service", () => ({
+  AuthService: {
+    validateToken: jest.fn(async (token: string) => {
+      const jwt = require("jsonwebtoken");
+      return jwt.decode(token);
+    }),
+    isTokenRevoked: jest.fn().mockResolvedValue(false),
+  },
+}));
 
-function createMockPrisma(): CategoryPrismaMock {
+function createMockPrisma() {
   return {
     disputeCategory: {
       create: jest.fn<
@@ -122,7 +116,7 @@ describe("Dispute Category Routes", () => {
 
     const app = express();
     app.use(express.json());
-    app.use("/dispute-categories", createDisputeCategoryRouter(asPrismaClient(prisma)));
+    app.use("/dispute-categories", createDisputeCategoryRouter(prisma as unknown as PrismaClient));
 
     const res = await request(app)
       .get("/dispute-categories?includeInactive=true")
@@ -150,7 +144,7 @@ describe("Dispute Category Routes", () => {
 
     const app = express();
     app.use(express.json());
-    app.use("/dispute-categories", createDisputeCategoryRouter(asPrismaClient(prisma)));
+    app.use("/dispute-categories", createDisputeCategoryRouter(prisma as unknown as PrismaClient));
 
     const res = await request(app)
       .get("/dispute-categories")
@@ -183,7 +177,7 @@ describe("Dispute Category Routes", () => {
 
     const app = express();
     app.use(express.json());
-    app.use("/dispute-categories", createDisputeCategoryRouter(asPrismaClient(prisma)));
+    app.use("/dispute-categories", createDisputeCategoryRouter(prisma as unknown as PrismaClient));
 
     const res = await request(app)
       .post("/dispute-categories")
@@ -198,7 +192,7 @@ describe("Dispute Category Routes", () => {
     const prisma = createMockPrisma();
     const app = express();
     app.use(express.json());
-    app.use("/dispute-categories", createDisputeCategoryRouter(asPrismaClient(prisma)));
+    app.use("/dispute-categories", createDisputeCategoryRouter(prisma as unknown as PrismaClient));
 
     const res = await request(app)
       .post("/dispute-categories")

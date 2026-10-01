@@ -16,8 +16,8 @@ export default {
   roots: ["<rootDir>/scripts"],
   testMatch: ["**/scripts/__tests__/**/*.test.mjs"],
   moduleFileExtensions: ["mjs", "js", "json"],
-  extensionsToTreatAsEsm: [".mjs"],
-  // No transform needed — native ESM
+  // No transform needed — native ESM. `.mjs` is always treated as ESM by Jest,
+  // so it must not be listed in `extensionsToTreatAsEsm` (Jest 30 rejects it).
   transform: {},
   forceExit: true,
   detectOpenHandles: true,

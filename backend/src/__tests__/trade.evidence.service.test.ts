@@ -1,12 +1,4 @@
-import {
-  DeliveryManifest,
-  Dispute,
-  DisputeStatus,
-  Prisma,
-  Trade,
-  TradeEvidence,
-  TradeStatus,
-} from "@prisma/client";
+import { PrismaClient, TradeStatus } from "@prisma/client";
 import { TradeEvidenceListService } from "../services/trade.evidence.service";
 import { IPFSService } from "../services/ipfs.service";
 
@@ -30,53 +22,9 @@ describe("TradeEvidenceListService", () => {
     createdAt: now,
     updatedAt: now,
   };
-  const dispute: Dispute = {
-    id: 1,
-    tradeId: "trade-1",
-    initiator: "g-buyer",
-    reason: "Evidence required",
-    status: DisputeStatus.OPEN,
-    version: 0,
-    resolvedAt: null,
-    categoryId: null,
-    createdAt: now,
-    updatedAt: now,
-  };
-  const video: TradeEvidence = {
-    id: 1,
-    tradeId: "trade-1",
-    cid: "bafy-video",
-    filename: "proof.mp4",
-    mimeType: "video/mp4",
-    uploadedBy: "g-seller",
-    createdAt: now,
-  };
-  const prisma = {
-    trade: {
-      findUnique: jest.fn<Promise<Trade | null>, [args: Prisma.TradeFindUniqueArgs]>(),
-    },
-    dispute: {
-      findUnique: jest.fn<Promise<Dispute | null>, [args: Prisma.DisputeFindUniqueArgs]>(),
-    },
-    tradeEvidence: {
-      findMany: jest.fn<Promise<TradeEvidence[]>, [args: Prisma.TradeEvidenceFindManyArgs]>(),
-      count: jest.fn<Promise<number>, [args: Prisma.TradeEvidenceCountArgs]>(),
-    },
-    deliveryManifest: {
-      findUnique: jest.fn<
-        Promise<DeliveryManifest | null>,
-        [args: Prisma.DeliveryManifestFindUniqueArgs]
-      >(),
-    },
-  };
-  const ipfs: jest.Mocked<Pick<IPFSService, "getSignedFileUrl">> = {
-    getSignedFileUrl: jest.fn<
-      ReturnType<IPFSService["getSignedFileUrl"]>,
-      Parameters<IPFSService["getSignedFileUrl"]>
-    >(),
-  };
+  const ipfs = { getSignedFileUrl: jest.fn() };
   const service = new TradeEvidenceListService(
-    prisma as unknown as ConstructorParameters<typeof TradeEvidenceListService>[0],
+    prisma as unknown as Pick<PrismaClient, "trade" | "dispute" | "tradeEvidence" | "deliveryManifest">,
     ipfs as unknown as IPFSService,
   );
 

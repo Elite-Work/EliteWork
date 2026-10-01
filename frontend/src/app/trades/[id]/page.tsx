@@ -9,6 +9,7 @@ import { useTradeDetail } from "@/hooks/useTradeDetail";
 import { useWallet } from "@/hooks/useWallet";
 import { api, ApiError } from "@/lib/api";
 import { apiConfig } from "@/lib/api";
+import { CopyButton } from "@/components/ui/CopyButton";
 
 function formatDate(dateString: string) {
   return new Date(dateString).toLocaleString("en-US", {
@@ -194,7 +195,12 @@ export default function TradeDetailPage() {
             <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
               <div>
                 <p className="text-xs uppercase tracking-wide text-text-muted">Trade ID</p>
-                <p className="mt-2 text-xl font-semibold text-text-primary font-mono">{trade.tradeId}</p>
+                <div className="mt-2 flex items-center gap-2">
+                  <p className="text-xl font-semibold text-text-primary font-mono break-all">
+                    {trade.tradeId}
+                  </p>
+                  <CopyButton value={trade.tradeId} label="Trade ID" />
+                </div>
                 <p className="mt-2 text-xs text-text-muted">Created: {formatDate(trade.createdAt)}</p>
                 <p className="mt-1 text-xs text-text-muted">Updated: {formatDate(trade.updatedAt)}</p>
               </div>

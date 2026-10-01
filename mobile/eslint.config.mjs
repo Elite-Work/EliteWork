@@ -30,6 +30,8 @@ export default [
         FormData: 'readonly',
         Blob: 'readonly',
         fetch: 'readonly',
+        URL: 'readonly',
+        URLSearchParams: 'readonly',
       },
     },
     plugins: {
@@ -40,6 +42,34 @@ export default [
       ...tseslint.configs.recommended.rules,
       '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
       'react-native/no-unused-styles': 'warn',
+    },
+  },
+  // Jest globals for unit/e2e tests — the linter previously flagged every
+  // `describe`/`it`/`expect` as `no-undef` because the flat config never
+  // declared the test globals.
+  {
+    files: [
+      '**/*.test.{ts,tsx,js,jsx}',
+      '**/__tests__/**/*.{ts,tsx,js,jsx}',
+      'e2e/**/*.{ts,tsx,js,jsx}',
+    ],
+    languageOptions: {
+      globals: {
+        jest: 'readonly',
+        describe: 'readonly',
+        it: 'readonly',
+        test: 'readonly',
+        expect: 'readonly',
+        beforeEach: 'readonly',
+        afterEach: 'readonly',
+        beforeAll: 'readonly',
+        afterAll: 'readonly',
+      },
+    },
+    rules: {
+      // Test doubles are routinely `any`; the test runner, not the type system,
+      // is the safety net here.
+      '@typescript-eslint/no-explicit-any': 'off',
     },
   },
   prettier,

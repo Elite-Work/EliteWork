@@ -76,7 +76,46 @@ touch no production tables. Rotate these secrets on the same quarterly
 cadence as other operational secrets — see
 [secrets-policy.md](./secrets-policy.md).
 
-## 5. Pre-release hook
+## 5. Resetting staging to the baseline
+
+The probe assumes staging sits on a known-good baseline: the schema produced by
+all committed Prisma migrations plus the fixture set written by
+`backend/prisma/seed.staging.ts`. Manual debugging sessions can leave extra
+trades, mutated statuses, or half-consumed idempotency locks behind, which makes
+probe runs non-reproducible.
+
+After any manual staging debugging session, restore the baseline with:
+
+```bash
+./scripts/staging-reset.sh --yes
+```
+
+[`scripts/staging-reset.sh`](../scripts/staging-reset.sh) performs, in order:
+
+1. `prisma migrate reset --force --skip-seed` — drops the schema and replays
+   every committed migration.
+2. `npx tsx prisma/seed.staging.ts` — reloads the staging fixture set.
+3. `redis-cli FLUSHALL` on the staging Redis — clears idempotency locks and
+   cached responses that would otherwise replay or reject probe requests.
+4. [`scripts/staging-validate.sh`](../scripts/staging-validate.sh) — proves the
+   seeded baseline (table counts, status coverage, referential integrity) is
+   actually in place.
+
+Safety notes:
+
+- The script **refuses to run** unless the target database name looks like
+  staging (or `--force` is passed), so a production URL cannot be wiped by
+  accident.
+- `--dry-run` prints the plan and runs the guard without changing anything;
+  `--skip-redis` / `--skip-validate` narrow the steps when needed.
+- It requires `--yes` (or an interactive confirmation) before destroying data.
+
+Runners that need a full infrastructure restart (not just data) can use
+`./scripts/staging-up.sh --reset`, which recreates the staging volumes and then
+seeds; `staging-reset.sh` is the lighter, data-only path for after a debugging
+session.
+
+## 6. Pre-release hook
 
 Before promoting a release candidate to production, check the most recent
 scheduled probe run (or trigger one on demand via `workflow_dispatch`) as
@@ -85,7 +124,7 @@ part of the release checklist alongside
 [admin route smoke test](./staging-smoke-testing.md) — a red probe blocks
 promotion the same way a failed smoke test does.
 
-## 6. Game-day validation
+## 7. Game-day validation
 
 To validate the probe itself catches real breakage, intentionally break a
 staging deployment (e.g. temporarily misconfigure `STELLAR_RPC_URL`, or

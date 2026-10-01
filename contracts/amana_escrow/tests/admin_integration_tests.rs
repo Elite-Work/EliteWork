@@ -265,7 +265,7 @@ fn test_admin_clawback_updates_trade_history() {
         .filter(|e| {
             let et = e.event_type.clone();
             // Soroban String has no std Display; compare via to_string helper on bytes length / known tags
-            et.len() > 0
+            !et.is_empty()
                 && (et == soroban_sdk::String::from_str(&h.env, "clawback_full")
                     || et == soroban_sdk::String::from_str(&h.env, "clawback_partial")
                     || et == soroban_sdk::String::from_str(&h.env, "admin_clawback"))

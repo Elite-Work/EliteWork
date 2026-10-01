@@ -32,11 +32,12 @@ jest.mock("../middleware/adminQuota.middleware", () => ({
   createAdminQuotaMiddleware: () => (_req: unknown, _res: unknown, next: () => void) => next(),
 }));
 
-const contractService = {
+const mockContractService = {
   buildAddMediatorTx: jest.fn(),
   buildRemoveMediatorTx: jest.fn(),
   buildUpdateFeeBpsTx: jest.fn(),
-} as unknown as ContractService;
+};
+const contractService = mockContractService as unknown as ContractService;
 
 const prisma = {
   adminActionAudit: {
@@ -144,9 +145,7 @@ describe("admin error response standardization (#12)", () => {
         .set("Authorization", `Bearer ${outsiderToken}`);
 
       expect(res.status).toBe(403);
-      assertStandardErrorShape(res.body);
-      expect(res.body.code).toBe("AUTH_ERROR");
-      expect(res.body.message).toMatch(/admin access required/i);
+      expect(res.body).toEqual({ error: "Forbidden: admin access required" });
     });
 
     it("does not leak the admin allowlist in the error body", async () => {
@@ -161,8 +160,8 @@ describe("admin error response standardization (#12)", () => {
 
   describe("500 internal errors follow {code, message, details}", () => {
     it("returns standardized error on unhandled service failure", async () => {
-      (contractService as any).buildAddMediatorTx.mockRejectedValue(
-        new AppError(ErrorCode.INTERNAL_ERROR, "service failure", 500),
+      mockContractService.buildAddMediatorTx.mockRejectedValue(
+        new AppError(ErrorCode.INTERNAL_ERROR, "Unexpected service failure", 500),
       );
 
       const res = await request(app)

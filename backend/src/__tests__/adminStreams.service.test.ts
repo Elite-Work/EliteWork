@@ -1,4 +1,4 @@
-import { StreamStatus } from "@prisma/client";
+import { PrismaClient, StreamStatus } from "@prisma/client";
 import { AdminStreamsService, vestingStateOf } from "../services/adminStreams.service";
 
 type StreamRecord = {
@@ -62,7 +62,7 @@ describe("AdminStreamsService.list", () => {
         findUnique: jest.fn().mockResolvedValue(null),
       },
     };
-    service = new AdminStreamsService(mockPrisma as any);
+    service = new AdminStreamsService(mockPrisma as unknown as Pick<PrismaClient, "stream">);
   });
 
   it("returns paginated summaries with derived vestingState, newest first", async () => {
@@ -144,7 +144,7 @@ describe("AdminStreamsService.getByStreamId", () => {
     const mockPrisma = {
       stream: { findUnique: jest.fn().mockResolvedValue(makeStream({ streamId: "s1" })) },
     };
-    const service = new AdminStreamsService(mockPrisma as any);
+    const service = new AdminStreamsService(mockPrisma as unknown as Pick<PrismaClient, "stream">);
 
     const result = await service.getByStreamId("s1");
 
@@ -154,7 +154,7 @@ describe("AdminStreamsService.getByStreamId", () => {
 
   it("returns null for an unknown id", async () => {
     const mockPrisma = { stream: { findUnique: jest.fn().mockResolvedValue(null) } };
-    const service = new AdminStreamsService(mockPrisma as any);
+    const service = new AdminStreamsService(mockPrisma as unknown as Pick<PrismaClient, "stream">);
 
     expect(await service.getByStreamId("missing")).toBeNull();
   });

@@ -14,7 +14,7 @@ type MockTx = {
       (args: Prisma.DisputeCreateArgs) => Promise<Dispute>
     >;
     updateMany: jest.MockedFunction<
-      (args: Prisma.DisputeUpdateManyArgs) => Promise<Prisma.BatchPayload>
+      (args: Prisma.DisputeUpdateManyArgs) => Promise<{ count: number }>
     >;
   };
 };
@@ -22,40 +22,25 @@ type MockTx = {
 function createMockTx(): MockTx {
   return {
     dispute: {
-      findUnique: jest.fn<
-        Promise<Dispute | null>,
-        [args: Prisma.DisputeFindUniqueArgs]
-      >(),
-      create: jest.fn<
-        Promise<Dispute>,
-        [args: Prisma.DisputeCreateArgs]
-      >(),
-      updateMany: jest.fn<
-        Promise<Prisma.BatchPayload>,
-        [args: Prisma.DisputeUpdateManyArgs]
-      >(),
+      findUnique: jest.fn<Promise<Dispute | null>, [Prisma.DisputeFindUniqueArgs]>(),
+      create: jest.fn<Promise<Dispute>, [Prisma.DisputeCreateArgs]>(),
+      updateMany: jest.fn<Promise<{ count: number }>, [Prisma.DisputeUpdateManyArgs]>(),
     },
   };
 }
 
-function asTransactionClient(mock: MockTx): Prisma.TransactionClient {
-  return mock as unknown as Prisma.TransactionClient;
-}
-
-const FIXED_DATE = new Date("2026-05-27T00:00:00.000Z");
-
-function makeDispute(overrides: Partial<Dispute> = {}): Dispute {
+function disputeRow(overrides: Partial<Dispute>): Dispute {
   return {
     id: 1,
     tradeId: "T-001",
     initiator: "GA_BUYER",
-    reason: "Test dispute",
+    reason: "Test reason",
     status: DisputeStatus.OPEN,
     version: 0,
+    createdAt: new Date("2025-01-01T00:00:00.000Z"),
+    updatedAt: new Date("2025-01-01T00:00:00.000Z"),
     resolvedAt: null,
     categoryId: null,
-    createdAt: FIXED_DATE,
-    updatedAt: FIXED_DATE,
     ...overrides,
   };
 }
@@ -72,7 +57,7 @@ describe("disputeTransitions", () => {
       mockTx.dispute.updateMany.mockResolvedValue({ count: 1 });
 
       const applied = await applyDisputeStatusTransition(
-        asTransactionClient(mockTx),
+        mockTx as unknown as Prisma.TransactionClient,
         { id: 1, status: DisputeStatus.OPEN, version: 2 },
         DisputeStatus.UNDER_REVIEW,
       );
@@ -91,7 +76,7 @@ describe("disputeTransitions", () => {
       mockTx.dispute.updateMany.mockResolvedValue({ count: 0 });
 
       const applied = await applyDisputeStatusTransition(
-        asTransactionClient(mockTx),
+        mockTx as unknown as Prisma.TransactionClient,
         { id: 1, status: DisputeStatus.OPEN, version: 2 },
         DisputeStatus.UNDER_REVIEW,
       );
@@ -104,7 +89,7 @@ describe("disputeTransitions", () => {
     it("creates an OPEN dispute when none exists", async () => {
       mockTx.dispute.findUnique.mockResolvedValue(null);
 
-      await syncDisputeInitiatedFromChain(asTransactionClient(mockTx), "T-001", "GA_BUYER");
+      await syncDisputeInitiatedFromChain(mockTx as unknown as Prisma.TransactionClient, "T-001", "GA_BUYER");
 
       expect(mockTx.dispute.create).toHaveBeenCalledWith({
         data: {
@@ -118,11 +103,9 @@ describe("disputeTransitions", () => {
     });
 
     it("is idempotent when a dispute row already exists", async () => {
-      mockTx.dispute.findUnique.mockResolvedValue(
-        makeDispute({ status: DisputeStatus.OPEN }),
-      );
+      mockTx.dispute.findUnique.mockResolvedValue(disputeRow({ status: DisputeStatus.OPEN }));
 
-      await syncDisputeInitiatedFromChain(asTransactionClient(mockTx), "T-001", "GA_BUYER");
+      await syncDisputeInitiatedFromChain(mockTx as unknown as Prisma.TransactionClient, "T-001", "GA_BUYER");
 
       expect(mockTx.dispute.create).not.toHaveBeenCalled();
     });
@@ -130,16 +113,10 @@ describe("disputeTransitions", () => {
 
   describe("syncDisputeResolvedFromChain", () => {
     it("marks active disputes RESOLVED with a version guard", async () => {
-      mockTx.dispute.findUnique.mockResolvedValue(
-        makeDispute({
-          id: 9,
-          status: DisputeStatus.OPEN,
-          version: 4,
-        }),
-      );
+      mockTx.dispute.findUnique.mockResolvedValue(disputeRow({ id: 9, version: 4 }));
       mockTx.dispute.updateMany.mockResolvedValue({ count: 1 });
 
-      await syncDisputeResolvedFromChain(asTransactionClient(mockTx), "T-001");
+      await syncDisputeResolvedFromChain(mockTx as unknown as Prisma.TransactionClient, "T-001");
 
       expect(mockTx.dispute.updateMany).toHaveBeenCalledWith({
         where: {
@@ -156,30 +133,18 @@ describe("disputeTransitions", () => {
     });
 
     it("no-ops when the dispute is already terminal", async () => {
-      mockTx.dispute.findUnique.mockResolvedValue(
-        makeDispute({
-          id: 9,
-          status: DisputeStatus.RESOLVED,
-          version: 5,
-        }),
-      );
+      mockTx.dispute.findUnique.mockResolvedValue(disputeRow({ id: 9, status: DisputeStatus.RESOLVED, version: 5 }));
 
-      await syncDisputeResolvedFromChain(asTransactionClient(mockTx), "T-001");
+      await syncDisputeResolvedFromChain(mockTx as unknown as Prisma.TransactionClient, "T-001");
 
       expect(mockTx.dispute.updateMany).not.toHaveBeenCalled();
     });
 
     it("throws when the CAS update loses a concurrent race", async () => {
-      mockTx.dispute.findUnique.mockResolvedValue(
-        makeDispute({
-          id: 9,
-          status: DisputeStatus.UNDER_REVIEW,
-          version: 1,
-        }),
-      );
+      mockTx.dispute.findUnique.mockResolvedValue(disputeRow({ id: 9, status: DisputeStatus.UNDER_REVIEW, version: 1 }));
       mockTx.dispute.updateMany.mockResolvedValue({ count: 0 });
 
-      await expect(syncDisputeResolvedFromChain(asTransactionClient(mockTx), "T-001")).rejects.toThrow(
+      await expect(syncDisputeResolvedFromChain(mockTx as unknown as Prisma.TransactionClient, "T-001")).rejects.toThrow(
         "Dispute concurrency conflict during chain sync",
       );
     });

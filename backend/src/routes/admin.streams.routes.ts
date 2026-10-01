@@ -96,7 +96,6 @@ export function createAdminStreamsRouter(
   lockService: StreamLockService = streamLockService,
   streamsService: AdminStreamsService = adminStreamsService,
   validationService: StreamValidationService = streamValidationService,
-  clawbackService: Pick<StreamClawbackService, "acquire" | "release"> = streamClawbackService,
   reconciliationService: StreamReconciliationService = streamReconciliationService,
 ) {
   const router = Router();

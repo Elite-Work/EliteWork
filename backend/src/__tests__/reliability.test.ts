@@ -2,34 +2,42 @@ import request from "supertest";
 import { TOKEN_CONFIG } from "../config/token";
 import { ErrorCode } from "../errors/errorCodes";
 
-// Mock redis
-jest.mock("../lib/redis", () => {
-  const store = new Map<string, string>();
-  return {
-    redis: {
-      status: "ready",
-      get: jest.fn(async (key: string) => store.get(key) ?? null),
-      set: jest.fn(async (key: string, value: string, ...args: unknown[]) => {
-        if (args.includes("NX") && store.has(key)) return null;
-        store.set(key, value);
-        return "OK";
-      }),
-      del: jest.fn(async (key: string) => (store.delete(key) ? 1 : 0)),
-      exists: jest.fn(async (key: string) => (store.has(key) ? 1 : 0)),
-      on: jest.fn(),
-    },
-  };
-});
+// ── Typed mock factories ─────────────────────────────────────────────────────
 
-// Mock auth middleware to skip auth
-jest.mock("../middleware/auth.middleware", () => ({
-  authMiddleware: (req: any, res: any, next: any) => {
+type RedisMock = {
+  get: jest.Mock<Promise<string | undefined>, [string]>;
+  set: jest.Mock<Promise<void>, [string, unknown]>;
+};
+
+function createMockRedis(): RedisMock {
+  const store = new Map<string, unknown>();
+  return {
+    get: jest.fn().mockImplementation(async (key: string) => store.get(key) as string | undefined),
+    set: jest.fn().mockImplementation(async (key: string, value: unknown) => { store.set(key, value); }),
+  };
+}
+
+function createMockAuthMiddleware(): jest.Mock<void, [ { user: { walletAddress: string } }, unknown, () => void ]> {
+  return jest.fn((req: { user: { walletAddress: string } }, _res: unknown, next: () => void) => {
     req.user = { walletAddress: "GBU...123" };
     next();
+  });
+}
+
+// Mock redis
+const mockRedis = createMockRedis();
+jest.mock("../lib/redis", () => ({
+  redis: {
+    get: mockRedis.get,
+    set: mockRedis.set,
   },
 }));
 
-const { createApp } = require("../app") as typeof import("../app");
+// Mock auth middleware to skip auth
+const mockAuthMiddleware = createMockAuthMiddleware();
+jest.mock("../middleware/auth.middleware", () => ({
+  authMiddleware: mockAuthMiddleware,
+}));
 
 describe("Backend Reliability Layer", () => {
   const app = createApp();

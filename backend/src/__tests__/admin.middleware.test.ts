@@ -2,7 +2,7 @@ import express, { Request, Response } from "express";
 import request from "supertest";
 import jwt from "jsonwebtoken";
 import { adminMiddleware } from "../middleware/admin.middleware";
-import { authMiddleware } from "../middleware/auth.middleware";
+import { authMiddleware, AuthRequest } from "../middleware/auth.middleware";
 import { errorHandler } from "../middleware/errorHandler";
 
 jest.mock("../services/auth.service", () => {
@@ -18,8 +18,6 @@ jest.mock("../services/auth.service", () => {
     },
   };
 });
-
-import { AuthService } from "../services/auth.service";
 
 const JWT_SECRET = "a-very-long-secret-that-is-at-least-32-chars-long";
 const JWT_ISSUER = "amana";
@@ -72,9 +70,9 @@ describe("adminMiddleware — identity propagation", () => {
     // so that `isMediatorAddress` finds a match.
     process.env.ADMIN_STELLAR_PUBKEYS = adminKey.toLowerCase();
 
-    let capturedReqUser: unknown = null;
+    let capturedReqUser: AuthRequest["user"];
     const app = buildAdminApp((req: Request, res: Response) => {
-      capturedReqUser = (req as any).user;
+      capturedReqUser = (req as AuthRequest).user;
       res.json({ ok: true });
     });
 
@@ -85,8 +83,8 @@ describe("adminMiddleware — identity propagation", () => {
 
     expect(res.status).toBe(200);
     expect(capturedReqUser).toBeDefined();
-    expect((capturedReqUser as any).isAdmin).toBe(true);
-    expect((capturedReqUser as any).walletAddress).toBe(adminKey.toLowerCase());
+    expect(capturedReqUser?.isAdmin).toBe(true);
+    expect(capturedReqUser?.walletAddress).toBe(adminKey.toLowerCase());
   });
 
   it("does NOT set isAdmin when caller is not on the admin allowlist", async () => {
@@ -121,9 +119,9 @@ describe("adminMiddleware — identity propagation", () => {
     const adminKey = "GCADMIN22222222222222222222222222222222222222222222222222";
     process.env.ADMIN_STELLAR_PUBKEYS = adminKey.toLowerCase();
 
-    let capturedUser: unknown = null;
+    let capturedUser: AuthRequest["user"];
     const app = buildAdminApp((req: Request, res: Response) => {
-      capturedUser = (req as any).user;
+      capturedUser = (req as AuthRequest).user;
       res.json({ ok: true });
     });
 
@@ -133,10 +131,10 @@ describe("adminMiddleware — identity propagation", () => {
       .set("Authorization", `Bearer ${token}`);
 
     expect(res.status).toBe(200);
-    const user = capturedUser as any;
-    expect(user.isAdmin).toBe(true);
-    expect(user.walletAddress).toBe(adminKey.toLowerCase());
-    expect(user.sub).toBe(adminKey.toLowerCase());
+    const user = capturedUser;
+    expect(user?.isAdmin).toBe(true);
+    expect(user?.walletAddress).toBe(adminKey.toLowerCase());
+    expect(user?.sub).toBe(adminKey.toLowerCase());
   });
 
   it("grants access when multiple admin pubkeys are configured", async () => {
@@ -144,9 +142,9 @@ describe("adminMiddleware — identity propagation", () => {
     const firstAdmin = "GCADMIN11111111111111111111111111111111111111111111111111";
     process.env.ADMIN_STELLAR_PUBKEYS = `${firstAdmin.toLowerCase()},${secondAdmin.toLowerCase()}`;
 
-    let capturedUser: unknown = null;
+    let capturedUser: AuthRequest["user"];
     const app = buildAdminApp((req: Request, res: Response) => {
-      capturedUser = (req as any).user;
+      capturedUser = (req as AuthRequest).user;
       res.json({ ok: true });
     });
 
@@ -156,6 +154,6 @@ describe("adminMiddleware — identity propagation", () => {
       .set("Authorization", `Bearer ${token}`);
 
     expect(res.status).toBe(200);
-    expect((capturedUser as any).isAdmin).toBe(true);
+    expect(capturedUser?.isAdmin).toBe(true);
   });
 });

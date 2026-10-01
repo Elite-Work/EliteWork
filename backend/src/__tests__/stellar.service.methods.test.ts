@@ -8,23 +8,16 @@ jest.mock("../config/stellar", () => ({
     sorobanRpcClient: {},
     networkPassphrase: "Test SDF Network ; September 2015",
 }));
-jest.mock("../config/tracing", () => ({
-    TracingHelper: {
-        withSpan: (_n: string, fn: (span: unknown) => unknown) => fn({ setAttributes: jest.fn(), end: jest.fn() }),
-    },
+vi.mock("../config/tracing", () => ({ TracingHelper: { withSpan: (_n: string, fn: (...args: unknown[]) => unknown) => fn({ setAttributes: vi.fn(), end: vi.fn() }) } }));
+vi.mock("../lib/circuitBreaker", () => ({
+    CircuitBreaker: vi.fn().mockImplementation(() => ({ getState: () => "CLOSED", execute: (fn: (...args: unknown[]) => unknown) => fn() })),
+    withCircuitBreaker: (_fn: (...args: unknown[]) => unknown, _cb: any) => _fn(),
+    getCircuitBreaker: vi.fn(),
 }));
-jest.mock("../lib/circuitBreaker", () => ({
-    CircuitBreaker: jest.fn().mockImplementation(() => ({
-        getState: () => "CLOSED",
-        execute: (fn: () => unknown) => fn(),
-    })),
-    withCircuitBreaker: (_fn: () => unknown, _cb: unknown) => _fn(),
-    getCircuitBreaker: jest.fn(),
-}));
-jest.mock("../lib/retry", () => ({ retryAsync: (_fn: () => unknown) => _fn() }));
-jest.mock("../lib/metrics", () => ({ classifySubmissionError: jest.fn(), recordTransactionSubmission: jest.fn() }));
-jest.mock("../middleware/logger", () => ({ appLogger: { info: jest.fn(), error: jest.fn(), warn: jest.fn() } }));
-jest.mock("../errors/service.errors", () => ({
+vi.mock("../lib/retry", () => ({ retryAsync: (_fn: (...args: unknown[]) => unknown) => _fn() }));
+vi.mock("../lib/metrics", () => ({ classifySubmissionError: vi.fn(), recordTransactionSubmission: vi.fn() }));
+vi.mock("../middleware/logger", () => ({ appLogger: { info: vi.fn(), error: vi.fn(), warn: vi.fn() } }));
+vi.mock("../errors/service.errors", () => ({
     classifyStellarServiceError: (e: Error) => e,
     StellarError: class StellarError extends Error { constructor(p: any) { super(p.message); } },
 }));

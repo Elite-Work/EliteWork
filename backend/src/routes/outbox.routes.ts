@@ -113,6 +113,9 @@ export function createOutboxRoutes(): Router {
     isAdmin,
     async (req: Request, res: Response, next: NextFunction) => {
       try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports -- lazy require avoids a route-layer circular import
+        const prisma = require("../lib/db").prisma;
+
         // Fetch outbox stats
         const totalEvents = await prisma.chainEventOutbox.count();
         const pendingEvents = await prisma.chainEventOutbox.count({
@@ -176,6 +179,9 @@ export function createOutboxRoutes(): Router {
             error: "Missing required field: eventId or tradeId",
           });
         }
+
+        // eslint-disable-next-line @typescript-eslint/no-require-imports -- lazy require avoids a route-layer circular import
+        const prisma = require("../lib/db").prisma;
 
         const event = await prisma.chainEventOutbox.findFirst({
           where: eventId ? { id: parseInt(eventId) } : { tradeId },

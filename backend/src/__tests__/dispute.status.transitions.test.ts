@@ -113,7 +113,7 @@ describe("DisputeService – status transitions", () => {
 
   beforeEach(() => {
     prisma = createMockPrisma();
-    service = new DisputeService(asPrismaClient(prisma));
+    service = new DisputeService(prisma);
     process.env.ADMIN_STELLAR_PUBKEYS = MEDIATOR;
   });
 

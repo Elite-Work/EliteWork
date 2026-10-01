@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -11,12 +11,45 @@ import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../types/navigation';
 import { useAuthStore } from '../stores/authStore';
 import { authApi } from '../api/auth';
+import { authenticateWithBiometrics, isBiometricUnlockAvailable } from '../utils/biometrics';
 
 type Props = StackScreenProps<RootStackParamList, 'WalletConnect'>;
 
 export default function WalletConnectScreen({ navigation }: Props) {
   const [connecting, setConnecting] = useState(false);
-  const { setWalletAddress, setToken } = useAuthStore();
+  const [unlocking, setUnlocking] = useState(false);
+  const [rememberedAddress, setRememberedAddress] = useState<string | null>(null);
+  const [biometricsAvailable, setBiometricsAvailable] = useState(false);
+  const { setWalletAddress, setToken, getRememberedWalletAddress } = useAuthStore();
+
+  // #57: offer a faster re-auth path for returning users instead of always
+  // requiring the full "paste your address" flow.
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      const [address, hardwareReady] = await Promise.all([
+        getRememberedWalletAddress(),
+        isBiometricUnlockAvailable(),
+      ]);
+      if (cancelled) return;
+      setRememberedAddress(address);
+      setBiometricsAvailable(hardwareReady);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [getRememberedWalletAddress]);
+
+  const authenticateAddress = async (address: string) => {
+    const { challenge } = await authApi.generateChallenge(address);
+    // On mobile we cannot sign with Freighter; we use the challenge as a demo token
+    const { token } = await authApi.verifyChallenge(address, challenge);
+    await setToken(token);
+    setWalletAddress(address);
+    navigation.replace('TradeList');
+  };
 
   const handleConnect = async () => {
     setConnecting(true);
@@ -34,12 +67,7 @@ export default function WalletConnectScreen({ navigation }: Props) {
           }
 
           try {
-            const { challenge } = await authApi.generateChallenge(address);
-            // On mobile we cannot sign with Freighter; we use the challenge as a demo token
-            const { token } = await authApi.verifyChallenge(address, challenge);
-            await setToken(token);
-            setWalletAddress(address);
-            navigation.replace('TradeList');
+            await authenticateAddress(address);
           } catch (err: unknown) {
             Alert.alert('Connection failed', (err as Error)?.message ?? 'Unknown error');
           } finally {
@@ -52,6 +80,30 @@ export default function WalletConnectScreen({ navigation }: Props) {
       setConnecting(false);
     }
   };
+
+  const handleBiometricUnlock = async () => {
+    if (!rememberedAddress) return;
+    setUnlocking(true);
+    try {
+      const result = await authenticateWithBiometrics('Unlock Amana to continue trading');
+      if (!result.success) {
+        if (result.error && result.error !== 'user_cancel') {
+          Alert.alert('Unlock failed', 'Please try again or connect your wallet manually.');
+        }
+        return;
+      }
+      await authenticateAddress(rememberedAddress);
+    } catch (err: unknown) {
+      Alert.alert('Connection failed', (err as Error)?.message ?? 'Unknown error');
+    } finally {
+      setUnlocking(false);
+    }
+  };
+
+  const showBiometricUnlock = biometricsAvailable && !!rememberedAddress;
+  const truncatedAddress = rememberedAddress
+    ? `${rememberedAddress.slice(0, 4)}…${rememberedAddress.slice(-4)}`
+    : '';
 
   return (
     <View style={styles.container}>
@@ -67,15 +119,37 @@ export default function WalletConnectScreen({ navigation }: Props) {
           Link your wallet to start trading securely with escrow-backed protection.
         </Text>
 
+        {showBiometricUnlock && (
+          <TouchableOpacity
+            style={[styles.biometricButton, unlocking && styles.buttonDisabled]}
+            onPress={handleBiometricUnlock}
+            disabled={unlocking || connecting}
+            accessibilityRole="button"
+            accessibilityLabel={`Unlock with Face ID or fingerprint as ${truncatedAddress}`}
+            accessibilityHint="Uses your device biometrics to reconnect without retyping your wallet address"
+          >
+            {unlocking ? (
+              <ActivityIndicator color="#2d6a2d" />
+            ) : (
+              <Text style={styles.biometricButtonText}>🔐 Unlock as {truncatedAddress}</Text>
+            )}
+          </TouchableOpacity>
+        )}
+
         <TouchableOpacity
           style={[styles.button, connecting && styles.buttonDisabled]}
           onPress={handleConnect}
-          disabled={connecting}
+          disabled={connecting || unlocking}
+          accessibilityRole="button"
+          accessibilityLabel="Connect wallet"
+          accessibilityState={{ disabled: connecting || unlocking, busy: connecting }}
         >
           {connecting ? (
             <ActivityIndicator color="#fff" />
           ) : (
-            <Text style={styles.buttonText}>Connect Wallet</Text>
+            <Text style={styles.buttonText}>
+              {showBiometricUnlock ? 'Use a different wallet' : 'Connect Wallet'}
+            </Text>
           )}
         </TouchableOpacity>
       </View>
@@ -135,13 +209,31 @@ const styles = StyleSheet.create({
     backgroundColor: '#2d6a2d',
     borderRadius: 8,
     paddingVertical: 14,
+    minHeight: 44,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   buttonDisabled: {
     opacity: 0.6,
   },
   buttonText: {
     color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  biometricButton: {
+    backgroundColor: '#f0f8f0',
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: '#2d6a2d',
+    paddingVertical: 14,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  biometricButtonText: {
+    color: '#2d6a2d',
     fontSize: 16,
     fontWeight: '600',
   },

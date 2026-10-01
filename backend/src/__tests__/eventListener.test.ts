@@ -1,4 +1,8 @@
+import { jest } from "@jest/globals";
+import { vi } from "vitest";
 import { EventType } from "../types/events";
+import { createRawSorobanEvent } from "./factories/mockFactories";
+import type { RawSorobanEvent } from "./factories/mockFactories";
 
 /* ------------------------------------------------------------------ */
 /*  Hoisted mock variables (must be declared before jest.mock factories) */
@@ -53,7 +57,7 @@ const TEST_CONFIG = {
 /*  Helpers                                                           */
 /* ------------------------------------------------------------------ */
 
-function createMockPrisma() {
+function createMockPrismaForEventListener() {
   const mockTx = {
     trade: { upsert: jest.fn().mockResolvedValue({}) },
     processedEvent: {
@@ -64,25 +68,15 @@ function createMockPrisma() {
   return {
     trade: { upsert: jest.fn().mockResolvedValue({}) },
     processedEvent: {
-      findMany: jest.fn().mockResolvedValue([]),
-      findUnique: jest.fn().mockResolvedValue(null),
-      create: jest.fn().mockResolvedValue({}),
+      findFirst: vi.fn().mockResolvedValue(null),
+      findMany: vi.fn().mockResolvedValue([]),
+      findUnique: vi.fn().mockResolvedValue(null),
+      create: vi.fn().mockResolvedValue({}),
     },
     $transaction: jest.fn().mockImplementation(async (cb: (tx: typeof mockTx) => Promise<void>) => {
       await cb(mockTx);
     }),
     _mockTx: mockTx,
-  } as any;
-}
-
-/** Build a minimal raw Soroban event for testing. */
-function makeRawEvent(ledger: number, id = `evt-${ledger}`, contractId = "CONTRACT_TEST_123") {
-  return {
-    ledger,
-    id,
-    contractId,
-    topic: [{ _scval: "symbol" }, { _scval: "tradeId" }],
-    value: { type: "test", value: {} },
   };
 }
 
@@ -456,6 +450,11 @@ describe("EventListenerService", () => {
   describe("start and stop lifecycle", () => {
     it("should hydrate lastLedger from DB on start", async () => {
       const fresh = new EventListenerService(mockPrisma);
+      mockPrisma.processedEvent.findFirst.mockResolvedValue({
+        ledgerSequence: 50,
+        contractId: "C",
+        eventId: "e1",
+      });
       mockPrisma.processedEvent.findMany.mockResolvedValue([
         { ledgerSequence: 50, contractId: "C", eventId: "e1" },
         { ledgerSequence: 49, contractId: "C", eventId: "e2" },
@@ -463,8 +462,35 @@ describe("EventListenerService", () => {
 
       await fresh.start();
 
-      expect(mockPrisma.processedEvent.findMany).toHaveBeenCalled();
+      expect(mockPrisma.processedEvent.findFirst).toHaveBeenCalled();
       expect((fresh as any).lastLedger).toBe(50);
+      fresh.stop();
+    });
+
+    it("should schedule the first poll without waiting for full cache hydration", async () => {
+      const fresh = new EventListenerService(mockPrisma);
+      let resolveCacheHydration!: (value: unknown) => void;
+      mockPrisma.processedEvent.findFirst.mockResolvedValue({
+        ledgerSequence: 25,
+        contractId: "C",
+        eventId: "e25",
+      });
+      mockPrisma.processedEvent.findMany.mockImplementation(
+        () => new Promise((resolve) => {
+          resolveCacheHydration = resolve;
+        }),
+      );
+
+      await fresh.start();
+
+      expect((fresh as any).running).toBe(true);
+      expect(mockGetEvents).not.toHaveBeenCalled();
+
+      jest.advanceTimersByTime(0);
+      await Promise.resolve();
+      expect(mockGetEvents).toHaveBeenCalledTimes(1);
+
+      resolveCacheHydration([]);
       fresh.stop();
     });
 

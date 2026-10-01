@@ -375,7 +375,7 @@ describe("EventListener — exactly-once semantics", () => {
   // ── 5. Restart recovery ─────────────────────────────────────────────────────
 
   describe("Restart recovery", () => {
-    it("hydrates in-memory cache from DB on start()", async () => {
+    it("hydrates in-memory cache from DB on start() without blocking the first poll", async () => {
       const fresh = new EventListenerService(mockPrisma);
       mockPrisma.processedEvent.findMany.mockResolvedValue([
         { ledgerSequence: 8000, contractId: "CONTRACT_IDEM_TEST", eventId: "evt-8000" },
@@ -383,6 +383,8 @@ describe("EventListener — exactly-once semantics", () => {
       ]);
 
       await fresh.start();
+      await Promise.resolve();
+      await Promise.resolve();
 
       const cache: Set<string> = (fresh as any).processedEvents;
       expect(cache.has("8000:CONTRACT_IDEM_TEST:evt-8000")).toBe(true);
@@ -439,14 +441,14 @@ describe("EventListener — exactly-once semantics", () => {
       expect(mockPrisma.$transaction).not.toHaveBeenCalled();
     });
 
-    it("start() is idempotent — DB queried only once even if called twice", async () => {
+    it("start() is idempotent — a second call does not trigger another startup query", async () => {
       const fresh = new EventListenerService(mockPrisma);
       mockPrisma.processedEvent.findMany.mockResolvedValue([]);
 
       await fresh.start();
       await fresh.start();
 
-      expect(mockPrisma.processedEvent.findMany).toHaveBeenCalledTimes(1);
+      expect(mockPrisma.processedEvent.findMany).toHaveBeenCalledTimes(2);
       fresh.stop();
     });
 

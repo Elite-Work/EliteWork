@@ -1,9 +1,9 @@
-import { Prisma, Trade, TradeStatus, TradeTemplate } from "@prisma/client";
-import { ContractService } from "../services/contract.service";
+import { PrismaClient, TradeStatus } from "@prisma/client";
 import {
   TradeTemplateNotFoundError,
   TradeTemplateService,
 } from "../services/trade.template.service";
+import { ContractService } from "../services/contract.service";
 
 describe("TradeTemplateService", () => {
   const userAddress = "g-user";
@@ -47,14 +47,9 @@ describe("TradeTemplateService", () => {
       create: jest.fn<Promise<Trade>, [args: Prisma.TradeCreateArgs]>(),
     },
   };
-  const contract: jest.Mocked<Pick<ContractService, "buildCreateTradeTx">> = {
-    buildCreateTradeTx: jest.fn<
-      ReturnType<ContractService["buildCreateTradeTx"]>,
-      Parameters<ContractService["buildCreateTradeTx"]>
-    >(),
-  };
+  const contract = { buildCreateTradeTx: jest.fn() };
   const service = new TradeTemplateService(
-    prisma as unknown as TemplateDatabase,
+    prisma as unknown as Pick<PrismaClient, "tradeTemplate" | "trade">,
     contract as unknown as ContractService,
   );
 

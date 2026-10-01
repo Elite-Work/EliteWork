@@ -71,7 +71,7 @@ export interface WebhookJobData {
 
 export interface NotificationJobData {
   userAddress: string;
-  type: 'in_app' | 'email' | 'push';
+  type: 'in_app' | 'email' | 'push' | 'sms';
   title: string;
   message: string;
   metadata?: Record<string, unknown>;
@@ -79,7 +79,7 @@ export interface NotificationJobData {
 
 export interface ExportJobData {
   requestedBy: string;
-  format: 'csv' | 'json';
+  format: 'csv' | 'json' | 'pdf';
   tradeIds?: string[];
   filters?: Record<string, unknown>;
 }

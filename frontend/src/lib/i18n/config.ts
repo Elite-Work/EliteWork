@@ -5,7 +5,7 @@
 export const DEFAULT_LOCALE = "en-NG";
 export const DEFAULT_CURRENCY = "NGN";
 
-export const SUPPORTED_LOCALES = ["en-NG", "en-US", "pseudo"] as const;
+export const SUPPORTED_LOCALES = ["en-NG", "en-US", "fr", "pseudo"] as const;
 export type Locale = (typeof SUPPORTED_LOCALES)[number];
 
 /**

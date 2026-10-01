@@ -154,7 +154,7 @@ export class EvidenceService {
         }
 
         // Enforce configurable size limit (default 50MB)
-        const size = (file as any).size ?? file.buffer.length;
+        const size = file.size ?? file.buffer.length;
         const MAX = env.EVIDENCE_MAX_BYTES;
         if (size > MAX) {
             throw new EvidenceValidationError("File too large");
@@ -197,7 +197,7 @@ export class EvidenceService {
 
         const timeoutMs = env.IPFS_STREAM_TIMEOUT_MS;
 
-        let lastError: any = null;
+        let lastError: unknown = null;
         for (const url of urls) {
             if (this.isGatewayCircuitOpen(url)) {
                 continue;

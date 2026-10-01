@@ -2,16 +2,11 @@ import axios from "axios";
 import { Readable } from "stream";
 import { EvidenceService } from "../services/evidence.service";
 import { ServiceUnavailableError } from "../services/ipfs.service";
-
-function createMockPrisma() {
-    return {
-        trade: { findUnique: jest.fn() },
-        tradeEvidence: { findMany: jest.fn(), create: jest.fn() },
-    } as any;
-}
+import { createMockPrisma, createMockAxiosResponse } from "./factories/mockFactories";
+import type { MockedPrisma } from "./factories/mockFactories";
 
 describe("EvidenceService.streamFromIPFS gateway fallback and range support", () => {
-    let prisma: ReturnType<typeof createMockPrisma>;
+    let prisma: MockedPrisma;
     let service: EvidenceService;
 
     beforeEach(() => {
@@ -29,15 +24,14 @@ describe("EvidenceService.streamFromIPFS gateway fallback and range support", ()
         process.env.IPFS_GATEWAY_URLS = "https://g1.example.com/ipfs,https://g2.example.com/ipfs";
 
         const payload = Buffer.from("hello world gateway2");
-        jest.spyOn(axios, "get").mockImplementation(async (url: string, opts: any) => {
+        jest.spyOn(axios, "get").mockImplementation(async (url: string, opts: { timeout?: number; headers?: Record<string, string> }) => {
             if (url.includes("g1.example.com")) {
                 throw new Error("gateway1 timeout");
             }
-            return {
+            return createMockAxiosResponse(Readable.from(payload), {
                 status: 200,
-                data: Readable.from(payload),
                 headers: { "content-type": "video/mp4" },
-            } as any;
+            });
         });
 
         const res = await service.streamFromIPFS("bafy123");
@@ -57,21 +51,20 @@ describe("EvidenceService.streamFromIPFS gateway fallback and range support", ()
         process.env.IPFS_GATEWAY_URLS = "https://g.example.com/ipfs";
         const full = Buffer.from("abcdefghijklmnopqrstuvwxyz");
         // return a 206 and stream the requested slice
-        jest.spyOn(axios, "get").mockImplementation(async (url: string, opts: any) => {
+        jest.spyOn(axios, "get").mockImplementation(async (url: string, opts: { headers?: Record<string, string> }) => {
             const range = opts.headers?.Range as string | undefined;
             // simulate Range: bytes=5-9
             const start = range ? Number(range.replace(/bytes=(\d+)-.*/, "$1")) : 0;
             const end = start + 4;
             const slice = full.slice(start, end + 1);
-            return {
+            return createMockAxiosResponse(Readable.from(slice), {
                 status: 206,
-                data: Readable.from(slice),
                 headers: {
                     "content-type": "video/mp4",
                     "content-range": `bytes ${start}-${end}/${full.length}`,
                     "content-length": String(slice.length),
                 },
-            } as any;
+            });
         });
 
         const rangeHeader = "bytes=5-9";
@@ -97,11 +90,10 @@ describe("EvidenceService.streamFromIPFS gateway fallback and range support", ()
     it("enforces gateway allowlist", async () => {
         process.env.IPFS_GATEWAY_URLS = "https://blocked.example.com/ipfs";
         process.env.IPFS_GATEWAY_ALLOWLIST = "allowed.example.com";
-        const getSpy = jest.spyOn(axios, "get").mockResolvedValue({
+        const getSpy = jest.spyOn(axios, "get").mockResolvedValue(createMockAxiosResponse(Readable.from(Buffer.from("ok")), {
             status: 200,
-            data: Readable.from(Buffer.from("ok")),
             headers: { "content-type": "video/mp4" },
-        } as any);
+        }));
 
         await expect(service.streamFromIPFS("bafy123")).rejects.toBeInstanceOf(ServiceUnavailableError);
         expect(getSpy).not.toHaveBeenCalled();
@@ -116,11 +108,10 @@ describe("EvidenceService.streamFromIPFS gateway fallback and range support", ()
             if (url.includes("g1.example.com")) {
                 throw new Error("gateway 1 down");
             }
-            return {
+            return createMockAxiosResponse(Readable.from(Buffer.from("ok")), {
                 status: 200,
-                data: Readable.from(Buffer.from("ok")),
                 headers: { "content-type": "video/mp4" },
-            } as any;
+            });
         });
 
         await service.streamFromIPFS("bafy123");

@@ -201,6 +201,25 @@
         { "expr": "slo:S3:error_budget_consumed:ratio6h", "legendFormat": "S3 burn (6h)" },
         { "expr": "slo:S4:error_budget_consumed:ratio6h", "legendFormat": "S4 burn (6h)" }
       ]
+    },
+    {
+      "id": 11,
+      "title": "Admin streams list latency p95",
+      "description": "p95 of GET /api/admin/streams (backend/src/routes/admin.streams.routes.ts), the endpoint that can return the largest result sets. Route label is matched with an alternation so the panel works whether OTel records the mounted path (/api/admin/streams) or the router path (/admin/streams). Read the number before and after a change to quantify the effect — this panel is the measurable before/after for issue #105.",
+      "type": "timeseries",
+      "datasource": "${datasource}",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 56 },
+      "fieldConfig": { "defaults": { "unit": "ms", "min": 0 }, "overrides": [] },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(http_server_duration_milliseconds_bucket{http_route=~\"/api/admin/streams|/admin/streams\"}[5m])) by (le, http_route))",
+          "legendFormat": "{{http_route}} p95"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(http_server_duration_milliseconds_bucket{http_route=~\"/api/admin/streams|/admin/streams\"}[5m])) by (le, http_route))",
+          "legendFormat": "{{http_route}} p99"
+        }
+      ]
     }
   ]
 }

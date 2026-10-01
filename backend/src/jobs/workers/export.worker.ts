@@ -6,7 +6,9 @@ import { Parser as CsvParser } from 'json2csv';
 import { attachDeadLetterQueue } from '../deadLetter';
 
 export interface ExportResult {
-  format: 'csv' | 'json';
+  // Mirrors `ExportJobData['format']` so a queued 'pdf' job is not narrowed
+  // away from the worker's result contract.
+  format: 'csv' | 'json' | 'pdf';
   data: string;
   rowCount: number;
   s3Key?: string;
@@ -28,6 +30,10 @@ export function createExportWorker(): Worker<ExportJobData> {
     async (job: Job<ExportJobData>): Promise<ExportResult> => {
       const { requestedBy, format, tradeIds, filters } = job.data;
       appLogger.info({ jobId: job.id, requestedBy, format }, 'Processing export job');
+
+      if (format === 'pdf') {
+        throw new Error('PDF exports are not supported by the background export worker');
+      }
 
       const where: Record<string, unknown> = { ...filters };
       if (tradeIds?.length) {

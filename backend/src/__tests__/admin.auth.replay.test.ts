@@ -16,7 +16,7 @@ import express, { Request, Response } from "express";
 import request from "supertest";
 import jwt from "jsonwebtoken";
 import { adminMiddleware } from "../middleware/admin.middleware";
-import { authMiddleware } from "../middleware/auth.middleware";
+import { authMiddleware, AuthRequest } from "../middleware/auth.middleware";
 import { errorHandler } from "../middleware/errorHandler";
 
 // ── Mock AuthService — fully self-contained, no jest.requireActual ────────────
@@ -143,9 +143,9 @@ describe("Admin auth — happy path", () => {
   });
 
   it("sets isAdmin = true on the request context", async () => {
-    let capturedUser: unknown = null;
+    let capturedUser: AuthRequest["user"];
     const app = buildAdminApp((req: Request, res: Response) => {
-      capturedUser = (req as any).user;
+      capturedUser = (req as AuthRequest).user;
       res.json({ ok: true });
     });
 
@@ -155,8 +155,8 @@ describe("Admin auth — happy path", () => {
       .set("Authorization", `Bearer ${token}`);
 
     expect(res.status).toBe(200);
-    expect((capturedUser as any).isAdmin).toBe(true);
-    expect((capturedUser as any).walletAddress).toBe(ADMIN_ADDRESS);
+    expect(capturedUser?.isAdmin).toBe(true);
+    expect(capturedUser?.walletAddress).toBe(ADMIN_ADDRESS);
   });
 });
 

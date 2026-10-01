@@ -41,12 +41,15 @@ export async function isAlreadyProcessed(
  * Returns true if the error is a Prisma unique-constraint violation (P2002).
  */
 export function isPrismaUniqueConstraintError(err: unknown): boolean {
-  return (
-    typeof err === "object" &&
-    err !== null &&
-    "code" in err &&
-    (err as { code?: unknown }).code === "P2002"
-  );
+  if (err instanceof Prisma.PrismaClientKnownRequestError) {
+    return err.code === "P2002";
+  }
+
+  if (typeof err === "object" && err !== null && "code" in err) {
+    return (err as { code?: string }).code === "P2002";
+  }
+
+  return false;
 }
 
 /**
@@ -118,32 +121,117 @@ export class EventListenerService {
     });
   }
 
-  /** Boot the polling loop. Loads recent processed ledgers from DB into memory. */
+  /** Boot the polling loop.
+   *
+   * We intentionally keep the startup cursor lookup lightweight: the first poll
+   * must start promptly after deploy, and the full history cache can warm in the
+   * background without blocking time-to-first-poll.
+   */
   async start(): Promise<void> {
     if (this.running) return;
     this.running = true;
 
-    // Hydrate in-memory set from DB on startup
-    const recentEvents = await this.prisma.processedEvent.findMany({
-      orderBy: { ledgerSequence: "desc" },
-      take: this.config.processedLedgersCacheSize,
-    });
-    for (const e of recentEvents) {
-      const cacheKey = `${e.ledgerSequence}:${e.contractId}:${e.eventId}`;
-      this.processedEvents.add(cacheKey);
+    const processedEventModel = this.prisma.processedEvent as unknown as {
+      findFirst?: (args: {
+        orderBy: { ledgerSequence: "desc" };
+        select: { ledgerSequence: true; contractId: true; eventId: true };
+      }) => Promise<{
+        ledgerSequence: number;
+        contractId: string;
+        eventId: string;
+      } | null>;
+      findMany?: (args: {
+        orderBy: { ledgerSequence: "desc" };
+        take: number;
+        select: { ledgerSequence: true; contractId: true; eventId: true };
+      }) => Promise<Array<{
+        ledgerSequence: number;
+        contractId: string;
+        eventId: string;
+      }>>;
+    };
+
+    let latestEvent:
+      | { ledgerSequence: number; contractId: string; eventId: string }
+      | null = null;
+
+    if (processedEventModel.findFirst) {
+      latestEvent = await processedEventModel.findFirst({
+        orderBy: { ledgerSequence: "desc" },
+        select: {
+          ledgerSequence: true,
+          contractId: true,
+          eventId: true,
+        },
+      });
+    } else if (processedEventModel.findMany) {
+      const recentEvents = await processedEventModel.findMany({
+        orderBy: { ledgerSequence: "desc" },
+        take: 1,
+        select: {
+          ledgerSequence: true,
+          contractId: true,
+          eventId: true,
+        },
+      });
+      latestEvent = recentEvents[0] ?? null;
     }
-    if (recentEvents.length > 0) {
-      this.lastLedger = recentEvents[0].ledgerSequence;
+
+    if (latestEvent) {
+      this.lastLedger = latestEvent.ledgerSequence;
+      this.processedEvents.add(
+        `${latestEvent.ledgerSequence}:${latestEvent.contractId}:${latestEvent.eventId}`,
+      );
     }
 
     appLogger.info(
       {
         pollIntervalMs: this.config.pollIntervalMs,
         contractId: this.config.contractId,
+        lastLedger: this.lastLedger,
       },
       "[EventListener] Started",
     );
+
     this.scheduleNextPoll(0);
+
+    if (processedEventModel.findMany) {
+      void this.warmProcessedEventCache().catch((error) => {
+        appLogger.warn({ error }, "[EventListener] Startup cache warmup failed");
+      });
+    }
+  }
+
+  /** Warm the in-memory dedupe cache without delaying the first poll. */
+  private async warmProcessedEventCache(): Promise<void> {
+    const processedEventModel = this.prisma.processedEvent as unknown as {
+      findMany?: (args: {
+        orderBy: { ledgerSequence: "desc" };
+        take: number;
+        select: { ledgerSequence: true; contractId: true; eventId: true };
+      }) => Promise<Array<{
+        ledgerSequence: number;
+        contractId: string;
+        eventId: string;
+      }>>;
+    };
+
+    const recentEvents = processedEventModel.findMany
+      ? await processedEventModel.findMany({
+          orderBy: { ledgerSequence: "desc" },
+          take: this.config.processedLedgersCacheSize,
+          select: {
+            ledgerSequence: true,
+            contractId: true,
+            eventId: true,
+          },
+        })
+      : [];
+
+    for (const e of recentEvents) {
+      const cacheKey = `${e.ledgerSequence}:${e.contractId}:${e.eventId}`;
+      this.processedEvents.add(cacheKey);
+    }
   }
 
   /** Gracefully stop the polling loop. */
@@ -318,10 +406,9 @@ export class EventListenerService {
     // If the Prisma client was generated with a `chainEventOutbox` model,
     // it will be available on the client. Use feature-detection rather than
     // unsafe casts.
-    const outbox = (this.prisma as unknown as Record<string, unknown>)[
-      "chainEventOutbox"
-    ];
-    return Boolean(outbox && typeof (outbox as any).findUnique === "function");
+    const prismaRecord = this.prisma as unknown as Record<string, unknown>;
+    const outbox = prismaRecord["chainEventOutbox"] as Record<string, unknown> | undefined;
+    return Boolean(outbox && typeof outbox.findUnique === "function");
   }
 
   private async ensureOutboxRecord(event: ParsedEvent): Promise<OutboxRecord> {

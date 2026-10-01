@@ -13,23 +13,7 @@ import { ErrorCode } from "../errors/errorCodes";
 
 const MEDIATOR = "GA_MEDIATOR_ADDR_VALID";
 const NOW = new Date("2025-06-01T00:00:00.000Z");
-
-type CleanupDisputeRow = Prisma.DisputeGetPayload<{
-  select: { id: true; tradeId: true };
-}>;
-
-type DisputePrismaMock = {
-  dispute: {
-    findMany: jest.MockedFunction<
-      (args: Prisma.DisputeFindManyArgs) => Promise<CleanupDisputeRow[]>
-    >;
-    updateMany: jest.MockedFunction<
-      (args: Prisma.DisputeUpdateManyArgs) => Promise<Prisma.BatchPayload>
-    >;
-  };
-};
-
-function createMockPrisma(): DisputePrismaMock {
+function createMockPrisma() {
   return {
     dispute: {
       findMany: jest.fn<
@@ -56,7 +40,7 @@ describe("DisputeService – purgeCompletedDisputeData", () => {
 
   beforeEach(() => {
     prisma = createMockPrisma();
-    service = new DisputeService(asPrismaClient(prisma));
+    service = new DisputeService(prisma);
     process.env.ADMIN_STELLAR_PUBKEYS = MEDIATOR;
     jest.useFakeTimers();
     jest.setSystemTime(NOW);

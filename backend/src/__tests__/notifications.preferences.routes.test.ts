@@ -5,6 +5,7 @@ import * as StellarSdk from "@stellar/stellar-sdk";
 import { createNotificationPreferencesRouter } from "../routes/notifications.preferences.routes";
 import { AuthService } from "../services/auth.service";
 import { errorHandler } from "../middleware/errorHandler";
+import { PrismaClient } from "@prisma/client";
 
 jest.mock("../services/auth.service", () => ({
   AuthService: {
@@ -19,16 +20,31 @@ jest.mock("../services/auth.service", () => ({
 describe("Notification preferences route", () => {
   const userAddress = StellarSdk.Keypair.random().publicKey();
   let token: string;
-  const mockPrisma = {
+
+  interface MockNotificationPreference {
+    preferences: {
+      trade_funded?: string[];
+      trade_delivered?: string[];
+    };
+  }
+
+  interface MockPrismaClient {
+    notificationPreference: {
+      findUnique: jest.Mock<Promise<MockNotificationPreference | null>, [unknown]>;
+      upsert: jest.Mock<Promise<MockNotificationPreference>, [unknown]>;
+    };
+  }
+
+  const mockPrisma: MockPrismaClient = {
     notificationPreference: {
       findUnique: jest.fn(),
       upsert: jest.fn(),
     },
-  } as any;
+  };
 
   const app = express();
   app.use(express.json());
-  app.use("/", createNotificationPreferencesRouter(mockPrisma));
+  app.use("/", createNotificationPreferencesRouter(mockPrisma as unknown as PrismaClient));
   app.use(errorHandler);
 
   beforeAll(() => {
@@ -91,7 +107,7 @@ describe("Notification preferences route", () => {
         trade_delivered: ["in-app"],
       },
     });
-    mockPrisma.notificationPreference.upsert.mockImplementation(async (args: any) => ({
+    mockPrisma.notificationPreference.upsert.mockImplementation(async (args: { update: { preferences: { trade_funded: string[] } } }) => ({
       preferences: args.update.preferences,
     }));
 

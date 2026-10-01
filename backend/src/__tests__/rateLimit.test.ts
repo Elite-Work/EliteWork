@@ -2,14 +2,26 @@ import { Request, Response } from 'express';
 import { ErrorCode } from '../errors/errorCodes';
 import { RATE_LIMIT_CONFIG } from '../config/rateLimit';
 
-const mockRateLimit = jest.fn((options: unknown) => {
-  void options;
-  return (_req: Request, _res: Response, next: () => void) => next();
-});
+// ── Typed mock factories ─────────────────────────────────────────────────────
+
+type RateLimitOptions = {
+  windowMs: number;
+  max: number;
+  standardHeaders: boolean;
+  legacyHeaders: boolean;
+  keyGenerator?: (req: Request) => string;
+  handler?: jest.Mock;
+};
+
+function createMockRateLimiter(): jest.Mock<void, [Request, Response, () => void]> & { mock: { calls: Array<[RateLimitOptions]> } } {
+  return jest.fn((_options: RateLimitOptions) => (_req: Request, _res: Response, next: () => void) => next());
+}
+
+const mockRateLimit = createMockRateLimiter();
 
 jest.mock('express-rate-limit', () => ({
   __esModule: true,
-  default: (options: unknown) => mockRateLimit(options),
+  default: (options: RateLimitOptions) => mockRateLimit(options),
 }));
 
 describe('rate limit configuration', () => {
@@ -56,7 +68,7 @@ describe('rate limit factory', () => {
     });
 
     expect(mockRateLimit).toHaveBeenCalledTimes(1);
-    const options = mockRateLimit.mock.calls[0][0] as any;
+    const options = mockRateLimit.mock.calls[0][0] as { windowMs: number; max: number; standardHeaders: boolean; legacyHeaders: boolean; handler: jest.Mock };
 
     expect(options.windowMs).toBe(RATE_LIMIT_CONFIG.auth.windowMs);
     expect(options.max).toBe(RATE_LIMIT_CONFIG.auth.max);
@@ -100,7 +112,7 @@ describe('rate limit factory', () => {
       createIpRateLimiter(RATE_LIMIT_CONFIG.user);
     });
 
-    const options = mockRateLimit.mock.calls[0][0] as any;
+    const options = mockRateLimit.mock.calls[0][0] as { keyGenerator: (req: Request) => string };
     const req = {
       headers: { 'x-forwarded-for': '203.0.113.10, 10.0.0.1' },
       ip: '127.0.0.1',
@@ -116,7 +128,7 @@ describe('rate limit factory', () => {
       createWalletRateLimiter(RATE_LIMIT_CONFIG.dispute);
     });
 
-    const options = mockRateLimit.mock.calls[0][0] as any;
+    const options = mockRateLimit.mock.calls[0][0] as { keyGenerator: (req: Request) => string };
     const req = {
       user: { walletAddress: 'GABC123EXAMPLEKEYEXAMPLEKEYEXAMPLEKEYEXAMPLE12' },
       headers: {},
@@ -135,7 +147,7 @@ describe('rate limit factory', () => {
       createWalletRateLimiter(RATE_LIMIT_CONFIG.dispute);
     });
 
-    const options = mockRateLimit.mock.calls[0][0] as any;
+    const options = mockRateLimit.mock.calls[0][0] as { keyGenerator: (req: Request) => string };
     const req = {
       headers: {},
       ip: '198.51.100.4',
@@ -170,7 +182,7 @@ describe('auth route wiring', () => {
     });
 
     expect(mockRateLimit).toHaveBeenCalledTimes(2);
-    expect((mockRateLimit.mock.calls[0][0] as any).max).toBe(RATE_LIMIT_CONFIG.auth.max);
-    expect((mockRateLimit.mock.calls[1][0] as any).max).toBe(RATE_LIMIT_CONFIG.authRefresh.max);
+    expect((mockRateLimit.mock.calls[0][0] as { max: number }).max).toBe(RATE_LIMIT_CONFIG.auth.max);
+    expect((mockRateLimit.mock.calls[1][0] as { max: number }).max).toBe(RATE_LIMIT_CONFIG.authRefresh.max);
   });
 });

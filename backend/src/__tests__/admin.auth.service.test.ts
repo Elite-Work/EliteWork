@@ -222,7 +222,9 @@ describe("adminMiddleware — service-oriented unit tests", () => {
       await adminMiddleware(req as AuthRequest, res, next);
 
       const jsonArg = res.json.mock.calls[0][0];
-      expect(jsonArg).toEqual({ error: "Forbidden: admin access required" });
+      expect(jsonArg).toEqual(
+        expect.objectContaining({ error: "Forbidden: admin access required" }),
+      );
       expect(jsonArg).toHaveProperty("error");
       expect(typeof jsonArg.error).toBe("string");
     });

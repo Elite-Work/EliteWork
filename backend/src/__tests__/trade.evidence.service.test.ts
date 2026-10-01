@@ -1,5 +1,6 @@
-import { TradeStatus } from "@prisma/client";
+import { PrismaClient, TradeStatus } from "@prisma/client";
 import { TradeEvidenceListService } from "../services/trade.evidence.service";
+import { IPFSService } from "../services/ipfs.service";
 
 describe("TradeEvidenceListService", () => {
   const now = new Date("2026-06-24T12:00:00.000Z");
@@ -12,7 +13,10 @@ describe("TradeEvidenceListService", () => {
     deliveryManifest: { findUnique: jest.fn() },
   };
   const ipfs = { getSignedFileUrl: jest.fn() };
-  const service = new TradeEvidenceListService(prisma as any, ipfs as any);
+  const service = new TradeEvidenceListService(
+    prisma as unknown as Pick<PrismaClient, "trade" | "dispute" | "tradeEvidence" | "deliveryManifest">,
+    ipfs as unknown as IPFSService,
+  );
 
   beforeEach(() => {
     jest.clearAllMocks();

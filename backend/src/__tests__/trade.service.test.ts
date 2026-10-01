@@ -1,5 +1,6 @@
 import { PrismaClient, TradeStatus } from "@prisma/client";
 import { TradeAccessDeniedError, TradeService } from "../services/trade.service";
+import { ContractService } from "../services/contract.service";
 
 function createMockPrisma() {
   return {
@@ -18,7 +19,7 @@ describe("TradeService", () => {
 
   beforeEach(() => {
     prisma = createMockPrisma();
-    service = new TradeService(prisma, {} as any);
+    service = new TradeService(prisma, {} as unknown as ContractService);
   });
 
   it("stores a pending trade with PENDING_SIGNATURE status", async () => {

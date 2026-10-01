@@ -123,7 +123,7 @@ describe("Trade Routes", () => {
       });
 
     expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/sellerAddress/i);
+    expect(res.body.message).toMatch(/sellerAddress/i);
     expect(res.body.code).toBe("VALIDATION_ERROR");
   });
 
@@ -134,7 +134,7 @@ describe("Trade Routes", () => {
     });
 
     expect(res.status).toBe(401);
-    expect(res.body.error).toBe("Missing Authorization header");
+    expect(res.body.error).toBe("Unauthorized");
   });
 
   it("returns unsignedXdr for a valid buyer deposit request", async () => {

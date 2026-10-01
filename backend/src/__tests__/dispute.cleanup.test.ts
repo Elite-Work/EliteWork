@@ -13,9 +13,6 @@ import { ErrorCode } from "../errors/errorCodes";
 
 const MEDIATOR = "GA_MEDIATOR_ADDR_VALID";
 const NOW = new Date("2025-06-01T00:00:00.000Z");
-const OLD_DATE = new Date("2024-12-01T00:00:00.000Z"); // > 90 days ago
-const RECENT_DATE = new Date("2025-05-25T00:00:00.000Z"); // < 90 days ago
-
 function createMockPrisma() {
   return {
     dispute: {
@@ -31,7 +28,7 @@ describe("DisputeService – purgeCompletedDisputeData", () => {
 
   beforeEach(() => {
     prisma = createMockPrisma();
-    service = new DisputeService(prisma as any);
+    service = new DisputeService(prisma);
     process.env.ADMIN_STELLAR_PUBKEYS = MEDIATOR;
     jest.useFakeTimers();
     jest.setSystemTime(NOW);

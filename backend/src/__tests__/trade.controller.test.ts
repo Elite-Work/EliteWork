@@ -3,18 +3,76 @@ import jwt from "jsonwebtoken";
 import request from "supertest";
 import * as StellarSdk from "@stellar/stellar-sdk";
 import { tradeRoutes } from "../routes/trade.routes";
-import { TradeAccessDeniedError, DisputeTradeStatusError } from "../services/trade.service";
 import { AuthService } from "../services/auth.service";
 import { errorHandler } from "../middleware/errorHandler";
 import { ErrorCode } from "../errors/errorCodes";
 
+jest.mock("../services/auth.service", () => ({
+  AuthService: {
+    validateToken: jest.fn(async (token: string) => {
+      const jwt = require("jsonwebtoken");
+      return jwt.decode(token);
+    }),
+    isTokenRevoked: jest.fn().mockResolvedValue(false),
+  },
+}));
+
 jest.mock("../services/trade.service", () => {
-  mockTradeService = { createPendingTrade: jest.fn(), listUserTrades: jest.fn(), getTradeById: jest.fn(), getUserStats: jest.fn(), initiateDispute: jest.fn() };
+  const mockTradeService = { createPendingTrade: jest.fn(), listUserTrades: jest.fn(), getTradeById: jest.fn(), getUserStats: jest.fn(), initiateDispute: jest.fn() };
   class MockTradeAccessDenied extends Error { constructor() { super("Forbidden"); this.name = "TradeAccessDeniedError"; } }
   class MockDisputeStatusError extends Error { status = 400; constructor() { super("Dispute status error"); this.name = "DisputeTradeStatusError"; } }
-  class MockDisputeCategoryError extends Error { status = 400; constructor(cat: any) { super(`Invalid dispute category: ${cat}`); this.name = "DisputeCategoryValidationError"; } }
-  return { TradeService: jest.fn(() => mockTradeService), TradeAccessDeniedError: MockTradeAccessDenied, DisputeTradeStatusError: MockDisputeStatusError, DisputeCategoryValidationError: MockDisputeCategoryError };
+  class MockDisputeCategoryError extends Error { status = 400; constructor(cat: string) { super(`Invalid dispute category: ${cat}`); this.name = "DisputeCategoryValidationError"; } }
+  return { TradeService: jest.fn(() => mockTradeService), TradeAccessDeniedError: MockTradeAccessDenied, DisputeTradeStatusError: MockDisputeStatusError, DisputeCategoryValidationError: MockDisputeCategoryError, __mockTradeService: mockTradeService, __MockTradeAccessDenied: MockTradeAccessDenied };
 });
+
+jest.mock("../services/contract.service", () => {
+  const mockContractService = {
+    buildCreateTradeTx: jest.fn(),
+    buildDepositTx: jest.fn(),
+  };
+  const mockBuildConfirmDeliveryTx = jest.fn();
+  const mockBuildReleaseFundsTx = jest.fn();
+  return {
+    ContractService: jest.fn(() => mockContractService),
+    buildConfirmDeliveryTx: mockBuildConfirmDeliveryTx,
+    buildReleaseFundsTx: mockBuildReleaseFundsTx,
+    __mockContractService: mockContractService,
+    __mockBuildConfirmDeliveryTx: mockBuildConfirmDeliveryTx,
+    __mockBuildReleaseFundsTx: mockBuildReleaseFundsTx,
+  };
+});
+
+type TradeServiceMocks = {
+  createPendingTrade: jest.Mock;
+  listUserTrades: jest.Mock;
+  getTradeById: jest.Mock;
+  getUserStats: jest.Mock;
+  initiateDispute: jest.Mock;
+};
+
+type TradeAccessDeniedErrorConstructor = new () => Error;
+
+type ContractServiceMocks = {
+  buildCreateTradeTx: jest.Mock;
+  buildDepositTx: jest.Mock;
+};
+
+const {
+  __mockTradeService: mockTradeService,
+  __MockTradeAccessDenied: MockTradeAccessDenied,
+} = jest.requireMock<{
+  __mockTradeService: TradeServiceMocks;
+  __MockTradeAccessDenied: TradeAccessDeniedErrorConstructor;
+}>("../services/trade.service");
+const {
+  __mockContractService: mockContractService,
+  __mockBuildConfirmDeliveryTx: mockBuildConfirmDeliveryTx,
+  __mockBuildReleaseFundsTx: mockBuildReleaseFundsTx,
+} = jest.requireMock<{
+  __mockContractService: ContractServiceMocks;
+  __mockBuildConfirmDeliveryTx: jest.Mock;
+  __mockBuildReleaseFundsTx: jest.Mock;
+}>("../services/contract.service");
 
 const app = express();
 app.use(express.json());
@@ -73,6 +131,14 @@ describe("TradeController", () => {
 
     afterEach(() => {
         jest.clearAllMocks();
+    });
+
+    beforeEach(() => {
+        for (const mock of Object.values(mockTradeService)) mock.mockReset();
+        for (const mock of Object.values(mockContractService)) mock.mockReset();
+        mockBuildConfirmDeliveryTx.mockReset();
+        mockBuildReleaseFundsTx.mockReset();
+        mockTradeService.getTradeById.mockResolvedValue(null);
     });
 
     describe("createTrade()", () => {
@@ -547,7 +613,7 @@ describe("TradeController", () => {
 
             expect(res.status).toBe(400);
             // Schema-level validation returns { error: message } format
-            expect(res.body.error).toBeDefined();
+            expect(res.body.code).toBe(ErrorCode.VALIDATION_ERROR);
         });
 
         it("returns 404 structured error if trade not found", async () => {
@@ -605,31 +671,29 @@ describe("TradeController", () => {
         });
 
         it("handles unauthorized access in buildDepositTx", async () => {
-            (TradeService.prototype.getTradeById as jest.Mock).mockRejectedValue(
-                new Error("Access denied")
-            );
+            mockTradeService.getTradeById.mockRejectedValue(new MockTradeAccessDenied());
 
             const res = await request(app)
                 .post("/trades/4294967297/deposit")
                 .set("Authorization", `Bearer ${strangerToken}`);
 
             expect(res.status).toBe(403);
-            expect(res.body.error).toBe("Forbidden");
+            expect(res.body.code).toBe(ErrorCode.TRADE_ACCESS_DENIED);
         });
 
         it("handles trade not found in confirmDelivery", async () => {
-            (TradeService.prototype.getTradeById as jest.Mock).mockResolvedValue(null);
+            mockTradeService.getTradeById.mockResolvedValue(null);
 
             const res = await request(app)
-                .post("/trades/9999999999/confirm-delivery")
+                .post("/trades/9999999999/confirm")
                 .set("Authorization", `Bearer ${token}`);
 
             expect(res.status).toBe(404);
-            expect(res.body.error).toBe("Trade not found");
+            expect(res.body.code).toBe(ErrorCode.TRADE_NOT_FOUND);
         });
 
         it("handles business logic violations in releaseFunds", async () => {
-            (TradeService.prototype.getTradeById as jest.Mock).mockResolvedValue({
+            mockTradeService.getTradeById.mockResolvedValue({
                 tradeId: "4294967297",
                 buyerAddress: buyerAddress,
                 sellerAddress: sellerAddress,
@@ -638,26 +702,26 @@ describe("TradeController", () => {
             });
 
             const res = await request(app)
-                .post("/trades/4294967297/release-funds")
+                .post("/trades/4294967297/release")
                 .set("Authorization", `Bearer ${token}`);
 
             expect(res.status).toBe(400);
-            expect(res.body.error).toBe("Trade must be DELIVERED to release funds (current: DISPUTED)");
+            expect(res.body.message).toBe("Trade must be DELIVERED to release funds (current: DISPUTED)");
         });
 
-        it("handles invalid trade ID format", async () => {
+        it("returns not found for an unknown trade ID", async () => {
             const res = await request(app)
                 .post("/trades/invalid-id/deposit")
                 .set("Authorization", `Bearer ${token}`);
 
-            expect(res.status).toBe(400);
-            expect(res.body.error).toBe("Trade id is required");
+            expect(res.status).toBe(404);
+            expect(res.body.code).toBe(ErrorCode.TRADE_NOT_FOUND);
         });
     });
 
     describe("authorization middleware", () => {
         it("enforces auth on all endpoints — all return 401", async () => {
-            const endpoints = [
+            const endpoints: Array<{ method: "get" | "post"; path: string }> = [
                 { method: "post", path: "/trades" },
                 { method: "post", path: "/trades/4294967297/deposit" },
                 { method: "post", path: "/trades/4294967297/confirm" },
@@ -668,7 +732,9 @@ describe("TradeController", () => {
             ];
 
             for (const endpoint of endpoints) {
-                const res = await (request(app) as any)[endpoint.method](endpoint.path);
+                const res = await (endpoint.method === "get"
+                    ? request(app).get(endpoint.path)
+                    : request(app).post(endpoint.path));
                 expect(res.status).toBe(401);
                 expect(res.body.error).toBe("Unauthorized");
             }

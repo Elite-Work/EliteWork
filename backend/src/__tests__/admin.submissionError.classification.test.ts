@@ -16,8 +16,7 @@ import { StellarError } from "../errors/service.errors";
 describe("classifyAdminSubmissionError (#37)", () => {
   describe("classification by error category", () => {
     it("classifies timeout errors as SUBMISSION_NETWORK_ERROR with 504", () => {
-      const error = new Error("Connection timed out after 30000ms");
-      (error as any).code = "ETIMEDOUT";
+      const error = Object.assign(new Error("Connection timed out after 30000ms"), { code: "ETIMEDOUT" });
 
       const result = classifyAdminSubmissionError(error, "stream_terminate");
 
@@ -32,8 +31,7 @@ describe("classifyAdminSubmissionError (#37)", () => {
     });
 
     it("classifies connection refused as SUBMISSION_NETWORK_ERROR with 503", () => {
-      const error = new Error("connect ECONNREFUSED 127.0.0.1:8000");
-      (error as any).code = "ECONNREFUSED";
+      const error = Object.assign(new Error("connect ECONNREFUSED 127.0.0.1:8000"), { code: "ECONNREFUSED" });
 
       const result = classifyAdminSubmissionError(error, "add_mediator");
 

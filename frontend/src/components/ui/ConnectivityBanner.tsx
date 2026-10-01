@@ -5,6 +5,7 @@ import { useOffline } from "@/hooks/useOffline";
 import { useOfflineQueueStore } from "@/stores/offlineQueueStore";
 import { useToast } from "@/hooks/useToast";
 import { request } from "@/lib/api/client";
+import { trackEvent } from "@/lib/analytics";
 
 export function ConnectivityBanner() {
   const { isOffline, wasOffline, retryOnline } = useOffline();
@@ -21,6 +22,9 @@ export function ConnectivityBanner() {
   // Replay on reconnect with conflict handling via idempotency keys
   useEffect(() => {
     if (!isOffline && wasOffline && queue.length > 0) {
+      // Track offline reconnect beacon for Prometheus metrics
+      trackEvent("offline_reconnect", { queueDepth: queue.length });
+
       const correlationId = `replay-${Date.now()}`;
       addToastWithCorrelation({
         type: "info",

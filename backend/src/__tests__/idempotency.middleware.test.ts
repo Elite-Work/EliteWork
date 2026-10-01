@@ -26,6 +26,36 @@ import { redis } from "../lib/redis";
 import { alertService } from "../services/alert.service";
 import { idempotencyMiddleware } from "../middleware/idempotency";
 
+// ── Typed mock factories ─────────────────────────────────────────────────────
+
+type RedisMock = {
+  get: jest.Mock<Promise<string | null>, [string]>;
+  set: jest.Mock<Promise<string>, [string, string, string?, number?]>;
+  del: jest.Mock<Promise<number>, [string]>;
+};
+
+function createMockRedis(): RedisMock {
+  return {
+    get: jest.fn(),
+    set: jest.fn(),
+    del: jest.fn(),
+  };
+}
+
+type AlertServiceMock = {
+  dispatch: jest.Mock<Promise<void>, [string, string, object]>;
+};
+
+function createMockAlertService(): AlertServiceMock {
+  return {
+    dispatch: jest.fn().mockResolvedValue(undefined),
+  };
+}
+
+interface MockResponse extends Response {
+  body?: unknown;
+}
+
 function createReq(
   overrides: Partial<Request> = {},
 ): Request {
@@ -39,31 +69,31 @@ function createReq(
 
 function createRes() {
   const events = new EventEmitter();
-  const headers: Record<string, any> = {};
+  const headers: Record<string, string> = {};
 
   const res = {
     once: events.once.bind(events),
     emit: events.emit.bind(events),
     setHeader: jest.fn((key: string, value: unknown) => {
-      headers[key] = value;
+      headers[key] = String(value);
     }),
     getHeaders: jest.fn(() => ({ ...headers })),
     statusCode: 200,
-    status: jest.fn(function status(this: any, code: number) {
+    status: jest.fn(function (this: { statusCode: number }, code: number) {
       this.statusCode = code;
       return this;
     }),
-    json: jest.fn(function json(this: any, body: unknown) {
+    json: jest.fn(function (this: MockResponse, body: unknown) {
       this.body = body;
       this.emit("finish");
       return this;
     }),
-    send: jest.fn(function send(this: any, body: unknown) {
+    send: jest.fn(function (this: MockResponse, body: unknown) {
       this.body = body;
       this.emit("finish");
       return this;
     }),
-  } as unknown as Response & EventEmitter & { body?: unknown };
+  } as unknown as MockResponse & EventEmitter;
 
   return { res, headers };
 }
@@ -74,14 +104,14 @@ describe("idempotencyMiddleware", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    redisMock.get.mockResolvedValue(null as any);
-    redisMock.set.mockResolvedValue("OK" as any);
-    redisMock.del.mockResolvedValue(1 as any);
+    redisMock.get.mockResolvedValue(null);
+    redisMock.set.mockResolvedValue("OK");
+    redisMock.del.mockResolvedValue(1);
     alertMock.dispatch.mockResolvedValue(undefined);
   });
 
   it("bypasses when idempotency key is missing", async () => {
-    const req = createReq({ headers: {} as any });
+    const req = createReq({ headers: {} });
     const { res } = createRes();
     const next = jest.fn();
 
@@ -108,7 +138,7 @@ describe("idempotencyMiddleware", () => {
         status: 201,
         body: { tradeId: "t-1" },
         headers: { "content-type": "application/json" },
-      }) as any,
+      }),
     );
 
     const req = createReq();
@@ -119,7 +149,7 @@ describe("idempotencyMiddleware", () => {
 
     expect(next).not.toHaveBeenCalled();
     expect(res.status).toHaveBeenCalledWith(201);
-    expect((res as any).body).toEqual({ tradeId: "t-1" });
+    expect((res as MockResponse).body).toEqual({ tradeId: "t-1" });
     expect(headers["X-Idempotency-Cache"]).toBe("HIT");
   });
 
@@ -169,31 +199,31 @@ describe("idempotencyMiddleware", () => {
 
     redisMock.get.mockImplementation(async (key: string) => {
       if (key === "idempotency:POST:/trades:idem-1") {
-        return cachedPayload as any;
+        return cachedPayload;
       }
-      return null as any;
+      return null;
     });
 
     redisMock.set.mockImplementation(async (key: string, value: string, mode: string) => {
       if (key === "idempotency:lock:POST:/trades:idem-1" && mode === "NX") {
-        if (lockHeld) return null as any;
+        if (lockHeld) return null;
         lockHeld = true;
-        return "OK" as any;
+        return "OK";
       }
 
       if (key === "idempotency:POST:/trades:idem-1") {
         cachedPayload = value;
-        return "OK" as any;
+        return "OK";
       }
 
-      return "OK" as any;
+      return "OK";
     });
 
     redisMock.del.mockImplementation(async (key: string) => {
       if (key === "idempotency:lock:POST:/trades:idem-1") {
         lockHeld = false;
       }
-      return 1 as any;
+      return 1;
     });
 
     const req1 = createReq();
@@ -221,7 +251,7 @@ describe("idempotencyMiddleware", () => {
     expect(next1).toHaveBeenCalledTimes(1);
     expect(next2).not.toHaveBeenCalled();
     expect(res2.status).toHaveBeenCalledWith(201);
-    expect((res2 as any).body).toEqual({ tradeId: "created-once" });
+    expect((res2 as MockResponse).body).toEqual({ tradeId: "created-once" });
     expect(headers2["X-Idempotency-Cache"]).toBe("HIT");
   });
 
@@ -232,31 +262,31 @@ describe("idempotencyMiddleware", () => {
 
     redisMock.get.mockImplementation(async (key: string) => {
       if (key === "idempotency:POST:/trades:idem-1") {
-        return cachedPayload as any;
+        return cachedPayload;
       }
-      return null as any;
+      return null;
     });
 
     redisMock.set.mockImplementation(async (key: string, value: string, mode: string) => {
       if (key === "idempotency:lock:POST:/trades:idem-1" && mode === "NX") {
-        if (lockHeld) return null as any;
+        if (lockHeld) return null;
         lockHeld = true;
-        return "OK" as any;
+        return "OK";
       }
 
       if (key === "idempotency:POST:/trades:idem-1") {
         cachedPayload = value;
-        return "OK" as any;
+        return "OK";
       }
 
-      return "OK" as any;
+      return "OK";
     });
 
     redisMock.del.mockImplementation(async (key: string) => {
       if (key === "idempotency:lock:POST:/trades:idem-1") {
         lockHeld = false;
       }
-      return 1 as any;
+      return 1;
     });
 
     const req1 = createReq();
@@ -284,7 +314,7 @@ describe("idempotencyMiddleware", () => {
     expect(next1).toHaveBeenCalledTimes(1);
     expect(next2).not.toHaveBeenCalled();
     expect(res2.status).toHaveBeenCalledWith(201);
-    expect((res2 as any).body).toEqual({ tradeId: "created-once" });
+    expect((res2 as MockResponse).body).toEqual({ tradeId: "created-once" });
     expect(headers2["X-Idempotency-Cache"]).toBe("HIT");
   });
 
@@ -301,11 +331,11 @@ describe("idempotencyMiddleware", () => {
         body: { tradeId: "t-original" },
         headers: {},
         requestBodyHash: originalBodyHash,
-      }) as any,
+      }),
     );
 
     // Request with a different body but the same idempotency key
-    const req = createReq({ body: { amount: 999 } } as any);
+    const req = createReq({ body: { amount: 999 } });
     const { res } = createRes();
     const next = jest.fn();
 
@@ -313,13 +343,13 @@ describe("idempotencyMiddleware", () => {
 
     expect(next).not.toHaveBeenCalled();
     expect(res.status).toHaveBeenCalledWith(409);
-    expect((res as any).body).toMatchObject({
+    expect((res as MockResponse).body).toMatchObject({
       error: expect.stringContaining("different request body"),
     });
   });
 
   it("continues request flow when Redis storage fails", async () => {
-    redisMock.get.mockRejectedValueOnce(new Error("redis down") as any);
+    redisMock.get.mockRejectedValueOnce(new Error("redis down"));
 
     const req = createReq();
     const { res } = createRes();

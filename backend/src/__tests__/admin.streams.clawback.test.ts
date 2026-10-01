@@ -55,6 +55,15 @@ function fakeValidationService(): StreamValidationService {
   return new StreamValidationService(prisma as never);
 }
 
+jest.mock("../lib/redis", () => ({
+  redis: {
+    status: "ready",
+    set: jest.fn().mockResolvedValue("OK"),
+    del: jest.fn().mockResolvedValue(1),
+    get: jest.fn().mockResolvedValue(null),
+  },
+}));
+
 jest.mock("../services/auth.service", () => ({
   AuthService: {
     validateToken: jest.fn(async (token: string) => {

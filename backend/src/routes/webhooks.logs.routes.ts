@@ -102,12 +102,15 @@ export function createWebhookLogsRouter(prisma: PrismaClient = defaultPrisma) {
         }
 
         const result = await paginateWithCursor({
-          findMany: (args) =>
+          findMany: ({ take, skip, cursor: cur, orderBy }) =>
             prisma.webhookDeliveryAttempt.findMany({
               where: { webhookId },
               select,
-              ...args,
-            } as any),
+              take,
+              skip,
+              ...(cur ? { cursor: cur } : {}),
+              orderBy: orderBy as { timestamp: "desc"; id?: "desc" }[],
+            }),
           orderBy: [{ timestamp: "desc" }, { id: "desc" }],
           cursor,
           limit: normalizeCursorLimit(limit),

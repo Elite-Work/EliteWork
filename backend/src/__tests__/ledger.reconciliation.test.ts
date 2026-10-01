@@ -13,6 +13,41 @@ import {
   EventListenerService,
 } from "../services/eventListener.service";
 import { ParsedEvent, EventType } from "../types/events";
+import { ProcessedEvent, PrismaClient } from "@prisma/client";
+
+// ── Typed mock factories ───────────────────────────────────────────────────────
+
+type MockPrismaProcessedEvent = {
+  findUnique: jest.Mock<Promise<{ id: number } | null>, [object]>;
+  findMany: jest.Mock<Promise<Array<{ ledgerSequence: number; contractId: string; eventId: string }>, []>;
+  create: jest.Mock<Promise<object>, [object]>;
+};
+
+type MockPrismaTransaction = jest.Mock<Promise<void>, [(tx: { processedEvent: { create: jest.Mock } }) => Promise<void>]>;
+
+interface MockPrismaClient {
+  processedEvent: MockPrismaProcessedEvent;
+  $transaction: MockPrismaTransaction;
+}
+
+function createMockPrismaClient(): MockPrismaClient {
+  return {
+    processedEvent: {
+      findUnique: jest.fn(),
+      findMany: jest.fn(),
+      create: jest.fn(),
+    },
+    $transaction: jest.fn(),
+  };
+}
+
+function makePrismaWithProcessedEvent(found: boolean): MockPrismaClient {
+  const prisma = createMockPrismaClient();
+  prisma.processedEvent.findUnique.mockResolvedValue(found ? { id: 1 } : null);
+  prisma.processedEvent.findMany.mockResolvedValue([]);
+  prisma.processedEvent.create.mockResolvedValue({});
+  return prisma;
+}
 
 // ── SDK / config mocks ────────────────────────────────────────────────────────
 
@@ -57,17 +92,6 @@ function makeEvent(overrides: Partial<ParsedEvent> = {}): ParsedEvent {
   };
 }
 
-function makePrismaWithProcessedEvent(found: boolean) {
-  return {
-    processedEvent: {
-      findUnique: jest.fn().mockResolvedValue(found ? { id: 1 } : null),
-      findMany: jest.fn().mockResolvedValue([]),
-      create: jest.fn().mockResolvedValue({}),
-    },
-    $transaction: jest.fn(),
-  } as any;
-}
-
 // ── isPrismaUniqueConstraintError ─────────────────────────────────────────────
 
 describe("isPrismaUniqueConstraintError", () => {
@@ -99,7 +123,7 @@ describe("isAlreadyProcessed", () => {
 
   it("returns true when a ProcessedEvent record exists for the composite key", async () => {
     const prisma = makePrismaWithProcessedEvent(true);
-    await expect(isAlreadyProcessed(prisma, key)).resolves.toBe(true);
+    await expect(isAlreadyProcessed(prisma as unknown as PrismaClient, key)).resolves.toBe(true);
     expect(prisma.processedEvent.findUnique).toHaveBeenCalledWith({
       where: { ledgerSequence_contractId_eventId: key },
     });
@@ -107,17 +131,17 @@ describe("isAlreadyProcessed", () => {
 
   it("returns false when no ProcessedEvent record exists", async () => {
     const prisma = makePrismaWithProcessedEvent(false);
-    await expect(isAlreadyProcessed(prisma, key)).resolves.toBe(false);
+    await expect(isAlreadyProcessed(prisma as unknown as PrismaClient, key)).resolves.toBe(false);
   });
 
   it("propagates DB errors to the caller", async () => {
-    const prisma = {
+    const prisma: MockPrismaClient = {
       processedEvent: {
         findUnique: jest.fn().mockRejectedValue(new Error("DB timeout")),
         findMany: jest.fn(),
       },
-    } as any;
-    await expect(isAlreadyProcessed(prisma, key)).rejects.toThrow("DB timeout");
+    };
+    await expect(isAlreadyProcessed(prisma as unknown as PrismaClient, key)).rejects.toThrow("DB timeout");
   });
 });
 
@@ -127,15 +151,14 @@ describe("processEventAtomically", () => {
   it("runs the handler and inserts a ProcessedEvent record in the same transaction", async () => {
     const event = makeEvent();
     const txProcessedEvent = { create: jest.fn().mockResolvedValue({}) };
-    const tx = { processedEvent: txProcessedEvent } as any;
-
-    const prisma = {
-      $transaction: jest.fn().mockImplementation(async (cb: any) => cb(tx)),
+    const tx = { processedEvent: txProcessedEvent };
+    const prisma: MockPrismaClient = {
+      $transaction: jest.fn().mockImplementation(async (cb: (tx: typeof tx) => Promise<void>) => cb(tx)),
       processedEvent: { findMany: jest.fn().mockResolvedValue([]) },
-    } as any;
+    };
 
     const handler = jest.fn().mockResolvedValue(undefined);
-    await processEventAtomically(prisma, event, handler);
+    await processEventAtomically(prisma as unknown as PrismaClient, event, handler);
 
     expect(handler).toHaveBeenCalledWith(tx, event);
     expect(txProcessedEvent.create).toHaveBeenCalledWith({
@@ -149,24 +172,24 @@ describe("processEventAtomically", () => {
 
   it("swallows P2002 duplicate-insert errors (concurrent processing)", async () => {
     const event = makeEvent();
-    const prisma = {
+    const prisma: MockPrismaClient = {
       $transaction: jest.fn().mockRejectedValue({ code: "P2002" }),
       processedEvent: { findMany: jest.fn().mockResolvedValue([]) },
-    } as any;
+    };
 
     const handler = jest.fn().mockResolvedValue(undefined);
-    await expect(processEventAtomically(prisma, event, handler)).resolves.toBeUndefined();
+    await expect(processEventAtomically(prisma as unknown as PrismaClient, event, handler)).resolves.toBeUndefined();
   });
 
   it("propagates non-P2002 errors from the transaction", async () => {
     const event = makeEvent();
-    const prisma = {
+    const prisma: MockPrismaClient = {
       $transaction: jest.fn().mockRejectedValue(new Error("constraint violation")),
       processedEvent: { findMany: jest.fn().mockResolvedValue([]) },
-    } as any;
+    };
 
     const handler = jest.fn().mockResolvedValue(undefined);
-    await expect(processEventAtomically(prisma, event, handler)).rejects.toThrow(
+    await expect(processEventAtomically(prisma as unknown as PrismaClient, event, handler)).rejects.toThrow(
       "constraint violation",
     );
   });
@@ -175,15 +198,14 @@ describe("processEventAtomically", () => {
     const event = makeEvent();
     const tx = {
       processedEvent: { create: jest.fn().mockResolvedValue({}) },
-    } as any;
-
-    const prisma = {
-      $transaction: jest.fn().mockImplementation(async (cb: any) => cb(tx)),
+    };
+    const prisma: MockPrismaClient = {
+      $transaction: jest.fn().mockImplementation(async (cb: (tx: typeof tx) => Promise<void>) => cb(tx)),
       processedEvent: { findMany: jest.fn().mockResolvedValue([]) },
-    } as any;
+    };
 
     const handler = jest.fn().mockRejectedValue(new Error("handler failed"));
-    await expect(processEventAtomically(prisma, event, handler)).rejects.toThrow(
+    await expect(processEventAtomically(prisma as unknown as PrismaClient, event, handler)).rejects.toThrow(
       "handler failed",
     );
   });
@@ -198,23 +220,23 @@ describe("EventListenerService — deduplication reconciliation", () => {
   });
 
   it("skips processing when in-memory cache already contains the event key", async () => {
-    const prisma = {
+    const prisma: MockPrismaClient = {
       processedEvent: {
         findUnique: jest.fn().mockResolvedValue(null),
         findMany: jest.fn().mockResolvedValue([]),
         create: jest.fn().mockResolvedValue({}),
       },
-      $transaction: jest.fn().mockImplementation(async (cb: any) =>
+      $transaction: jest.fn().mockImplementation(async (cb: (tx: { processedEvent: { create: jest.Mock } }) => Promise<void>) =>
         cb({ processedEvent: { create: jest.fn().mockResolvedValue({}) } }),
       ),
-    } as any;
+    };
 
-    const svc = new EventListenerService(prisma);
-    (svc as any).running = true;
+    const svc = new EventListenerService(prisma as unknown as PrismaClient);
+    (svc as { running: boolean }).running = true;
 
     // Seed in-memory cache directly
     const cacheKey = "100:CONTRACT_TEST:evt-recon-001";
-    (svc as any).processedEvents.add(cacheKey);
+    (svc as { processedEvents: Set<string> }).processedEvents.add(cacheKey);
 
     await svc.processEvent({
       ledger: 100,
@@ -222,32 +244,32 @@ describe("EventListenerService — deduplication reconciliation", () => {
       contractId: "CONTRACT_TEST",
       topic: [],
       value: {},
-    } as any);
+    });
 
     expect(prisma.processedEvent.findUnique).not.toHaveBeenCalled();
     expect(dispatchEvent).not.toHaveBeenCalled();
   });
 
   it("checks the DB when the in-memory cache misses, and skips if DB says processed", async () => {
-    const prisma = {
+    const prisma: MockPrismaClient = {
       processedEvent: {
         findUnique: jest.fn().mockResolvedValue({ id: 99 }),
         findMany: jest.fn().mockResolvedValue([]),
         create: jest.fn().mockResolvedValue({}),
       },
       $transaction: jest.fn(),
-    } as any;
+    };
 
-    const svc = new EventListenerService(prisma);
-    (svc as any).running = true;
+    const svc = new EventListenerService(prisma as unknown as PrismaClient);
+    (svc as { running: boolean }).running = true;
 
     // parseEvent needs the SDK mock — bypass by pre-seeding a parseable raw event
     const event = makeEvent({ ledgerSequence: 200, eventId: "evt-db-check" });
 
     // Inject a parsed event directly via processEvent logic by mocking parseEvent
-    const parseEventSpy = jest.spyOn(svc as any, "parseEvent").mockReturnValue(event);
+    const parseEventSpy = jest.spyOn(svc as { parseEvent: (raw: unknown) => ParsedEvent }, "parseEvent").mockReturnValue(event);
 
-    await svc.processEvent({ ledger: 200, id: "evt-db-check" } as any);
+    await svc.processEvent({ ledger: 200, id: "evt-db-check" });
 
     expect(prisma.processedEvent.findUnique).toHaveBeenCalledWith({
       where: {
@@ -265,24 +287,24 @@ describe("EventListenerService — deduplication reconciliation", () => {
 
   it("processes and marks the event when neither cache nor DB has seen it", async () => {
     const txCreate = jest.fn().mockResolvedValue({});
-    const prisma = {
+    const prisma: MockPrismaClient = {
       processedEvent: {
         findUnique: jest.fn().mockResolvedValue(null),
         findMany: jest.fn().mockResolvedValue([]),
         create: jest.fn().mockResolvedValue({}),
       },
-      $transaction: jest.fn().mockImplementation(async (cb: any) =>
+      $transaction: jest.fn().mockImplementation(async (cb: (tx: { processedEvent: { create: jest.Mock } }) => Promise<void>) =>
         cb({ processedEvent: { create: txCreate } }),
       ),
-    } as any;
+    };
 
-    const svc = new EventListenerService(prisma);
-    (svc as any).running = true;
+    const svc = new EventListenerService(prisma as unknown as PrismaClient);
+    (svc as { running: boolean }).running = true;
 
     const event = makeEvent({ ledgerSequence: 300, eventId: "evt-new" });
-    const parseEventSpy = jest.spyOn(svc as any, "parseEvent").mockReturnValue(event);
+    const parseEventSpy = jest.spyOn(svc as { parseEvent: (raw: unknown) => ParsedEvent }, "parseEvent").mockReturnValue(event);
 
-    await svc.processEvent({ ledger: 300, id: "evt-new" } as any);
+    await svc.processEvent({ ledger: 300, id: "evt-new" });
 
     expect(dispatchEvent).toHaveBeenCalled();
     expect(txCreate).toHaveBeenCalledWith({
@@ -292,7 +314,7 @@ describe("EventListenerService — deduplication reconciliation", () => {
         eventId: "evt-new",
       },
     });
-    expect((svc as any).processedEvents.has("300:CONTRACT_TEST:evt-new")).toBe(true);
+    expect((svc as { processedEvents: Set<string> }).processedEvents.has("300:CONTRACT_TEST:evt-new")).toBe(true);
 
     parseEventSpy.mockRestore();
   });
@@ -302,13 +324,13 @@ describe("EventListenerService — deduplication reconciliation", () => {
 
 describe("EventListenerService — in-memory cache eviction", () => {
   it("evicts oldest ledger entries when cache size exceeds the configured limit", async () => {
-    const prisma = {
+    const prisma: MockPrismaClient = {
       processedEvent: { findMany: jest.fn().mockResolvedValue([]) },
-    } as any;
+    };
 
-    const svc = new EventListenerService(prisma);
+    const svc = new EventListenerService(prisma as unknown as PrismaClient);
     // processedLedgersCacheSize is mocked to 5 — add 6 entries
-    const cache: Set<string> = (svc as any).processedEvents;
+    const cache: Set<string> = (svc as { processedEvents: Set<string> }).processedEvents;
     cache.add("1:C:e1");
     cache.add("2:C:e2");
     cache.add("3:C:e3");
@@ -317,7 +339,7 @@ describe("EventListenerService — in-memory cache eviction", () => {
     cache.add("6:C:e6"); // over the limit
 
     // Trigger eviction directly
-    (svc as any).evictOldEvents();
+    (svc as { evictOldEvents: () => void }).evictOldEvents();
 
     expect(cache.size).toBe(5);
     expect(cache.has("1:C:e1")).toBe(false); // oldest evicted
@@ -325,15 +347,15 @@ describe("EventListenerService — in-memory cache eviction", () => {
   });
 
   it("does not evict when cache size is within limit", () => {
-    const prisma = {
+    const prisma: MockPrismaClient = {
       processedEvent: { findMany: jest.fn().mockResolvedValue([]) },
-    } as any;
-    const svc = new EventListenerService(prisma);
-    const cache: Set<string> = (svc as any).processedEvents;
+    };
+    const svc = new EventListenerService(prisma as unknown as PrismaClient);
+    const cache: Set<string> = (svc as { processedEvents: Set<string> }).processedEvents;
     cache.add("1:C:e1");
     cache.add("2:C:e2");
 
-    (svc as any).evictOldEvents();
+    (svc as { evictOldEvents: () => void }).evictOldEvents();
 
     expect(cache.size).toBe(2);
   });
@@ -343,36 +365,36 @@ describe("EventListenerService — in-memory cache eviction", () => {
 
 describe("EventListenerService — retry backoff", () => {
   it("doubles the delay on each successive failure, capped at backoffMaxMs", () => {
-    const prisma = {
+    const prisma: MockPrismaClient = {
       processedEvent: { findMany: jest.fn().mockResolvedValue([]) },
-    } as any;
-    const svc = new EventListenerService(prisma);
+    };
+    const svc = new EventListenerService(prisma as unknown as PrismaClient);
 
     // backoffInitialMs=200, backoffMaxMs=3200
-    expect((svc as any).currentBackoffMs).toBe(200);
+    expect((svc as { currentBackoffMs: number }).currentBackoffMs).toBe(200);
 
     // Simulate backoff increments
-    (svc as any).currentBackoffMs = Math.min((svc as any).currentBackoffMs * 2, 3200);
-    expect((svc as any).currentBackoffMs).toBe(400);
+    (svc as { currentBackoffMs: number }).currentBackoffMs = Math.min((svc as { currentBackoffMs: number }).currentBackoffMs * 2, 3200);
+    expect((svc as { currentBackoffMs: number }).currentBackoffMs).toBe(400);
 
-    (svc as any).currentBackoffMs = Math.min((svc as any).currentBackoffMs * 2, 3200);
-    expect((svc as any).currentBackoffMs).toBe(800);
+    (svc as { currentBackoffMs: number }).currentBackoffMs = Math.min((svc as { currentBackoffMs: number }).currentBackoffMs * 2, 3200);
+    expect((svc as { currentBackoffMs: number }).currentBackoffMs).toBe(800);
 
-    (svc as any).currentBackoffMs = Math.min((svc as any).currentBackoffMs * 2, 3200);
-    (svc as any).currentBackoffMs = Math.min((svc as any).currentBackoffMs * 2, 3200);
-    expect((svc as any).currentBackoffMs).toBe(3200); // cap reached
+    (svc as { currentBackoffMs: number }).currentBackoffMs = Math.min((svc as { currentBackoffMs: number }).currentBackoffMs * 2, 3200);
+    (svc as { currentBackoffMs: number }).currentBackoffMs = Math.min((svc as { currentBackoffMs: number }).currentBackoffMs * 2, 3200);
+    expect((svc as { currentBackoffMs: number }).currentBackoffMs).toBe(3200); // cap reached
   });
 
   it("resets backoff to initial value after a successful poll", () => {
-    const prisma = {
+    const prisma: MockPrismaClient = {
       processedEvent: { findMany: jest.fn().mockResolvedValue([]) },
-    } as any;
-    const svc = new EventListenerService(prisma);
-    (svc as any).currentBackoffMs = 3200;
+    };
+    const svc = new EventListenerService(prisma as unknown as PrismaClient);
+    (svc as { currentBackoffMs: number }).currentBackoffMs = 3200;
 
     svc.resetBackoff();
 
-    expect((svc as any).currentBackoffMs).toBe(200);
+    expect((svc as { currentBackoffMs: number }).currentBackoffMs).toBe(200);
   });
 });
 
@@ -380,29 +402,29 @@ describe("EventListenerService — retry backoff", () => {
 
 describe("EventListenerService — computeRetryDelay", () => {
   function makeServiceWithConfig() {
-    const prisma = {
+    const prisma: MockPrismaClient = {
       processedEvent: { findMany: jest.fn().mockResolvedValue([]) },
-    } as any;
-    return new EventListenerService(prisma);
+    };
+    return new EventListenerService(prisma as unknown as PrismaClient);
   }
 
   it("returns backoffInitialMs for the first attempt (exponent=0)", () => {
     const svc = makeServiceWithConfig();
     // attempt 1 → exponent = max(1-1,0) = 0 → 200 * 2^0 = 200
-    expect((svc as any).computeRetryDelay(1)).toBe(200);
+    expect((svc as { computeRetryDelay: (attempt: number) => number }).computeRetryDelay(1)).toBe(200);
   });
 
   it("doubles delay for each additional attempt", () => {
     const svc = makeServiceWithConfig();
-    expect((svc as any).computeRetryDelay(2)).toBe(400);
-    expect((svc as any).computeRetryDelay(3)).toBe(800);
-    expect((svc as any).computeRetryDelay(4)).toBe(1600);
+    expect((svc as { computeRetryDelay: (attempt: number) => number }).computeRetryDelay(2)).toBe(400);
+    expect((svc as { computeRetryDelay: (attempt: number) => number }).computeRetryDelay(3)).toBe(800);
+    expect((svc as { computeRetryDelay: (attempt: number) => number }).computeRetryDelay(4)).toBe(1600);
   });
 
   it("caps delay at backoffMaxMs regardless of attempt number", () => {
     const svc = makeServiceWithConfig();
-    expect((svc as any).computeRetryDelay(10)).toBe(3200);
-    expect((svc as any).computeRetryDelay(100)).toBe(3200);
+    expect((svc as { computeRetryDelay: (attempt: number) => number }).computeRetryDelay(10)).toBe(3200);
+    expect((svc as { computeRetryDelay: (attempt: number) => number }).computeRetryDelay(100)).toBe(3200);
   });
 });
 
@@ -415,50 +437,50 @@ describe("EventListenerService — start() cache hydration", () => {
       { ledgerSequence: 49, contractId: "C", eventId: "e49" },
     ];
 
-    const prisma = {
+    const prisma: MockPrismaClient = {
       processedEvent: {
         findMany: jest.fn().mockResolvedValue(recentEvents),
       },
-    } as any;
+    };
 
-    const svc = new EventListenerService(prisma);
+    const svc = new EventListenerService(prisma as unknown as PrismaClient);
     // Intercept scheduleNextPoll to prevent actual polling
-    jest.spyOn(svc as any, "scheduleNextPoll").mockImplementation(() => {});
+    jest.spyOn(svc as { scheduleNextPoll: () => void }, "scheduleNextPoll").mockImplementation(() => {});
 
     await svc.start();
 
-    const cache: Set<string> = (svc as any).processedEvents;
+    const cache: Set<string> = (svc as { processedEvents: Set<string> }).processedEvents;
     expect(cache.has("50:C:e50")).toBe(true);
     expect(cache.has("49:C:e49")).toBe(true);
   });
 
   it("sets lastLedger to the highest ledger seen on startup", async () => {
-    const prisma = {
+    const prisma: MockPrismaClient = {
       processedEvent: {
         findMany: jest.fn().mockResolvedValue([
           { ledgerSequence: 77, contractId: "C", eventId: "e77" },
           { ledgerSequence: 60, contractId: "C", eventId: "e60" },
         ]),
       },
-    } as any;
+    };
 
-    const svc = new EventListenerService(prisma);
-    jest.spyOn(svc as any, "scheduleNextPoll").mockImplementation(() => {});
+    const svc = new EventListenerService(prisma as unknown as PrismaClient);
+    jest.spyOn(svc as { scheduleNextPoll: () => void }, "scheduleNextPoll").mockImplementation(() => {});
 
     await svc.start();
 
-    expect((svc as any).lastLedger).toBe(77);
+    expect((svc as { lastLedger: number }).lastLedger).toBe(77);
   });
 
   it("does not re-start an already-running service", async () => {
-    const prisma = {
+    const prisma: MockPrismaClient = {
       processedEvent: {
         findMany: jest.fn().mockResolvedValue([]),
       },
-    } as any;
+    };
 
-    const svc = new EventListenerService(prisma);
-    jest.spyOn(svc as any, "scheduleNextPoll").mockImplementation(() => {});
+    const svc = new EventListenerService(prisma as unknown as PrismaClient);
+    jest.spyOn(svc as { scheduleNextPoll: () => void }, "scheduleNextPoll").mockImplementation(() => {});
 
     await svc.start();
     await svc.start(); // second call should be a no-op

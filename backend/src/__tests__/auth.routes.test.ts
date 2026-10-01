@@ -5,6 +5,7 @@ process.env.DATABASE_URL = "postgres://dummy";
 process.env.AMANA_ESCROW_CONTRACT_ID = "C123";
 process.env.USDC_CONTRACT_ID = "C456";
 
+import { Application } from "express";
 import request from "supertest";
 import { Keypair } from "@stellar/stellar-sdk";
 import { createApp } from "../app";
@@ -12,20 +13,29 @@ import { AuthService } from "../services/auth.service";
 import { AppError, ErrorCode } from "../errors/errorCodes";
 
 // auth.service.ts creates its own ioredis instance — mock at the ioredis level
-jest.mock("ioredis", () =>
-  jest.fn().mockImplementation(() => ({
-    on: jest.fn(),
-    get: jest.fn().mockResolvedValue(null),
-    set: jest.fn().mockResolvedValue("OK"),
-    del: jest.fn().mockResolvedValue(1),
-    exists: jest.fn().mockResolvedValue(0),
-  }))
-);
+jest.mock("ioredis", () => {
+  const { EventEmitter } = require("events");
+  class MockRedis extends EventEmitter {
+    get = jest.fn().mockResolvedValue(null);
+    set = jest.fn().mockResolvedValue("OK");
+    del = jest.fn().mockResolvedValue(1);
+    exists = jest.fn().mockResolvedValue(0);
+    quit = jest.fn().mockResolvedValue("OK");
+    defineCommand = jest.fn();
+    info = jest.fn().mockResolvedValue("");
+    status = "ready";
+  }
+  return {
+    __esModule: true,
+    default: MockRedis,
+    Redis: MockRedis,
+  };
+});
 
 jest.mock("../services/auth.service");
 
 describe("Auth Routes", () => {
-  let app: any;
+  let app: Application;
   // Use a real valid Stellar public key so Zod/StrKey validation in the route passes
   const mockWallet = Keypair.random().publicKey();
 

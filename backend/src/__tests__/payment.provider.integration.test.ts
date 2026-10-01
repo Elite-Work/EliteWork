@@ -20,13 +20,36 @@ jest.mock("../config/stellar", () => ({
   networkPassphrase: "Test SDF Network ; September 2015",
 }));
 jest.mock("../lib/retry", () => ({
-  retryAsync: (fn: () => Promise<any>) => fn(),
+  retryAsync: (fn: () => Promise<unknown>) => fn(),
 }));
 
 // ---------------------------------------------------------------------------
 // Mock Prisma so no real DB is needed
 // ---------------------------------------------------------------------------
-function createMockPrisma() {
+interface MockTradeDelegate {
+  create: jest.Mock;
+  findFirst: jest.Mock;
+  findMany: jest.Mock;
+  count: jest.Mock;
+  update: jest.Mock;
+}
+
+interface MockDisputeDelegate {
+  create: jest.Mock;
+  findFirst: jest.Mock;
+}
+
+interface MockDisputeCategoryDelegate {
+  findFirst: jest.Mock;
+}
+
+interface MockPrismaClient {
+  trade: MockTradeDelegate;
+  dispute: MockDisputeDelegate;
+  disputeCategory: MockDisputeCategoryDelegate;
+}
+
+function createMockPrisma(): MockPrismaClient {
   return {
     trade: {
       create: jest.fn(),
@@ -42,14 +65,27 @@ function createMockPrisma() {
     disputeCategory: {
       findFirst: jest.fn(),
     },
-  } as unknown as PrismaClient;
+  };
 }
 
 const BUYER = "GBUY000000000000000000000000000000000000000000000000000001";
 const SELLER = "GSEL000000000000000000000000000000000000000000000000000001";
 const TRADE_ID = "payment-integration-trade-001";
 
-function mockTrade(status: TradeStatus = TradeStatus.PENDING_SIGNATURE) {
+interface MockTrade {
+  id: number;
+  tradeId: string;
+  buyerAddress: string;
+  sellerAddress: string;
+  amountUsdc: string;
+  buyerLossBps: number;
+  sellerLossBps: number;
+  status: TradeStatus;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+function mockTrade(status: TradeStatus = TradeStatus.PENDING_SIGNATURE): MockTrade {
   return {
     id: 1,
     tradeId: TRADE_ID,
@@ -68,14 +104,14 @@ function mockTrade(status: TradeStatus = TradeStatus.PENDING_SIGNATURE) {
 // Suite 1 – Trade lifecycle (simulates payment provider deposit/release flow)
 // ---------------------------------------------------------------------------
 describe("Payment Provider Integration – Trade lifecycle", () => {
-  let prisma: ReturnType<typeof createMockPrisma>;
+  let prisma: MockPrismaClient;
   let tradeService: TradeService;
   let contractService: jest.Mocked<ContractService>;
 
   beforeEach(() => {
     prisma = createMockPrisma();
     contractService = new ContractService() as jest.Mocked<ContractService>;
-    tradeService = new TradeService(prisma as any, contractService);
+    tradeService = new TradeService(prisma as unknown as PrismaClient, contractService);
   });
 
   afterEach(() => jest.clearAllMocks());
@@ -255,14 +291,14 @@ describe("Payment Provider Integration – Path payment simulation", () => {
 // Suite 3 – Dispute-triggered payment hold simulation
 // ---------------------------------------------------------------------------
 describe("Payment Provider Integration – Dispute payment hold simulation", () => {
-  let prisma: ReturnType<typeof createMockPrisma>;
+  let prisma: MockPrismaClient;
   let tradeService: TradeService;
   let contractService: jest.Mocked<ContractService>;
 
   beforeEach(() => {
     prisma = createMockPrisma();
     contractService = new ContractService() as jest.Mocked<ContractService>;
-    tradeService = new TradeService(prisma as any, contractService);
+    tradeService = new TradeService(prisma as unknown as PrismaClient, contractService);
   });
 
   afterEach(() => jest.clearAllMocks());

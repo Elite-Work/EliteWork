@@ -9,11 +9,58 @@ import { createApp } from "../app";
 import { AuthService } from "../services/auth.service";
 import { prisma } from "../lib/db";
 
-jest.mock("../lib/db");
-jest.mock("../services/auth.service");
+// ── Typed mock factories ─────────────────────────────────────────────────────
+
+type MockPrismaWebhookSubscription = {
+  create: jest.Mock<Promise<object>, [object]>;
+  findMany: jest.Mock<Promise<object[]>, [object]>;
+  findUnique: jest.Mock<Promise<object | null>, [object]>;
+  delete: jest.Mock<Promise<void>, [object]>;
+};
+
+type MockPrismaUser = {
+  findUnique: jest.Mock<Promise<{ id: number; walletAddress: string } | null>, [object]>;
+};
+
+interface MockPrismaClient {
+  webhookSubscription: MockPrismaWebhookSubscription;
+  user: MockPrismaUser;
+}
+
+function createMockPrisma(): MockPrismaClient {
+  return {
+    webhookSubscription: {
+      create: jest.fn(),
+      findMany: jest.fn(),
+      findUnique: jest.fn(),
+      delete: jest.fn(),
+    },
+    user: {
+      findUnique: jest.fn(),
+    },
+  };
+}
+
+function createMockAuthService(): typeof AuthService {
+  return {
+    validateToken: jest.fn(),
+    isTokenRevoked: jest.fn(),
+  } as unknown as typeof AuthService;
+}
+
+// Apply mocks
+const mockPrisma = createMockPrisma();
+jest.mock("../lib/db", () => ({
+  prisma: mockPrisma,
+}));
+
+const mockAuthService = createMockAuthService();
+jest.mock("../services/auth.service", () => ({
+  AuthService: mockAuthService,
+}));
 
 describe("Webhooks Routes", () => {
-  let app: any;
+  let app: ReturnType<typeof createApp>;
   const mockWallet = Keypair.random().publicKey();
   const mockUserId = 1;
 

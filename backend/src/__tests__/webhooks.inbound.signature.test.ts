@@ -40,8 +40,22 @@ jest.mock("../config/env", () => {
   };
 });
 
+// ── Typed mock factories ─────────────────────────────────────────────────────
+
+type MetricsMock = {
+  recordWebhookSignatureVerification: jest.Mock<void, [string, string]>;
+};
+
+function createMockMetrics(): MetricsMock {
+  return {
+    recordWebhookSignatureVerification: jest.fn(),
+  };
+}
+
+const mockMetrics = createMockMetrics();
+
 jest.mock("../lib/metrics", () => ({
-  recordWebhookSignatureVerification: jest.fn(),
+  recordWebhookSignatureVerification: mockMetrics.recordWebhookSignatureVerification,
 }));
 
 const DEFAULT_SECRETS = JSON.stringify({

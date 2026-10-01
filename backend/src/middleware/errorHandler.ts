@@ -45,6 +45,7 @@ export function errorHandler(
     const payload: StructuredErrorPayload = {
       code: ErrorCode.VALIDATION_ERROR,
       message: 'Validation failed',
+      error: 'Validation failed',
       details: { errors: (err as { errors: unknown }).errors },
       timestamp: new Date().toISOString(),
       path,
@@ -67,6 +68,7 @@ export function errorHandler(
   const payload: StructuredErrorPayload = {
     code: ErrorCode.INTERNAL_ERROR,
     message,
+    error: message,
     details: {},
     timestamp: new Date().toISOString(),
     path,

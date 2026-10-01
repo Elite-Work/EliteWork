@@ -5,12 +5,12 @@ import { createRawSorobanEvent } from "./factories/mockFactories";
 import type { RawSorobanEvent } from "./factories/mockFactories";
 
 /* ------------------------------------------------------------------ */
-/*  Hoisted mock variables (must be declared before vi.mock factories) */
+/*  Hoisted mock variables (must be declared before jest.mock factories) */
 /* ------------------------------------------------------------------ */
 
-const mockGetEvents = vi.fn();
-const mockDispatchEvent = vi.fn().mockResolvedValue(undefined);
-const mockProcessEventAtomically = vi.fn().mockImplementation(
+const mockGetEvents = jest.fn();
+const mockDispatchEvent = jest.fn().mockResolvedValue(undefined);
+const mockProcessEventAtomically = jest.fn().mockImplementation(
   async (_prisma: unknown, event: unknown, handler: (...args: unknown[]) => Promise<void>) => {
     await handler({} as unknown, event);
   },
@@ -20,20 +20,20 @@ const mockProcessEventAtomically = vi.fn().mockImplementation(
 /*  Module-level mocks (hoisted by vitest)                            */
 /* ------------------------------------------------------------------ */
 
-vi.mock("@stellar/stellar-sdk", () => ({
+jest.mock("@stellar/stellar-sdk", () => ({
   rpc: {
-    Server: vi.fn().mockImplementation(() => ({
+    Server: jest.fn().mockImplementation(() => ({
       getEvents: (...args: unknown[]) => mockGetEvents(...args),
     })),
   },
-  scValToNative: vi.fn(),
+  scValToNative: jest.fn(),
 }));
 
-vi.mock("../config/eventListener.config", () => ({
-  getEventListenerConfig: vi.fn(),
+jest.mock("../config/eventListener.config", () => ({
+  getEventListenerConfig: jest.fn(),
 }));
 
-vi.mock("../services/eventHandlers", () => ({
+jest.mock("../services/eventHandlers", () => ({
   dispatchEvent: (...args: unknown[]) => mockDispatchEvent(...args),
 }));
 
@@ -59,21 +59,21 @@ const TEST_CONFIG = {
 
 function createMockPrismaForEventListener() {
   const mockTx = {
-    trade: { upsert: vi.fn().mockResolvedValue({}) },
+    trade: { upsert: jest.fn().mockResolvedValue({}) },
     processedEvent: {
-      create: vi.fn().mockResolvedValue({}),
+      create: jest.fn().mockResolvedValue({}),
     },
   };
 
   return {
-    trade: { upsert: vi.fn().mockResolvedValue({}) },
+    trade: { upsert: jest.fn().mockResolvedValue({}) },
     processedEvent: {
       findFirst: vi.fn().mockResolvedValue(null),
       findMany: vi.fn().mockResolvedValue([]),
       findUnique: vi.fn().mockResolvedValue(null),
       create: vi.fn().mockResolvedValue({}),
     },
-    $transaction: vi.fn().mockImplementation(async (cb: (tx: typeof mockTx) => Promise<void>) => {
+    $transaction: jest.fn().mockImplementation(async (cb: (tx: typeof mockTx) => Promise<void>) => {
       await cb(mockTx);
     }),
     _mockTx: mockTx,
@@ -89,13 +89,13 @@ describe("EventListenerService", () => {
   let mockPrisma: ReturnType<typeof createMockPrisma>;
 
   beforeEach(() => {
-    vi.useFakeTimers();
+    jest.useFakeTimers();
 
     /* Reset mocks but keep factory implementations intact */
     mockGetEvents.mockReset().mockResolvedValue({ events: [] });
     mockDispatchEvent.mockReset().mockResolvedValue(undefined);
-    (StellarSdk.scValToNative as ReturnType<typeof vi.fn>).mockReset();
-    vi.mocked(getEventListenerConfig).mockReturnValue(TEST_CONFIG);
+    (StellarSdk.scValToNative as ReturnType<typeof jest.fn>).mockReset();
+    jest.mocked(getEventListenerConfig).mockReturnValue(TEST_CONFIG);
 
     mockPrisma = createMockPrisma();
     service = new EventListenerService(mockPrisma);
@@ -103,15 +103,15 @@ describe("EventListenerService", () => {
     // Override the server instance directly to use mockGetEvents
     (service as any).server = { getEvents: (...args: unknown[]) => mockGetEvents(...args) };
 
-    vi.spyOn(console, "log").mockImplementation(() => {});
-    vi.spyOn(console, "warn").mockImplementation(() => {});
-    vi.spyOn(console, "error").mockImplementation(() => {});
+    jest.spyOn(console, "log").mockImplementation(() => {});
+    jest.spyOn(console, "warn").mockImplementation(() => {});
+    jest.spyOn(console, "error").mockImplementation(() => {});
   });
 
   afterEach(() => {
     service.stop();
-    vi.useRealTimers();
-    vi.restoreAllMocks();
+    jest.useRealTimers();
+    jest.restoreAllMocks();
   });
 
   /* ====== 0. isAlreadyProcessed helper ========================== */
@@ -163,7 +163,7 @@ describe("EventListenerService", () => {
     it("should dispatch a TradeFunded ParsedEvent after RPC returns the event", async () => {
       const raw = makeRawEvent(12345);
       mockGetEvents.mockResolvedValue({ events: [raw] });
-      (StellarSdk.scValToNative as ReturnType<typeof vi.fn>)
+      (StellarSdk.scValToNative as ReturnType<typeof jest.fn>)
         .mockReturnValueOnce("TradeFunded")
         .mockReturnValueOnce("trade-abc");
 
@@ -184,7 +184,7 @@ describe("EventListenerService", () => {
 
     it("should check processedEvent in DB when event is not in cache", async () => {
       const raw = makeRawEvent(12345);
-      (StellarSdk.scValToNative as ReturnType<typeof vi.fn>)
+      (StellarSdk.scValToNative as ReturnType<typeof jest.fn>)
         .mockReturnValueOnce("TradeFunded")
         .mockReturnValueOnce("trade-abc");
 
@@ -203,7 +203,7 @@ describe("EventListenerService", () => {
 
     it("should advance lastLedger after processing", async () => {
       const raw = makeRawEvent(500);
-      (StellarSdk.scValToNative as ReturnType<typeof vi.fn>)
+      (StellarSdk.scValToNative as ReturnType<typeof jest.fn>)
         .mockReturnValueOnce("TradeFunded")
         .mockReturnValueOnce("t-1");
 
@@ -219,13 +219,13 @@ describe("EventListenerService", () => {
     it("should NOT dispatch when the same event (ledger+contractId+eventId) is processed twice", async () => {
       const raw = makeRawEvent(99999, "evt-99999", "CONTRACT_TEST_123");
 
-      (StellarSdk.scValToNative as ReturnType<typeof vi.fn>)
+      (StellarSdk.scValToNative as ReturnType<typeof jest.fn>)
         .mockReturnValueOnce("TradeCreated")
         .mockReturnValueOnce("trade-dup");
       await service.processEvent(raw as any);
 
       /* Second attempt — same composite key, in-memory cache hit */
-      (StellarSdk.scValToNative as ReturnType<typeof vi.fn>)
+      (StellarSdk.scValToNative as ReturnType<typeof jest.fn>)
         .mockReturnValueOnce("TradeCreated")
         .mockReturnValueOnce("trade-dup");
       await service.processEvent(raw as any);
@@ -237,7 +237,7 @@ describe("EventListenerService", () => {
       const raw1 = makeRawEvent(100);
       const raw2 = makeRawEvent(101);
 
-      (StellarSdk.scValToNative as ReturnType<typeof vi.fn>)
+      (StellarSdk.scValToNative as ReturnType<typeof jest.fn>)
         .mockReturnValueOnce("TradeCreated")
         .mockReturnValueOnce("t-1")
         .mockReturnValueOnce("TradeFunded")
@@ -253,7 +253,7 @@ describe("EventListenerService", () => {
       const raw1 = makeRawEvent(200, "evt-200-a");
       const raw2 = makeRawEvent(200, "evt-200-b");
 
-      (StellarSdk.scValToNative as ReturnType<typeof vi.fn>)
+      (StellarSdk.scValToNative as ReturnType<typeof jest.fn>)
         .mockReturnValueOnce("TradeCreated")
         .mockReturnValueOnce("t-1")
         .mockReturnValueOnce("TradeFunded")
@@ -275,7 +275,7 @@ describe("EventListenerService", () => {
         processedAt: new Date(),
       });
 
-      (StellarSdk.scValToNative as ReturnType<typeof vi.fn>)
+      (StellarSdk.scValToNative as ReturnType<typeof jest.fn>)
         .mockReturnValueOnce("TradeFunded")
         .mockReturnValueOnce("t-restart");
 
@@ -286,7 +286,7 @@ describe("EventListenerService", () => {
 
     it("should add event to the in-memory processedEvents set", async () => {
       const raw = makeRawEvent(777, "evt-777");
-      (StellarSdk.scValToNative as ReturnType<typeof vi.fn>)
+      (StellarSdk.scValToNative as ReturnType<typeof jest.fn>)
         .mockReturnValueOnce("TradeFunded")
         .mockReturnValueOnce("t");
 
@@ -343,7 +343,7 @@ describe("EventListenerService", () => {
 
     it("should invoke handleBackoff when getEvents rejects", async () => {
       mockGetEvents.mockRejectedValue(new Error("RPC unavailable"));
-      const spy = vi.spyOn(service, "handleBackoff");
+      const spy = jest.spyOn(service, "handleBackoff");
 
       await service.pollEvents();
 
@@ -356,7 +356,7 @@ describe("EventListenerService", () => {
   describe("Event parsing", () => {
     it("should recognise snake_case symbols (trade_funded → TradeFunded)", async () => {
       const raw = makeRawEvent(200);
-      (StellarSdk.scValToNative as ReturnType<typeof vi.fn>)
+      (StellarSdk.scValToNative as ReturnType<typeof jest.fn>)
         .mockReturnValueOnce("trade_funded")
         .mockReturnValueOnce("trade-sc");
 
@@ -384,7 +384,7 @@ describe("EventListenerService", () => {
 
     it("should skip unknown event symbols", async () => {
       const raw = makeRawEvent(302);
-      (StellarSdk.scValToNative as ReturnType<typeof vi.fn>)
+      (StellarSdk.scValToNative as ReturnType<typeof jest.fn>)
         .mockReturnValueOnce("UnknownSymbol")
         .mockReturnValueOnce("trade-x");
 
@@ -395,7 +395,7 @@ describe("EventListenerService", () => {
 
     it("should handle scValToNative throwing (corrupt XDR)", async () => {
       const raw = makeRawEvent(303);
-      (StellarSdk.scValToNative as ReturnType<typeof vi.fn>).mockImplementation(() => {
+      (StellarSdk.scValToNative as ReturnType<typeof jest.fn>).mockImplementation(() => {
         throw new Error("XDR decode failure");
       });
 
@@ -419,7 +419,7 @@ describe("EventListenerService", () => {
         mockDispatchEvent.mockClear();
 
         const raw = makeRawEvent(400 + i, `evt-${400 + i}`);
-        (StellarSdk.scValToNative as ReturnType<typeof vi.fn>)
+        (StellarSdk.scValToNative as ReturnType<typeof jest.fn>)
           .mockReturnValueOnce(symbol)
           .mockReturnValueOnce(`trade-${i}`);
 
@@ -434,7 +434,7 @@ describe("EventListenerService", () => {
 
     it("should extract tradeId as 'unknown' when topic has only one element", async () => {
       const raw = { ledger: 450, id: "evt-450", contractId: "CONTRACT_TEST_123", topic: [{ _scval: "sym" }], value: null };
-      (StellarSdk.scValToNative as ReturnType<typeof vi.fn>).mockReturnValueOnce("TradeFunded");
+      (StellarSdk.scValToNative as ReturnType<typeof jest.fn>).mockReturnValueOnce("TradeFunded");
 
       await service.processEvent(raw as any);
 
@@ -513,7 +513,7 @@ describe("EventListenerService", () => {
       fresh.stop();
 
       mockGetEvents.mockClear();
-      vi.advanceTimersByTime(10_000);
+      jest.advanceTimersByTime(10_000);
 
       expect(mockGetEvents).not.toHaveBeenCalled();
     });
@@ -543,7 +543,7 @@ describe("EventListenerService", () => {
     it("should process every event in the response", async () => {
       const events = [makeRawEvent(500), makeRawEvent(501)];
       mockGetEvents.mockResolvedValue({ events });
-      (StellarSdk.scValToNative as ReturnType<typeof vi.fn>)
+      (StellarSdk.scValToNative as ReturnType<typeof jest.fn>)
         .mockReturnValueOnce("TradeCreated")
         .mockReturnValueOnce("t-1")
         .mockReturnValueOnce("TradeFunded")
@@ -596,7 +596,7 @@ describe("EventListenerService", () => {
   describe("Edge cases", () => {
     it("should not dispatch if dispatchEvent itself throws", async () => {
       const raw = makeRawEvent(600);
-      (StellarSdk.scValToNative as ReturnType<typeof vi.fn>)
+      (StellarSdk.scValToNative as ReturnType<typeof jest.fn>)
         .mockReturnValueOnce("TradeFunded")
         .mockReturnValueOnce("t-err");
       mockDispatchEvent.mockRejectedValueOnce(new Error("DB down"));
@@ -606,7 +606,7 @@ describe("EventListenerService", () => {
 
     it("should not persist processedEvent when dispatchEvent fails", async () => {
       const raw = makeRawEvent(601);
-      (StellarSdk.scValToNative as ReturnType<typeof vi.fn>)
+      (StellarSdk.scValToNative as ReturnType<typeof jest.fn>)
         .mockReturnValueOnce("TradeFunded")
         .mockReturnValueOnce("t-err2");
       mockDispatchEvent.mockRejectedValueOnce(new Error("DB down"));
@@ -622,7 +622,7 @@ describe("EventListenerService", () => {
 
       for (let i = 1; i <= 5; i++) {
         const raw = makeRawEvent(i, `evt-${i}`);
-        (StellarSdk.scValToNative as ReturnType<typeof vi.fn>)
+        (StellarSdk.scValToNative as ReturnType<typeof jest.fn>)
           .mockReturnValueOnce("TradeFunded")
           .mockReturnValueOnce(`t-${i}`);
         await service.processEvent(raw as any);

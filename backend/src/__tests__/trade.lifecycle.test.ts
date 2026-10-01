@@ -8,7 +8,13 @@
  * All dependencies are mocked — no live database or contract node required.
  */
 
-import { TradeStatus, DisputeStatus } from '@prisma/client';
+import {
+  Dispute,
+  DisputeStatus,
+  Prisma,
+  Trade,
+  TradeStatus,
+} from '@prisma/client';
 
 // ---------------------------------------------------------------------------
 // Mock factory
@@ -203,11 +209,14 @@ describe('Trade lifecycle — dispute', () => {
     await transitionTo(prisma, 'T-dispute-3', TradeStatus.FUNDED);
     await transitionTo(prisma, 'T-dispute-3', TradeStatus.DISPUTED);
 
-    prisma.dispute.create.mockResolvedValue({
-      id: 1,
-      tradeId: 'T-dispute-3',
-      status: DisputeStatus.OPEN,
-    });
+    prisma.dispute.create.mockResolvedValue(
+      makeDispute({
+        tradeId: 'T-dispute-3',
+        initiator: 'buyer-address',
+        reason: 'Delivery dispute',
+        status: DisputeStatus.OPEN,
+      }),
+    );
 
     const dispute = await prisma.dispute.create({
       data: { tradeId: 'T-dispute-3', status: DisputeStatus.OPEN },

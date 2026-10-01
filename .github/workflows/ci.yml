@@ -148,7 +148,7 @@ jobs:
       - name: Test
         if: needs.changes.outputs.frontend == 'true'
         # --json writes a machine-readable result file used by the flake reporter
-        run: pnpm test -- --json --outputFile=jest-results.json || true
+        run: pnpm test --json --outputFile=jest-results.json || true
 
       - name: Detect flake candidates (frontend)
         if: needs.changes.outputs.frontend == 'true'
@@ -347,6 +347,9 @@ jobs:
 
       - name: Install deps
         run: pnpm install --frozen-lockfile
+
+      - name: Apply database migrations
+        run: pnpm exec prisma migrate deploy
 
       - name: Build
         if: needs.changes.outputs.backend == 'true'

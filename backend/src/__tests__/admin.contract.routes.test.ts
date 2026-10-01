@@ -35,7 +35,6 @@ const mockPrisma = {
 const app = express();
 app.use(express.json());
 app.use(correlationIdMiddleware);
-app.use("/", createAdminContractRouter(mockContractService));
 app.use("/", createAdminContractRouter(mockContractService, mockPrisma as never));
 app.use(errorHandler);
 
@@ -228,7 +227,7 @@ describe("Admin Contract Maintenance Routes", () => {
       );
 
       const res = await request(timeoutApp)
-        .post("/admin/contract/mediators")
+        .post("/api/admin/contract/mediators")
         .set("Authorization", `Bearer ${adminToken}`)
         .send({ mediatorAddress });
 
@@ -242,7 +241,7 @@ describe("Admin Contract Maintenance Routes", () => {
       mockContractService.buildUpdateFeeBpsTx.mockResolvedValue({ unsignedXdr: "unsigned-fee" });
 
       const res = await request(timeoutApp)
-        .patch("/admin/contract/fee")
+        .patch("/api/admin/contract/fee")
         .set("Authorization", `Bearer ${adminToken}`)
         .send({ feeBps: 100 });
 

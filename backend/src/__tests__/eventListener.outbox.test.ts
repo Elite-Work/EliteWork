@@ -66,6 +66,7 @@ function createMockPrisma() {
     },
     chainEventOutbox: {
       findUnique: jest.fn().mockResolvedValue(null),
+      upsert: jest.fn().mockResolvedValue({ ...outbox }),
       create: jest.fn().mockResolvedValue({ ...outbox }),
       upsert: jest.fn().mockResolvedValue({ ...outbox }),
       update: jest.fn().mockImplementation(async ({ data }: any) => {

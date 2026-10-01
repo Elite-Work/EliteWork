@@ -1,7 +1,7 @@
-import { Verifier } from '@pact-foundation/pact';
+import { existsSync } from 'node:fs';
 import path from 'path';
 import express from 'express';
-import jwt from 'jsonwebtoken';
+import { Trade, TradeStatus } from '@prisma/client';
 
 import { createTradeRouter } from '../routes/trade.routes';
 import { errorHandler } from '../middleware/errorHandler';
@@ -9,11 +9,10 @@ import { AuthService } from '../services/auth.service';
 import { ContractService } from '../services/contract.service';
 import { TradeService } from '../services/trade.service';
 
-jest.mock('../services/contract.service');
-jest.mock('../services/trade.service');
 jest.mock('../services/auth.service', () => ({
   AuthService: {
     validateToken: jest.fn(async (token: string) => {
+      const jwt = jest.requireActual<typeof import("jsonwebtoken")>("jsonwebtoken");
       return jwt.decode(token);
     }),
     isTokenRevoked: jest.fn().mockResolvedValue(false),
@@ -21,6 +20,57 @@ jest.mock('../services/auth.service', () => ({
 }));
 
 const JWT_SECRET = 'pact-provider-verify-secret-key-at-least-32-chars';
+const pactFile = path.resolve(
+  __dirname,
+  '../../../frontend/tests/pact/pacts/AmanaFrontend-AmanaBackend.json',
+);
+const pactTest = existsSync(pactFile) ? it : it.skip;
+const pactDescribe = existsSync(pactFile) ? describe : describe.skip;
+
+function createMockTradeService() {
+  return {
+    createPendingTrade: jest.spyOn(TradeService.prototype, 'createPendingTrade'),
+    getTradeById: jest.spyOn(TradeService.prototype, 'getTradeById'),
+    listUserTrades: jest.spyOn(TradeService.prototype, 'listUserTrades'),
+    getUserStats: jest.spyOn(TradeService.prototype, 'getUserStats'),
+    initiateDispute: jest.spyOn(TradeService.prototype, 'initiateDispute'),
+  };
+}
+
+function createMockContractService() {
+  return {
+    buildCreateTradeTx: jest.spyOn(
+      ContractService.prototype,
+      'buildCreateTradeTx',
+    ),
+    buildDepositTx: jest.spyOn(ContractService.prototype, 'buildDepositTx'),
+  };
+}
+
+function makeTrade(overrides: Partial<Trade> = {}): Trade {
+  return {
+    id: 1,
+    tradeId: '4294967297',
+    buyerAddress: '',
+    sellerAddress: '',
+    amountUsdc: '100.00',
+    buyerLossBps: 5000,
+    sellerLossBps: 5000,
+    version: 0,
+    status: TradeStatus.CREATED,
+    fundedAt: null,
+    deliveredAt: null,
+    completedAt: null,
+    expiresAt: null,
+    expiredAt: null,
+    createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+    ...overrides,
+  };
+}
+
+const mockTradeService = createMockTradeService();
+const mockContractService = createMockContractService();
 
 function createTestApp(): express.Application {
   const app = express();
@@ -37,7 +87,7 @@ function createTestApp(): express.Application {
   return app;
 }
 
-describe('Pact Provider Verification - Trades API', () => {
+pactDescribe('Pact Provider Verification - Trades API', () => {
   let app: express.Application;
   let server: ReturnType<express.Application['listen']>;
 
@@ -47,90 +97,52 @@ describe('Pact Provider Verification - Trades API', () => {
     const buyerAddress = 'GDNM7WSJ7VIUVK2TSZ2OQES5XR2663TZEIBFXRDT56B5IRLHERVWSXMU';
     const sellerAddress = 'GA4T33YK6H6D5E7ZQY5W3J2L7F8K9B0N1M2P3Q4R5S6T7U8V9W0X1Y2Z3';
 
-    const now = Math.floor(Date.now() / 1000);
-    const buyerToken = jwt.sign(
-      {
-        walletAddress: buyerAddress,
-        jti: 'pact-verify-buyer-jti',
-        iss: 'amana',
-        aud: 'amana-api',
-        nbf: now - 1,
-        iat: now,
-        exp: now + 3600,
-      },
-      JWT_SECRET,
-      { algorithm: 'HS256' },
-    );
-
-    (ContractService.prototype.buildCreateTradeTx as jest.Mock).mockResolvedValue({
+    mockContractService.buildCreateTradeTx.mockResolvedValue({
       tradeId: '4294967297',
       unsignedXdr: 'AAAAAXNvbWUtY3JlYXRlLXRyYWRlLXhkcg==',
     });
 
-    (TradeService.prototype.createPendingTrade as jest.Mock).mockResolvedValue({
-      tradeId: '4294967297',
-    });
-
-    (TradeService.prototype.getTradeById as jest.Mock).mockImplementation(
-      (tradeId: string, caller: string) => {
-        if (caller === buyerAddress) {
-          return {
-            tradeId,
-            buyerAddress,
-            sellerAddress,
-            amountCngn: '100.00',
-            buyerLossBps: 5000,
-            sellerLossBps: 5000,
-            status: 'CREATED',
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          };
-        }
-        if (caller === sellerAddress) {
-          return {
-            tradeId,
-            buyerAddress,
-            sellerAddress,
-            amountCngn: '100.00',
-            buyerLossBps: 5000,
-            sellerLossBps: 5000,
-            status: 'CREATED',
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          };
-        }
-        return null;
-      },
+    mockTradeService.createPendingTrade.mockResolvedValue(
+      makeTrade({ tradeId: '4294967297' }),
     );
 
-    (ContractService.prototype.buildDepositTx as jest.Mock).mockResolvedValue({
+    mockTradeService.getTradeById.mockImplementation(async (tradeId, caller) => {
+      if (caller === buyerAddress || caller === sellerAddress) {
+        return makeTrade({
+          tradeId,
+          buyerAddress,
+          sellerAddress,
+          amountUsdc: '100.00',
+          status: TradeStatus.CREATED,
+        });
+      }
+      return null;
+    });
+
+    mockContractService.buildDepositTx.mockResolvedValue({
       unsignedXdr: 'AAAAAXNvbWUtZGVwb3NpdC10eC14ZHI=',
     });
 
-    (TradeService.prototype.listUserTrades as jest.Mock).mockResolvedValue({
+    mockTradeService.listUserTrades.mockResolvedValue({
       items: [
-        {
+        makeTrade({
           tradeId: '4294967297',
           buyerAddress,
           sellerAddress,
-          amountCngn: '100.00',
-          buyerLossBps: 5000,
-          sellerLossBps: 5000,
-          status: 'CREATED',
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        },
+          amountUsdc: '100.00',
+          status: TradeStatus.CREATED,
+        }),
       ],
       pagination: { page: 1, limit: 10, total: 1, totalPages: 1 },
     });
 
-    (TradeService.prototype.getUserStats as jest.Mock).mockResolvedValue({
+    mockTradeService.getUserStats.mockResolvedValue({
       totalTrades: 10,
       totalVolume: "250000.0000000",
       openTrades: 3,
     });
 
-    (TradeService.prototype.initiateDispute as jest.Mock).mockResolvedValue({
+    mockTradeService.initiateDispute.mockResolvedValue({
       unsignedXdr: 'AAAAAXNvbWUtZGlzcHV0ZS14ZHI=',
     });
 
@@ -154,10 +166,11 @@ describe('Pact Provider Verification - Trades API', () => {
     jest.restoreAllMocks();
   });
 
-  it('verifies the provider against the consumer pact', async () => {
+  pactTest('verifies the provider against the consumer pact', async () => {
     const pactDir = path.resolve(__dirname, '../../../frontend/tests/pact/pacts');
     const port = process.env.PACT_PROVIDER_PORT || '3001';
 
+    const { Verifier } = await import('@pact-foundation/pact');
     const output = await new Verifier({
       provider: 'AmanaBackend',
       providerBaseUrl: `http://localhost:${port}`,

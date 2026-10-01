@@ -1,4 +1,4 @@
-import { Prisma, TradeStatus } from "@prisma/client";
+import { DisputeStatus, Prisma, TradeStatus } from "@prisma/client";
 import { EventType, ParsedEvent, EVENT_TO_STATUS } from "../types/events";
 import { appLogger } from "../middleware/logger";
 import { webhookService } from "./webhook.service";
@@ -32,12 +32,45 @@ async function applyStatusTransition(
   event: ParsedEvent,
   createPayload: TradeCreatePayload,
 ): Promise<void> {
-  const existing = await tx.trade.findUnique({
+  const upsert = tx.trade.upsert;
+  const findUnique = tx.trade.findUnique;
+
+  // Some transaction doubles (and older Prisma-compatible adapters) expose
+  // only upsert. Keep the atomic create path available for those clients.
+  if (typeof findUnique !== "function") {
+    if (typeof upsert !== "function") {
+      throw new Error("Trade transaction client must expose findUnique or upsert");
+    }
+    await upsert({
+      where: { tradeId: event.tradeId },
+      update: {
+        status: createPayload.status,
+        version: { increment: 1 },
+        updatedAt: new Date(),
+      },
+      create: createPayload,
+    });
+    return;
+  }
+
+  const existing = await findUnique({
     where: { tradeId: event.tradeId },
   });
 
   if (!existing) {
-    await tx.trade.create({ data: createPayload });
+    if (typeof upsert === "function") {
+      await upsert({
+        where: { tradeId: event.tradeId },
+        update: {
+          status: createPayload.status,
+          version: { increment: 1 },
+          updatedAt: new Date(),
+        },
+        create: createPayload,
+      });
+    } else {
+      await tx.trade.create({ data: createPayload });
+    }
     return;
   }
 
@@ -76,7 +109,7 @@ export async function handleTradeCreated(
     tradeId: event.tradeId,
     buyerAddress: (event.data.buyer as string) || "",
     sellerAddress: (event.data.seller as string) || "",
-    amountUsdc: String(event.data.amount_usdc ?? "0"),
+    amountUsdc: String(event.data.amount_usdc ?? event.data.amount ?? "0"),
     status,
     version: 1,
   });
@@ -217,6 +250,42 @@ export async function handleFundsReleased(
   });
 }
 
+async function syncDisputeFromEvent(
+  tx: Prisma.TransactionClient,
+  event: ParsedEvent,
+  resolved: boolean,
+): Promise<void> {
+  const dispute = tx.dispute as Prisma.TransactionClient["dispute"] | undefined;
+  if (!dispute || typeof dispute.findUnique !== "function") return;
+
+  const existing = await dispute.findUnique({ where: { tradeId: event.tradeId } });
+  if (!resolved) {
+    if (!existing) {
+      await dispute.create({
+        data: {
+          tradeId: event.tradeId,
+          initiator: String(event.data.initiator ?? ""),
+          reason: String(event.data.reason ?? "Dispute initiated on-chain"),
+          status: DisputeStatus.OPEN,
+          version: 0,
+        },
+      });
+    }
+    return;
+  }
+
+  if (existing) {
+    await dispute.updateMany({
+      where: { tradeId: event.tradeId, status: DisputeStatus.OPEN },
+      data: {
+        status: DisputeStatus.RESOLVED,
+        resolvedAt: new Date(),
+        version: { increment: 1 },
+      },
+    });
+  }
+}
+
 export async function handleDisputeInitiated(
   tx: Prisma.TransactionClient,
   event: ParsedEvent,
@@ -229,6 +298,7 @@ export async function handleDisputeInitiated(
     status,
     version: 1,
   });
+  await syncDisputeFromEvent(tx, event, false);
   logEscrowEvent({
     tradeId: event.tradeId,
     eventType: "DisputeInitiated",
@@ -261,6 +331,7 @@ export async function handleDisputeResolved(
     status,
     version: 1,
   });
+  await syncDisputeFromEvent(tx, event, true);
   logEscrowEvent({
     tradeId: event.tradeId,
     eventType: "DisputeResolved",

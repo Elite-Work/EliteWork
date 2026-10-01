@@ -26,10 +26,7 @@ export const lossBps = z
   .min(LOSS_BPS_MIN, `Cannot be below ${LOSS_BPS_MIN}`)
   .max(LOSS_BPS_MAX, `Cannot exceed ${LOSS_BPS_MAX}`);
 
-export const usdcAmount = z.union([
-  z.string().regex(USDC_AMOUNT_REGEX, "Invalid amount format"),
-  z.number().positive("Amount must be positive").transform(String),
-]);
+export const usdcAmount = z.string().regex(USDC_AMOUNT_REGEX, "Invalid amount format");
 
 export const createTradeInputSchema = z
   .object({

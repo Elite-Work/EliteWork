@@ -1,5 +1,19 @@
 import request from "supertest";
 
+jest.setTimeout(30000);
+
+jest.mock("../lib/redis", () => ({
+  redis: {
+    status: "ready",
+    get: jest.fn().mockResolvedValue(null),
+    set: jest.fn().mockResolvedValue("OK"),
+    del: jest.fn().mockResolvedValue(1),
+    exists: jest.fn().mockResolvedValue(0),
+    ping: jest.fn().mockResolvedValue("PONG"),
+    on: jest.fn(),
+  },
+}));
+
 /**
  * Tests for HTTP baseline hardening:
  *  - Security headers from Helmet
@@ -31,25 +45,25 @@ async function buildApp(corsOrigins?: string) {
 describe("Helmet security headers", () => {
   it("sets X-Content-Type-Options: nosniff", async () => {
     const app = await buildApp();
-    const res = await request(app).get("/health");
+    const res = await request(app).get("/health/live");
     expect(res.headers["x-content-type-options"]).toBe("nosniff");
   });
 
   it("sets X-Frame-Options: DENY", async () => {
     const app = await buildApp();
-    const res = await request(app).get("/health");
+    const res = await request(app).get("/health/live");
     expect(res.headers["x-frame-options"]).toBe("DENY");
   });
 
   it("sets Strict-Transport-Security header", async () => {
     const app = await buildApp();
-    const res = await request(app).get("/health");
+    const res = await request(app).get("/health/live");
     expect(res.headers["strict-transport-security"]).toMatch(/max-age=\d+/);
   });
 
   it("sets Content-Security-Policy header", async () => {
     const app = await buildApp();
-    const res = await request(app).get("/health");
+    const res = await request(app).get("/health/live");
     expect(res.headers["content-security-policy"]).toBeDefined();
   });
 });
@@ -62,7 +76,7 @@ describe("CORS allowlist", () => {
   it("allows a request from a whitelisted origin", async () => {
     const app = await buildApp("https://app.amana.com");
     const res = await request(app)
-      .get("/health")
+      .get("/health/live")
       .set("Origin", "https://app.amana.com");
     expect(res.headers["access-control-allow-origin"]).toBe("https://app.amana.com");
   });
@@ -70,7 +84,7 @@ describe("CORS allowlist", () => {
   it("blocks a request from a non-whitelisted origin", async () => {
     const app = await buildApp("https://app.amana.com");
     const res = await request(app)
-      .options("/health")
+      .options("/health/live")
       .set("Origin", "https://evil.example.com")
       .set("Access-Control-Request-Method", "GET");
     // Either no ACAO header, or a 500 from the cors error callback
@@ -82,19 +96,19 @@ describe("CORS allowlist", () => {
     const app = await buildApp("https://app.amana.com,https://staging.amana.com");
 
     const res1 = await request(app)
-      .get("/health")
+      .get("/health/live")
       .set("Origin", "https://app.amana.com");
     expect(res1.headers["access-control-allow-origin"]).toBe("https://app.amana.com");
 
     const res2 = await request(app)
-      .get("/health")
+      .get("/health/live")
       .set("Origin", "https://staging.amana.com");
     expect(res2.headers["access-control-allow-origin"]).toBe("https://staging.amana.com");
   });
 
   it("permits server-to-server calls with no Origin header", async () => {
     const app = await buildApp("https://app.amana.com");
-    const res = await request(app).get("/health"); // no Origin
+    const res = await request(app).get("/health/live"); // no Origin
     expect(res.status).toBe(200);
   });
 });
@@ -108,7 +122,7 @@ describe("Request body size limits", () => {
     const app = await buildApp();
     const body = { data: "x".repeat(1000) };
     const res = await request(app)
-      .get("/health")
+      .get("/health/live")
       .set("Content-Type", "application/json")
       .send(body);
     expect(res.status).toBe(200);

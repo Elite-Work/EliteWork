@@ -1,4 +1,6 @@
 import request from "supertest";
+
+jest.setTimeout(30000);
 import express, { NextFunction, Request, Response } from "express";
 import {
   correlationIdMiddleware,
@@ -8,6 +10,19 @@ import {
   TracedRequest,
 } from "../middleware/correlationId.middleware";
 import { createApp } from "../app";
+
+jest.mock("../lib/redis", () => ({
+  redis: {
+    status: "ready",
+    get: jest.fn().mockResolvedValue(null),
+    set: jest.fn().mockResolvedValue("OK"),
+    del: jest.fn().mockResolvedValue(1),
+    exists: jest.fn().mockResolvedValue(0),
+    ping: jest.fn().mockResolvedValue("PONG"),
+    on: jest.fn(),
+  },
+}));
+import { errorHandler } from "../middleware/errorHandler";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -219,34 +234,37 @@ describe("correlationId – full app integration", () => {
   });
 
   it("/health returns x-correlation-id header", async () => {
-    const res = await request(app).get("/health");
+    const res = await request(app).get("/health/live");
     expect(res.headers[CORRELATION_ID_HEADER]).toBeDefined();
   });
 
   it("/health returns x-request-id header", async () => {
-    const res = await request(app).get("/health");
+    const res = await request(app).get("/health/live");
     expect(res.headers[REQUEST_ID_HEADER]).toBeDefined();
   });
 
   it("propagates caller correlation ID through the full app", async () => {
     const id = "e2e-trace-abc123";
     const res = await request(app)
-      .get("/health")
+      .get("/health/live")
       .set(CORRELATION_ID_HEADER, id);
     expect(res.headers[CORRELATION_ID_HEADER]).toBe(id);
   });
 
   it("error responses include correlationId and requestId fields", async () => {
-    // Mount a route that throws after the middleware chain is set up.
-    const testApp = createApp();
-    (testApp as any).get(
+    // Mount a route before the error handler so the test exercises the
+    // production correlation/error middleware chain directly.
+    const testApp = express();
+    testApp.use(correlationIdMiddleware);
+    testApp.get(
       "/test-error",
       (_req: Request, _res: Response, next: NextFunction) => {
-        const err = new Error("boom");
-        (err as any).status = 422;
+        const err = new Error("boom") as Error & { status: number };
+        err.status = 422;
         next(err);
       },
     );
+    testApp.use(errorHandler);
 
     const correlationId = "error-trace-id";
     const res = await request(testApp)
@@ -260,8 +278,8 @@ describe("correlationId – full app integration", () => {
 
   it("each request gets a unique x-request-id", async () => {
     const [r1, r2] = await Promise.all([
-      request(app).get("/health"),
-      request(app).get("/health"),
+      request(app).get("/health/live"),
+      request(app).get("/health/live"),
     ]);
     expect(r1.headers[REQUEST_ID_HEADER]).not.toBe(r2.headers[REQUEST_ID_HEADER]);
   });

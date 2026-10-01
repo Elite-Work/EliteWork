@@ -28,9 +28,8 @@ process.env.AMANA_ESCROW_CONTRACT_ID = process.env.AMANA_ESCROW_CONTRACT_ID ?? '
 process.env.USDC_CONTRACT_ID = process.env.USDC_CONTRACT_ID ?? 'test-usdc-contract';
 process.env.ADMIN_SECRET_KEY = process.env.ADMIN_SECRET_KEY ?? 'test-admin-secret-key-value';
 
-const { envSchema, SECRET_ENV_KEYS, getEnvSpecificIssues } = await import(
-  '../src/config/env'
-);
+type EnvModule = typeof import('../src/config/env');
+let envModule: EnvModule;
 
 const exampleFiles = [
   '.env.example',
@@ -53,7 +52,12 @@ function parseEnvFile(filePath: string): Record<string, string> {
   return map;
 }
 
+type ZodShape = {
+  safeParse: (value: unknown) => { success: boolean };
+};
+
 function validateExamples(): void {
+  const { envSchema, SECRET_ENV_KEYS, getEnvSpecificIssues } = envModule;
   const schemaKeys = new Set(Object.keys(envSchema.shape));
   let hasError = false;
 
@@ -78,11 +82,9 @@ function validateExamples(): void {
     // 2. Every REQUIRED (no-default, non-optional) schema key must be
     //    documented in each example. Optional keys may be omitted.
     for (const name of schemaKeys) {
-      const shape = (envSchema.shape as Record<string, unknown>)[name];
-      const isDefaulted =
-        typeof (shape as any)?._def?.defaultValue !== undefined;
-      const isOptional = (shape as any)?._def?.typeName === 'ZodOptional';
-      if (!isDefaulted && !isOptional && !fileKeys.has(name)) {
+      const shape = (envSchema.shape as Record<string, unknown>)[name] as ZodShape;
+      const isOptionalOrDefaulted = shape.safeParse(undefined).success;
+      if (!isOptionalOrDefaulted && !fileKeys.has(name)) {
         console.error(`❌ [${file}] Missing required env var: ${name}`);
         hasError = true;
       }
@@ -93,9 +95,9 @@ function validateExamples(): void {
       if (SECRET_ENV_KEYS.has(key)) continue;
       const value = map[key];
       if (value === '') continue; // placeholder / intentionally unset
-      const shape = (envSchema.shape as Record<string, unknown>)[key];
-      if (!shape || typeof (shape as any).safeParse !== 'function') continue;
-      const res = (shape as { safeParse(v: unknown): { success: boolean } }).safeParse(value);
+      const shape = (envSchema.shape as Record<string, unknown>)[key] as ZodShape;
+      if (!shape?.safeParse) continue;
+      const res = shape.safeParse(value);
       if (!res.success) {
         console.error(`❌ [${file}] Invalid value for ${key}="${value}"`);
         hasError = true;
@@ -123,4 +125,9 @@ function validateExamples(): void {
   process.exit(0);
 }
 
-void validateExamples();
+async function main(): Promise<void> {
+  envModule = await import('../src/config/env');
+  validateExamples();
+}
+
+void main();

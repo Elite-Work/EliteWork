@@ -98,8 +98,14 @@ function createRes() {
   return { res, headers };
 }
 
+type RedisTestMock = {
+  get: jest.Mock<Promise<string | null>, [string]>;
+  set: jest.Mock<Promise<string | null>, [string, string, string, ...unknown[]]>;
+  del: jest.Mock<Promise<number>, [string]>;
+};
+
 describe("idempotencyMiddleware", () => {
-  const redisMock = redis as jest.Mocked<typeof redis>;
+  const redisMock = redis as unknown as RedisTestMock;
   const alertMock = alertService as jest.Mocked<typeof alertService>;
 
   beforeEach(() => {

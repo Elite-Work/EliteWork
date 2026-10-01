@@ -51,7 +51,9 @@ describe("API Versioning contract", () => {
 
       expect(v1.status).toBe(legacy.status);
       expect(v1.status).not.toBe(404); // path must resolve, not 404
-      expect(JSON.stringify(v1.body)).toBe(JSON.stringify(legacy.body));
+      const { timestamp: _v1Timestamp, ...v1Body } = v1.body as Record<string, unknown>;
+      const { timestamp: _legacyTimestamp, ...legacyBody } = legacy.body as Record<string, unknown>;
+      expect(v1Body).toEqual(legacyBody);
     }
   });
 
@@ -73,7 +75,7 @@ describe("API Versioning contract", () => {
   });
 
   it("does not signal a version or deprecation on health (infra)", async () => {
-    const res = await request(app).get("/health");
+    const res = await request(app).get("/health/live");
     expect(res.status).toBe(200);
     expect(res.headers[API_VERSION_HEADER.toLowerCase()]).toBeUndefined();
     expect(res.headers[DEPRECATION_HEADER.toLowerCase()]).toBeUndefined();

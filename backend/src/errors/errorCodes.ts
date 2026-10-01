@@ -42,6 +42,8 @@ export enum ErrorCode {
 export interface StructuredErrorPayload {
   code: ErrorCode | string;
   message: string;
+  /** Backwards-compatible alias for clients that still read `error`. */
+  error?: string;
   details: Record<string, unknown>;
   timestamp: string;
   path?: string;
@@ -64,6 +66,7 @@ export class AppError extends Error {
     return {
       code: this.code,
       message: this.message,
+      error: this.message,
       details: this.details,
       timestamp: new Date().toISOString(),
       ...(path && { path }),

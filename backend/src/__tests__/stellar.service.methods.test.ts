@@ -1,10 +1,9 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // Mock dependencies before importing the service
-vi.mock("../config/stellar", () => ({
+jest.mock("../config/stellar", () => ({
     horizonServer: {
-        loadAccount: vi.fn(),
-        strictReceivePaths: vi.fn(),
+        loadAccount: jest.fn(),
+        strictReceivePaths: jest.fn(),
     },
     sorobanRpcClient: {},
     networkPassphrase: "Test SDF Network ; September 2015",
@@ -30,14 +29,14 @@ describe("StellarService new methods (#732)", () => {
     let service: StellarService;
 
     beforeEach(() => {
-        vi.clearAllMocks();
+        jest.clearAllMocks();
         service = new StellarService();
     });
 
     describe("loadAccount", () => {
         it("returns account response from Horizon", async () => {
             const mockAccount = { id: "GABC", sequence: "100" };
-            vi.mocked(horizonServer.loadAccount).mockResolvedValue(mockAccount as any);
+            jest.mocked(horizonServer.loadAccount).mockResolvedValue(mockAccount as any);
 
             const result = await service.loadAccount("GABC");
             expect(result).toEqual(mockAccount);
@@ -45,7 +44,7 @@ describe("StellarService new methods (#732)", () => {
         });
 
         it("throws classified error when Horizon fails", async () => {
-            vi.mocked(horizonServer.loadAccount).mockRejectedValue(new Error("Not found"));
+            jest.mocked(horizonServer.loadAccount).mockRejectedValue(new Error("Not found"));
             await expect(service.loadAccount("GINVALID")).rejects.toThrow("Not found");
         });
     });
@@ -53,8 +52,8 @@ describe("StellarService new methods (#732)", () => {
     describe("findPaymentPath", () => {
         it("returns path records from strictReceivePaths", async () => {
             const mockPaths = { records: [{ path: [], source_amount: "1" }] };
-            const callMock = vi.fn().mockResolvedValue(mockPaths);
-            vi.mocked(horizonServer.strictReceivePaths).mockReturnValue({ call: callMock } as any);
+            const callMock = jest.fn().mockResolvedValue(mockPaths);
+            jest.mocked(horizonServer.strictReceivePaths).mockReturnValue({ call: callMock } as any);
 
             const result = await service.findPaymentPath({
                 sourceAssets: [{ asset_type: "native" }],
@@ -65,8 +64,8 @@ describe("StellarService new methods (#732)", () => {
         });
 
         it("throws classified error on Horizon failure", async () => {
-            vi.mocked(horizonServer.strictReceivePaths).mockReturnValue({
-                call: vi.fn().mockRejectedValue(new Error("horizon down")),
+            jest.mocked(horizonServer.strictReceivePaths).mockReturnValue({
+                call: jest.fn().mockRejectedValue(new Error("horizon down")),
             } as any);
             await expect(service.findPaymentPath({
                 sourceAssets: [],

@@ -86,8 +86,12 @@ export class PathPaymentService {
       const destAssets = [new StellarSdk.Asset("USDC", usdcIssuer)];
 
       const paths = await this.circuitBreaker.call(() =>
-        retryAsync(() =>
-          server.strictSendPaths(sourceAsset, sourceAmount, destAssets).call(),
+        retryAsync(
+          () => server.strictSendPaths(sourceAsset, sourceAmount, destAssets).call(),
+          {
+            backoffMs: [1000, 2000, 4000, 8000],
+            operationName: "stellar.pathPaymentQuote",
+          },
         ),
       );
 

@@ -1,5 +1,4 @@
 import request from "supertest";
-import { createApp } from "../app";
 import express from "express";
 
 const mockAssets = jest.fn();
@@ -16,6 +15,8 @@ jest.mock("../lib/cache", () => ({
   cacheGet: jest.fn().mockResolvedValue(null),
   cacheSet: jest.fn().mockResolvedValue(undefined),
 }));
+
+const { createApp } = require("../app") as typeof import("../app");
 
 const KNOWN_ISSUER = "GDDD3FRCH55BSYNKISYY242HQNIBOH35CQP42NSJABR62XK2JOV5MED6";
 

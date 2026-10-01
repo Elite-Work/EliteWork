@@ -7,7 +7,7 @@ import { ContractService } from "../services/contract.service";
 
 describe("TradeTemplateService", () => {
   const userAddress = "g-user";
-  const template = {
+  const template: TradeTemplate = {
     id: 7,
     userAddress,
     name: "Weekly maize sale",
@@ -15,10 +15,37 @@ describe("TradeTemplateService", () => {
     amountUsdc: "125.50",
     buyerLossBps: 5000,
     sellerLossBps: 5000,
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    updatedAt: new Date("2026-01-01T00:00:00.000Z"),
   };
+  const createdTrade: Trade = {
+    id: 8,
+    tradeId: "trade-1",
+    buyerAddress: userAddress,
+    sellerAddress: "g-seller",
+    amountUsdc: "125.50",
+    buyerLossBps: 5000,
+    sellerLossBps: 5000,
+    version: 0,
+    status: TradeStatus.PENDING_SIGNATURE,
+    fundedAt: null,
+    deliveredAt: null,
+    completedAt: null,
+    expiresAt: null,
+    expiredAt: null,
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+  };
+  type TemplateDatabase = ConstructorParameters<typeof TradeTemplateService>[0];
   const prisma = {
-    tradeTemplate: { upsert: jest.fn(), findMany: jest.fn(), findFirst: jest.fn() },
-    trade: { create: jest.fn() },
+    tradeTemplate: {
+      upsert: jest.fn<Promise<TradeTemplate>, [args: Prisma.TradeTemplateUpsertArgs]>(),
+      findMany: jest.fn<Promise<TradeTemplate[]>, [args: Prisma.TradeTemplateFindManyArgs]>(),
+      findFirst: jest.fn<Promise<TradeTemplate | null>, [args: Prisma.TradeTemplateFindFirstArgs]>(),
+    },
+    trade: {
+      create: jest.fn<Promise<Trade>, [args: Prisma.TradeCreateArgs]>(),
+    },
   };
   const contract = { buildCreateTradeTx: jest.fn() };
   const service = new TradeTemplateService(
@@ -47,7 +74,7 @@ describe("TradeTemplateService", () => {
   it("creates a pending trade from a saved template", async () => {
     prisma.tradeTemplate.findFirst.mockResolvedValue(template);
     contract.buildCreateTradeTx.mockResolvedValue({ tradeId: "trade-1", unsignedXdr: "xdr" });
-    prisma.trade.create.mockResolvedValue({});
+    prisma.trade.create.mockResolvedValue(createdTrade);
 
     await expect(service.createTradeFromTemplate(7, "G-USER")).resolves.toEqual({
       tradeId: "trade-1", unsignedXdr: "xdr", templateId: 7,

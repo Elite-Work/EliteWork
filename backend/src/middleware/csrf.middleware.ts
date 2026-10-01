@@ -18,9 +18,14 @@ export function csrfToken(_req: Request, res: Response): void {
   res.json({ csrfToken: token });
 }
 
+function isAdminPath(path: string): boolean {
+  return path === "/admin" || path.startsWith("/admin/") ||
+    path === "/api/admin" || path.startsWith("/api/admin/");
+}
+
 /** Bearer authentication is not ambient and does not need CSRF protection. */
 export function csrfProtection(req: Request, res: Response, next: NextFunction): void {
-  if (SAFE_METHODS.has(req.method) || req.headers.authorization?.startsWith("Bearer ")) {
+  if (!isAdminPath(req.path) || SAFE_METHODS.has(req.method) || req.headers.authorization?.startsWith("Bearer ")) {
     next();
     return;
   }

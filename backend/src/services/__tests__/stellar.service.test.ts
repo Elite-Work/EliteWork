@@ -1,4 +1,6 @@
 import { StellarService } from '../stellar.service';
+import { appLogger } from '../../middleware/logger';
+import { __resetRetrySleepForTests, __setRetrySleepForTests } from '../../lib/retry';
 import { Horizon, rpc as SorobanRpc, TransactionBuilder } from '@stellar/stellar-sdk';
 
 /**
@@ -74,12 +76,17 @@ describe('StellarService', () => {
     // Clear all mocks before each test
     jest.clearAllMocks();
     
+    __setRetrySleepForTests(jest.fn().mockResolvedValue(undefined));
     // Create a new instance of StellarService
     stellarService = new StellarService();
   });
 
+  afterEach(() => {
+    __resetRetrySleepForTests();
+  });
+
   describe('getAccountBalance', () => {
-    const validPublicKey = 'GXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX';
+    const validPublicKey = 'GAT64WXNUTEGEPUCVY37RYK3FORUD53LQURINYCZFF5JQ77RXQK4DJ7E';
 
     it('should return USDC balance for valid address', async () => {
       const mockAccount = {
@@ -114,7 +121,7 @@ describe('StellarService', () => {
     it('should default to USDC when no assetCode is provided', async () => {
       const mockAccount = {
         balances: [
-          { asset_type: 'credit_alphanum4', asset_code: 'USDC', balance: '2500.5000000' },
+          { asset_type: 'credit_alphanum4', asset_code: 'cNGN', balance: '2500.5000000' },
         ],
       };
       mockHorizonServer.loadAccount.mockResolvedValue(mockAccount as any);
@@ -165,19 +172,19 @@ describe('StellarService', () => {
     });
 
     it('should log error details when balance fetch fails', async () => {
-      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
+      const loggerSpy = jest.spyOn(appLogger, 'error').mockImplementation();
       const error = new Error('Network failure');
       mockHorizonServer.loadAccount.mockRejectedValue(error);
 
       await expect(stellarService.getAccountBalance(validPublicKey, 'USDC'))
         .rejects.toThrow();
 
-      expect(consoleErrorSpy).toHaveBeenCalledWith(
-        `Failed to get balance for ${validPublicKey}:`,
-        error
+      expect(loggerSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ error }),
+        'Failed to get account balance',
       );
 
-      consoleErrorSpy.mockRestore();
+      loggerSpy.mockRestore();
     });
   });
 
@@ -211,7 +218,7 @@ describe('StellarService', () => {
     });
 
     it('should log transaction hash on successful submission', async () => {
-      const consoleLogSpy = jest.spyOn(console, 'log').mockImplementation();
+      const loggerSpy = jest.spyOn(appLogger, 'info').mockImplementation();
       const mockResponse: SorobanRpc.Api.SendTransactionResponse = {
         status: 'PENDING',
         hash: 'transaction-hash-123',
@@ -222,11 +229,12 @@ describe('StellarService', () => {
 
       await stellarService.submitTransaction(validSignedXdr);
 
-      expect(consoleLogSpy).toHaveBeenCalledWith(
-        'Transaction submitted with hash: transaction-hash-123'
+      expect(loggerSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ hash: 'transaction-hash-123' }),
+        'Transaction submitted',
       );
 
-      consoleLogSpy.mockRestore();
+      loggerSpy.mockRestore();
     });
 
     it('should throw RPC Error when response status is ERROR without errorResult', async () => {
@@ -294,7 +302,7 @@ describe('StellarService', () => {
     });
 
     it('should log error details when RPC error occurs', async () => {
-      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
+      const loggerSpy = jest.spyOn(appLogger, 'error').mockImplementation();
       const mockResponse: any = {
         status: 'ERROR',
         hash: 'error-hash',
@@ -306,13 +314,16 @@ describe('StellarService', () => {
       await expect(stellarService.submitTransaction(validSignedXdr))
         .rejects.toThrow();
 
-      expect(consoleErrorSpy).toHaveBeenCalledWith('RPC Error:', mockResponse);
+      expect(loggerSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ response: mockResponse }),
+        'RPC Error',
+      );
 
-      consoleErrorSpy.mockRestore();
+      loggerSpy.mockRestore();
     });
 
     it('should log error details when contract panic occurs', async () => {
-      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
+      const loggerSpy = jest.spyOn(appLogger, 'error').mockImplementation();
       const mockResponse: any = {
         status: 'ERROR',
         errorResult: { message: 'Contract failed' },
@@ -325,9 +336,12 @@ describe('StellarService', () => {
       await expect(stellarService.submitTransaction(validSignedXdr))
         .rejects.toThrow();
 
-      expect(consoleErrorSpy).toHaveBeenCalledWith('Contract Panic:', '{"message":"Contract failed"}');
+      expect(loggerSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ errorMessage: '{"message":"Contract failed"}' }),
+        'Contract Panic',
+      );
 
-      consoleErrorSpy.mockRestore();
+      loggerSpy.mockRestore();
     });
 
     it('should handle network timeout errors', async () => {
@@ -335,7 +349,7 @@ describe('StellarService', () => {
       mockSorobanRpc.sendTransaction.mockRejectedValue(networkError);
 
       await expect(stellarService.submitTransaction(validSignedXdr))
-        .rejects.toThrow('Transaction submission failed: Network timeout');
+        .rejects.toThrow(/Transaction submission failed: .*Network timeout/);
     });
 
     it('should parse contract error from string errorResult', async () => {

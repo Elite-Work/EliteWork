@@ -7,7 +7,7 @@
  *  - Active/open disputes are never touched
  *  - Returns correct metadata (purgedCount, tradeIds)
  */
-import { PrismaClient, DisputeStatus } from "@prisma/client";
+import { DisputeStatus, Prisma } from "@prisma/client";
 import { DisputeService, COMPLETED_DISPUTE_STATUSES } from "../services/dispute.service";
 import { ErrorCode } from "../errors/errorCodes";
 
@@ -16,10 +16,22 @@ const NOW = new Date("2025-06-01T00:00:00.000Z");
 function createMockPrisma() {
   return {
     dispute: {
-      findMany: jest.fn(),
-      updateMany: jest.fn(),
+      findMany: jest.fn<
+        Promise<CleanupDisputeRow[]>,
+        [args: Prisma.DisputeFindManyArgs]
+      >(),
+      updateMany: jest.fn<
+        Promise<Prisma.BatchPayload>,
+        [args: Prisma.DisputeUpdateManyArgs]
+      >(),
     },
-  } as unknown as PrismaClient;
+  };
+}
+
+type DisputeDatabase = ConstructorParameters<typeof DisputeService>[0];
+
+function asPrismaClient(mock: DisputePrismaMock): DisputeDatabase {
+  return mock as unknown as DisputeDatabase;
 }
 
 describe("DisputeService – purgeCompletedDisputeData", () => {
@@ -49,7 +61,7 @@ describe("DisputeService – purgeCompletedDisputeData", () => {
   });
 
   it("returns zero purgedCount when no completed disputes qualify", async () => {
-    (prisma.dispute.findMany as jest.Mock).mockResolvedValue([]);
+    prisma.dispute.findMany.mockResolvedValue([]);
 
     const result = await service.purgeCompletedDisputeData(MEDIATOR);
 
@@ -63,8 +75,8 @@ describe("DisputeService – purgeCompletedDisputeData", () => {
       { id: 1, tradeId: "T-001" },
       { id: 2, tradeId: "T-002" },
     ];
-    (prisma.dispute.findMany as jest.Mock).mockResolvedValue(rows);
-    (prisma.dispute.updateMany as jest.Mock).mockResolvedValue({ count: 2 });
+    prisma.dispute.findMany.mockResolvedValue(rows);
+    prisma.dispute.updateMany.mockResolvedValue({ count: 2 });
 
     const result = await service.purgeCompletedDisputeData(MEDIATOR);
 
@@ -77,7 +89,7 @@ describe("DisputeService – purgeCompletedDisputeData", () => {
   });
 
   it("queries with status filter limited to completed statuses", async () => {
-    (prisma.dispute.findMany as jest.Mock).mockResolvedValue([]);
+    prisma.dispute.findMany.mockResolvedValue([]);
 
     await service.purgeCompletedDisputeData(MEDIATOR);
 
@@ -91,29 +103,27 @@ describe("DisputeService – purgeCompletedDisputeData", () => {
   });
 
   it("queries with a cutoff date based on olderThanDays", async () => {
-    (prisma.dispute.findMany as jest.Mock).mockResolvedValue([]);
+    prisma.dispute.findMany.mockResolvedValue([]);
 
     await service.purgeCompletedDisputeData(MEDIATOR, 90);
 
-    const call = (prisma.dispute.findMany as jest.Mock).mock.calls[0][0];
-    const cutoff: Date = call.where.resolvedAt.lte;
+    const call = prisma.dispute.findMany.mock.calls[0]?.[0];
     const expectedCutoff = new Date(NOW.getTime() - 90 * 24 * 60 * 60 * 1000);
-    expect(cutoff.getTime()).toBe(expectedCutoff.getTime());
+    expect(call?.where?.resolvedAt).toEqual({ lte: expectedCutoff });
   });
 
   it("respects custom olderThanDays parameter", async () => {
-    (prisma.dispute.findMany as jest.Mock).mockResolvedValue([]);
+    prisma.dispute.findMany.mockResolvedValue([]);
 
     await service.purgeCompletedDisputeData(MEDIATOR, 30);
 
-    const call = (prisma.dispute.findMany as jest.Mock).mock.calls[0][0];
-    const cutoff: Date = call.where.resolvedAt.lte;
+    const call = prisma.dispute.findMany.mock.calls[0]?.[0];
     const expectedCutoff = new Date(NOW.getTime() - 30 * 24 * 60 * 60 * 1000);
-    expect(cutoff.getTime()).toBe(expectedCutoff.getTime());
+    expect(call?.where?.resolvedAt).toEqual({ lte: expectedCutoff });
   });
 
   it("does not call updateMany when findMany returns empty", async () => {
-    (prisma.dispute.findMany as jest.Mock).mockResolvedValue([]);
+    prisma.dispute.findMany.mockResolvedValue([]);
 
     await service.purgeCompletedDisputeData(MEDIATOR);
 
@@ -121,7 +131,7 @@ describe("DisputeService – purgeCompletedDisputeData", () => {
   });
 
   it("only selects id and tradeId in the query to minimise data exposure", async () => {
-    (prisma.dispute.findMany as jest.Mock).mockResolvedValue([]);
+    prisma.dispute.findMany.mockResolvedValue([]);
 
     await service.purgeCompletedDisputeData(MEDIATOR);
 

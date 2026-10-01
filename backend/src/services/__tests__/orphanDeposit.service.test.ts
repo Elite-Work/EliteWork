@@ -1,22 +1,27 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { OrphanDepositService, DepositEvent } from '../orphanDeposit.service';
+
+type AsyncMock = jest.Mock<Promise<unknown>, unknown[]>;
+
+function asyncMock(): AsyncMock {
+    return jest.fn<Promise<unknown>, unknown[]>();
+}
 
 function makePrisma(overrides: Record<string, unknown> = {}) {
   return {
     orphanDeposit: {
-      findUnique: vi.fn().mockResolvedValue(null),
-      create: vi.fn().mockResolvedValue({ id: 1 }),
-      findMany: vi.fn().mockResolvedValue([]),
-      count: vi.fn().mockResolvedValue(0),
-      update: vi.fn().mockResolvedValue({}),
+      findUnique: asyncMock().mockResolvedValue(null),
+      create: asyncMock().mockResolvedValue({ id: 1 }),
+      findMany: asyncMock().mockResolvedValue([]),
+      count: asyncMock().mockResolvedValue(0),
+      update: asyncMock().mockResolvedValue({}),
     },
     trade: {
-      findUnique: vi.fn().mockResolvedValue(null),
+      findUnique: asyncMock().mockResolvedValue(null),
     },
     adminActionAudit: {
-      create: vi.fn().mockResolvedValue({}),
+      create: asyncMock().mockResolvedValue({}),
     },
-    $transaction: vi.fn().mockImplementation((ops: unknown[]) => Promise.all(ops)),
+    $transaction: asyncMock().mockImplementation((...ops: unknown[]) => Promise.resolve(ops)),
     ...overrides,
   };
 }
@@ -31,7 +36,7 @@ const baseEvent: DepositEvent = {
 };
 
 describe('OrphanDepositService.ingestDepositEvents', () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => jest.clearAllMocks());
 
   it('creates orphan record when no matching trade exists', async () => {
     const db = makePrisma();
@@ -50,7 +55,7 @@ describe('OrphanDepositService.ingestDepositEvents', () => {
 
   it('skips event when txHash already recorded', async () => {
     const db = makePrisma();
-    (db.orphanDeposit.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({ id: 5 });
+    (db.orphanDeposit.findUnique as AsyncMock).mockResolvedValue({ id: 5 });
     const service = new OrphanDepositService(db as never);
 
     const result = await service.ingestDepositEvents([baseEvent]);
@@ -62,7 +67,7 @@ describe('OrphanDepositService.ingestDepositEvents', () => {
 
   it('skips event when matching trade exists in DB', async () => {
     const db = makePrisma();
-    (db.trade.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({ id: 10, tradeId: 'trade-99' });
+    (db.trade.findUnique as AsyncMock).mockResolvedValue({ id: 10, tradeId: 'trade-99' });
     const service = new OrphanDepositService(db as never);
 
     const result = await service.ingestDepositEvents([baseEvent]);
@@ -94,7 +99,7 @@ describe('OrphanDepositService.attachOrphanToTrade', () => {
 
   it('calls $transaction with update + audit on success', async () => {
     const db = makePrisma();
-    (db.trade.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({ id: 1, tradeId: 'trade-1' });
+    (db.trade.findUnique as AsyncMock).mockResolvedValue({ id: 1, tradeId: 'trade-1' });
     const service = new OrphanDepositService(db as never);
 
     await service.attachOrphanToTrade(3, 'trade-1', 'GADMIN');

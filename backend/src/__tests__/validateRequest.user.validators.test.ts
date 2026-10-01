@@ -3,6 +3,7 @@ import request from "supertest";
 import { z } from "zod";
 import { validateRequest } from "../middleware/validateRequest";
 import { updateProfileSchema } from "../validators/user.validators";
+import { errorHandler } from "../middleware/errorHandler";
 
 describe("validateRequest middleware", () => {
   it("parses and reassigns body/params for valid payloads", async () => {
@@ -46,13 +47,16 @@ describe("validateRequest middleware", () => {
       }),
       (_req, res) => res.status(201).json({ ok: true }),
     );
+    app.use(errorHandler);
 
     const res = await request(app).post("/items").send({ quantity: -1 });
 
     expect(res.status).toBe(400);
-    expect(res.body).toEqual({
-      error: expect.stringMatching(/^quantity:/),
-    });
+    expect(res.body).toEqual(
+      expect.objectContaining({
+        error: expect.stringMatching(/^quantity:/),
+      }),
+    );
   });
 
   it("forwards non-zod failures to next(error)", async () => {
@@ -92,6 +96,7 @@ describe("updateProfileSchema boundaries and middleware interaction", () => {
       validateRequest({ body: updateProfileSchema }),
       (req, res) => res.status(200).json({ profile: req.body }),
     );
+    app.use(errorHandler);
 
     return app;
   };
@@ -128,13 +133,19 @@ describe("updateProfileSchema boundaries and middleware interaction", () => {
       .send({ displayName: "a".repeat(33) });
 
     expect(tooShort.status).toBe(400);
-    expect(tooShort.body).toEqual({
-      error: "displayName: Display name must be at least 2 characters",
-    });
+    expect(tooShort.body).toEqual(
+      expect.objectContaining({
+        code: "VALIDATION_ERROR",
+        message: "displayName: Display name must be at least 2 characters",
+      }),
+    );
     expect(tooLong.status).toBe(400);
-    expect(tooLong.body).toEqual({
-      error: "displayName: Display name must be 32 characters or fewer",
-    });
+    expect(tooLong.body).toEqual(
+      expect.objectContaining({
+        code: "VALIDATION_ERROR",
+        message: "displayName: Display name must be 32 characters or fewer",
+      }),
+    );
   });
 
   it("rejects displayName with invalid characters", async () => {
@@ -143,9 +154,12 @@ describe("updateProfileSchema boundaries and middleware interaction", () => {
     });
 
     expect(res.status).toBe(400);
-    expect(res.body).toEqual({
-      error: "displayName: Display name contains invalid characters",
-    });
+    expect(res.body).toEqual(
+      expect.objectContaining({
+        code: "VALIDATION_ERROR",
+        message: "displayName: Display name contains invalid characters",
+      }),
+    );
   });
 
   it("accepts valid avatarUrl and rejects malformed avatarUrl", async () => {
@@ -161,9 +175,12 @@ describe("updateProfileSchema boundaries and middleware interaction", () => {
     expect(valid.status).toBe(200);
     expect(valid.body.profile.avatarUrl).toBe("https://cdn.example.com/avatar.png");
     expect(invalid.status).toBe(400);
-    expect(invalid.body).toEqual({
-      error: "avatarUrl: Invalid URL",
-    });
+    expect(invalid.body).toEqual(
+      expect.objectContaining({
+        code: "VALIDATION_ERROR",
+        message: "avatarUrl: Invalid URL",
+      }),
+    );
   });
 
   it("strips unknown fields to remain forward-compatible with schema evolution", async () => {

@@ -31,6 +31,36 @@ jest.mock("../../services/adminStreams.service", () => ({
   },
 }));
 
+jest.mock("../../services/streamClawback.service", () => {
+  const activeClawbacks = new Set<string>();
+  return {
+    streamClawbackService: {
+      acquire: (streamId: string) => {
+        if (activeClawbacks.has(streamId)) throw new Error("already locked");
+        activeClawbacks.add(streamId);
+      },
+      release: (streamId: string) => activeClawbacks.delete(streamId),
+    },
+  };
+});
+
+jest.mock("../../services/streamValidation.service", () => {
+  const actual = jest.requireActual("../../services/streamValidation.service");
+  return {
+    ...actual,
+    streamValidationService: {
+      getStreamOrThrow: jest.fn().mockResolvedValue({ streamId: "stream-abc-123" }),
+      requireActionableStream: jest.fn().mockResolvedValue({
+        streamId: "stream-abc-123",
+        status: "ACTIVE",
+        vestingState: "vesting",
+        unclaimed: "7500",
+        pendingClawback: "0",
+      }),
+    },
+  };
+});
+
 import express from "express";
 import jwt from "jsonwebtoken";
 import request from "supertest";
@@ -96,7 +126,9 @@ describe("adminAuth — full-app integration (#53)", () => {
       const res = await request(app).get("/api/admin/streams").set("Authorization", `Bearer ${token}`);
 
       expect(res.status).toBe(403);
-      expect(res.body).toEqual({ error: "Forbidden: admin access required" });
+      expect(res.body).toEqual(
+        expect.objectContaining({ error: "Forbidden: admin access required" }),
+      );
       expect(mockList).not.toHaveBeenCalled();
     });
 

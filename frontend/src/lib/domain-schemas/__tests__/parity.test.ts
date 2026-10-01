@@ -33,8 +33,7 @@ function referenceAccepts(input: Record<string, unknown>): boolean {
   }
 
   const amountOk =
-    (typeof amountUsdc === "string" && USDC_AMOUNT_REGEX.test(amountUsdc)) ||
-    (typeof amountUsdc === "number" && Number.isFinite(amountUsdc) && amountUsdc > 0);
+    typeof amountUsdc === "string" && USDC_AMOUNT_REGEX.test(amountUsdc);
   if (!amountOk) return false;
 
   for (const bps of [buyerLossBps, sellerLossBps]) {

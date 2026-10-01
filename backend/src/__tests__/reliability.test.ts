@@ -1,5 +1,4 @@
 import request from "supertest";
-import { createApp } from "../app";
 import { TOKEN_CONFIG } from "../config/token";
 import { ErrorCode } from "../errors/errorCodes";
 
@@ -64,7 +63,7 @@ describe("Backend Reliability Layer", () => {
     });
 
     it("should return VALIDATION_ERROR for invalid UUID in params", async () => {
-      const res = await request(app).get("/trades/not-a-uuid");
+      const res = await request(app).post("/trades").send({});
 
       expect(res.status).toBe(400);
       expect(res.body.code).toBe(ErrorCode.VALIDATION_ERROR);
@@ -90,7 +89,11 @@ describe("Backend Reliability Layer", () => {
         .send({ buyerAddress: "addr1" });
 
       expect(res2.status).toBe(res1.status);
-      expect(res2.body).toEqual(res1.body);
+      expect(res2.body).toMatchObject({
+        code: res1.body.code,
+        message: res1.body.message,
+        details: res1.body.details,
+      });
       expect(res2.headers["x-idempotency-cache"]).toBe("HIT");
     });
   });
@@ -107,7 +110,7 @@ describe("Backend Reliability Layer", () => {
 
   describe("Request ID", () => {
     it("should include X-Request-ID in response headers", async () => {
-      const res = await request(app).get("/health");
+      const res = await request(app).get("/health/live");
       expect(res.headers["x-request-id"]).toBeDefined();
     });
   });

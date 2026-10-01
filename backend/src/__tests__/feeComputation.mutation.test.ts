@@ -248,6 +248,7 @@ describe("assertFeeConservation (mutation killers)", () => {
       sellerNet: "9900",
       buyerRefund: "0",
       feeBps: 100,
+      feeDust: "0",
       calculatedAt: new Date().toISOString(),
     };
     expect(() => assertFeeConservation(valid)).not.toThrow();
@@ -261,6 +262,7 @@ describe("assertFeeConservation (mutation killers)", () => {
       sellerNet: "9901", // off by 1
       buyerRefund: "0",
       feeBps: 100,
+      feeDust: "0",
       calculatedAt: new Date().toISOString(),
     };
     expect(() => assertFeeConservation(broken)).toThrow("conservation violated");
@@ -274,6 +276,7 @@ describe("assertFeeConservation (mutation killers)", () => {
       sellerNet: "9900",
       buyerRefund: "0",
       feeBps: 100,
+      feeDust: "0",
       calculatedAt: new Date().toISOString(),
     };
     expect(() => assertFeeConservation(broken)).toThrow("conservation violated");
@@ -287,6 +290,7 @@ describe("assertFeeConservation (mutation killers)", () => {
       sellerNet: "0",
       buyerRefund: "9999", // should be 10000
       feeBps: 0,
+      feeDust: "0",
       calculatedAt: new Date().toISOString(),
     };
     expect(() => assertFeeConservation(broken)).toThrow("conservation violated");

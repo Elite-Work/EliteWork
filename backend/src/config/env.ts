@@ -62,7 +62,7 @@ export const envSchema = z.object({
   JWT_AUDIENCE: z.string().default('amana-api'),
   REDIS_URL: z.string().default('redis://localhost:6379'),
   CORS_ORIGINS: z.string().default(''),
-  DATABASE_URL: z.string(),
+  DATABASE_URL: z.string().min(1),
   SUPABASE_URL: z.string().optional(),
   SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
   API_PUBLIC_URL: z.string().url().optional(),

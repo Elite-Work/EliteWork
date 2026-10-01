@@ -21,7 +21,11 @@ jest.mock('bullmq', () => ({
   Worker: MockWorker,
 }));
 
-jest.mock('ioredis', () => jest.fn().mockImplementation(() => ({ quit: jest.fn() })));
+jest.mock('ioredis', () => jest.fn().mockImplementation(() => ({
+  quit: jest.fn(),
+  on: jest.fn(),
+  duplicate: jest.fn(),
+})));
 
 jest.mock('../middleware/logger', () => ({
   appLogger: { info: jest.fn(), warn: jest.fn(), error: jest.fn() },

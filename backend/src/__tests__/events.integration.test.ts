@@ -179,6 +179,7 @@ describe("Event Integration Tests", () => {
         update: {
           status: EVENT_TO_STATUS[EventType.TradeCreated],
           updatedAt: expect.any(Date),
+           version: { increment: 1 },
         },
         create: {
           tradeId,
@@ -186,6 +187,7 @@ describe("Event Integration Tests", () => {
           sellerAddress: expect.any(String),
           amountUsdc: expect.any(String),
           status: EVENT_TO_STATUS[EventType.TradeCreated],
+          version: 1,
         },
       });
     });

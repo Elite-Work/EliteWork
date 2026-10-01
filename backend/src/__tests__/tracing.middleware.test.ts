@@ -51,6 +51,10 @@ function makeTestApp() {
     res.json({ message: 'test response' });
   });
 
+  app.post('/test', (_req: Request, res: Response) => {
+    res.json({ message: 'test response' });
+  });
+
   app.post('/test-error', (req: Request, res: Response, next: NextFunction) => {
     const error = new Error('Test error');
     (error as any).status = 500;
@@ -183,7 +187,7 @@ describe('tracingMiddleware', () => {
       const app = createApp();
       
       const res = await request(app)
-        .get('/health')
+        .get('/health/live')
         .set('x-correlation-id', 'test-correlation-id');
       
       expect(res.status).toBe(200);
@@ -283,10 +287,9 @@ describe('Tracing utilities', () => {
       const { getTracer } = require('@opentelemetry/api');
       const mockSpan = getTracer().startSpan();
       
-      expect(mockSpan.setAttributes).toHaveBeenCalledWith(
-        expect.objectContaining({
-          'test.attribute': 'test-value',
-        })
+      expect(mockSpan.setAttribute).toHaveBeenCalledWith(
+        'test.attribute',
+        'test-value',
       );
     });
   });

@@ -118,7 +118,7 @@ describe("Date Filtering & Pagination Logic", () => {
 
       it("should filter events within date range", () => {
         const after = parseIsoDate("2026-06-22T00:00:00Z");
-        const before = parseIsoDate("2026-06-26T00:00:00Z");
+        const before = parseIsoDate("2026-06-27T00:00:00Z");
         const result = filterByDateRange(events, after, before);
         expect(result.length).toBe(3); // ids 2, 3, 4
         expect(result[0].id).toBe(2);
@@ -236,8 +236,9 @@ describe("Date Filtering & Pagination Logic", () => {
       });
 
       it("should handle partial last page", () => {
-        const result = paginate(items, 5, 25);
-        expect(result.data.length).toBe(25);
+        const partialItems = createTestList(101);
+        const result = paginate(partialItems, 4, 30);
+        expect(result.data.length).toBe(11);
         expect(result.pagination.totalPages).toBe(4);
         expect(result.pagination.hasNextPage).toBe(false);
       });

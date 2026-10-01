@@ -3,7 +3,7 @@ import { PrismaClient } from "@prisma/client";
 import { prisma as defaultPrisma } from "../lib/db";
 import { IPFSService, ServiceUnavailableError } from "./ipfs.service";
 import { getAdminAllowlistLowercase } from "../lib/accessControl";
-import { env } from "../config/env";
+import { env, runtimeEnvValue } from "../config/env";
 
 export class EvidenceAccessDeniedError extends Error {
     status = 403;
@@ -53,7 +53,7 @@ class NoopEvidenceScanner implements EvidenceScanner {
 }
 
 function getEvidenceMetadataRetentionDays(): number {
-    return env.EVIDENCE_METADATA_RETENTION_DAYS;
+    return runtimeEnvValue("EVIDENCE_METADATA_RETENTION_DAYS");
 }
 
 function isEvidenceMetadataExpired(createdAt: Date): boolean {
@@ -331,8 +331,8 @@ export class EvidenceService {
     }
 
     private onGatewayFailure(url: string): void {
-        const threshold = env.IPFS_GATEWAY_CIRCUIT_FAILURE_THRESHOLD;
-        const cooldownMs = env.IPFS_GATEWAY_CIRCUIT_COOLDOWN_MS;
+        const threshold = runtimeEnvValue("IPFS_GATEWAY_CIRCUIT_FAILURE_THRESHOLD");
+        const cooldownMs = runtimeEnvValue("IPFS_GATEWAY_CIRCUIT_COOLDOWN_MS");
         const current = this.gatewayCircuit.get(url) ?? { failures: 0, openUntil: 0 };
         const failures = current.failures + 1;
 

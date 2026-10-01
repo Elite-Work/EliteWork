@@ -8,6 +8,7 @@
 
 jest.mock("../config/env", () => ({
   env: { NODE_ENV: "test", JWT_SECRET: "test-jwt-secret-value-with-minimum-length-32" },
+  runtimeEnvValue: (key: string) => process.env[key] ?? false,
 }));
 
 jest.mock("../config/rateLimit", () => ({
@@ -35,6 +36,13 @@ jest.mock("../middleware/adminQuota.middleware", () => ({
   createAdminQuotaMiddleware: () => (_req: unknown, _res: unknown, next: () => void) => next(),
 }));
 
+jest.mock("../services/feature-flags.service", () => ({
+  featureFlagService: {
+    listFlags: jest.fn().mockResolvedValue([]),
+    setFlag: jest.fn().mockResolvedValue({ name: "beta", enabled: true }),
+  },
+}));
+
 import express, { Express } from "express";
 import jwt from "jsonwebtoken";
 import request from "supertest";
@@ -47,6 +55,9 @@ import { errorHandler } from "../middleware/errorHandler";
 
 const JWT_SECRET = "test-jwt-secret-value-with-minimum-length-32";
 const ADMIN_ADDRESS = "GADMIN000000000000000000000000000000000000000000000000";
+const mockPrisma = {
+  adminActionAudit: { create: jest.fn().mockResolvedValue({}) },
+};
 
 function tokenFor(walletAddress: string): string {
   return jwt.sign({ walletAddress, tokenId: "test-token-id" }, JWT_SECRET, { expiresIn: "1h" });
@@ -59,7 +70,7 @@ function buildApp(): Express {
     "/api",
     createAdminStreamsRouter(new StreamTerminationService({} as never), undefined, {} as never),
   );
-  app.use("/", createAdminFeaturesRouter());
+  app.use("/", createAdminFeaturesRouter(mockPrisma as never));
   app.use(errorHandler);
   return app;
 }

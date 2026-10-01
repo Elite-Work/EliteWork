@@ -1,22 +1,69 @@
-import { PrismaClient } from "@prisma/client";
+import { DisputeCategory, Prisma } from "@prisma/client";
 import {
   DisputeCategoryNameConflictError,
   DisputeCategoryNotFoundError,
   DisputeCategoryService,
 } from "../services/disputeCategory.service";
 
-function createMockPrisma() {
+type CategoryPrismaMock = {
+  disputeCategory: {
+    create: jest.MockedFunction<
+      (args: Prisma.DisputeCategoryCreateArgs) => Promise<DisputeCategory>
+    >;
+    findMany: jest.MockedFunction<
+      (args: Prisma.DisputeCategoryFindManyArgs) => Promise<DisputeCategory[]>
+    >;
+    findUnique: jest.MockedFunction<
+      (args: Prisma.DisputeCategoryFindUniqueArgs) => Promise<DisputeCategory | null>
+    >;
+    update: jest.MockedFunction<
+      (args: Prisma.DisputeCategoryUpdateArgs) => Promise<DisputeCategory>
+    >;
+  };
+};
+
+function createMockPrisma(): CategoryPrismaMock {
   return {
     disputeCategory: {
-      create: jest.fn(),
-      findMany: jest.fn(),
-      findUnique: jest.fn(),
-      update: jest.fn(),
+      create: jest.fn<
+        Promise<DisputeCategory>,
+        [args: Prisma.DisputeCategoryCreateArgs]
+      >(),
+      findMany: jest.fn<
+        Promise<DisputeCategory[]>,
+        [args: Prisma.DisputeCategoryFindManyArgs]
+      >(),
+      findUnique: jest.fn<
+        Promise<DisputeCategory | null>,
+        [args: Prisma.DisputeCategoryFindUniqueArgs]
+      >(),
+      update: jest.fn<
+        Promise<DisputeCategory>,
+        [args: Prisma.DisputeCategoryUpdateArgs]
+      >(),
     },
-  } as unknown as PrismaClient;
+  };
+}
+
+type CategoryDatabase = ConstructorParameters<typeof DisputeCategoryService>[0];
+
+function asPrismaClient(mock: CategoryPrismaMock): CategoryDatabase {
+  return mock as unknown as CategoryDatabase;
 }
 
 const mockDate = new Date("2026-05-27T00:00:00.000Z");
+
+function makeCategory(overrides: Partial<DisputeCategory> = {}): DisputeCategory {
+  return {
+    id: 1,
+    name: "DAMAGE",
+    description: "Goods damaged",
+    isActive: true,
+    createdAt: mockDate,
+    updatedAt: mockDate,
+    ...overrides,
+  };
+}
 
 describe("DisputeCategoryService", () => {
   let prisma: ReturnType<typeof createMockPrisma>;
@@ -24,19 +71,14 @@ describe("DisputeCategoryService", () => {
 
   beforeEach(() => {
     prisma = createMockPrisma();
-    service = new DisputeCategoryService(prisma);
+    service = new DisputeCategoryService(asPrismaClient(prisma));
   });
 
   it("creates an active dispute category with a trimmed unique name", async () => {
-    prisma.disputeCategory.findUnique = jest.fn().mockResolvedValue(null);
-    prisma.disputeCategory.create = jest.fn().mockResolvedValue({
-      id: 1,
-      name: "DAMAGE",
-      description: "Goods damaged",
-      isActive: true,
-      createdAt: mockDate,
-      updatedAt: mockDate,
-    });
+    prisma.disputeCategory.findUnique.mockResolvedValue(null);
+    prisma.disputeCategory.create.mockResolvedValue(
+      makeCategory({ description: "Goods damaged" }),
+    );
 
     const category = await service.createCategory({
       name: " DAMAGE ",
@@ -62,7 +104,7 @@ describe("DisputeCategoryService", () => {
   });
 
   it("rejects duplicate category names", async () => {
-    prisma.disputeCategory.findUnique = jest.fn().mockResolvedValue({ id: 1, name: "DAMAGE" });
+    prisma.disputeCategory.findUnique.mockResolvedValue(makeCategory());
 
     await expect(service.createCategory({ name: "DAMAGE" })).rejects.toBeInstanceOf(
       DisputeCategoryNameConflictError,
@@ -70,7 +112,7 @@ describe("DisputeCategoryService", () => {
   });
 
   it("lists only active categories by default", async () => {
-    prisma.disputeCategory.findMany = jest.fn().mockResolvedValue([]);
+    prisma.disputeCategory.findMany.mockResolvedValue([]);
 
     await service.listCategories();
 
@@ -81,8 +123,10 @@ describe("DisputeCategoryService", () => {
   });
 
   it("deactivates a category instead of deleting it", async () => {
-    prisma.disputeCategory.findUnique = jest.fn().mockResolvedValue({ id: 1, name: "DAMAGE" });
-    prisma.disputeCategory.update = jest.fn().mockResolvedValue({});
+    prisma.disputeCategory.findUnique.mockResolvedValue(makeCategory());
+    prisma.disputeCategory.update.mockResolvedValue(
+      makeCategory({ isActive: false }),
+    );
 
     await service.deleteCategory(1);
 
@@ -93,7 +137,7 @@ describe("DisputeCategoryService", () => {
   });
 
   it("throws when deactivating an unknown category", async () => {
-    prisma.disputeCategory.findUnique = jest.fn().mockResolvedValue(null);
+    prisma.disputeCategory.findUnique.mockResolvedValue(null);
 
     await expect(service.deleteCategory(404)).rejects.toBeInstanceOf(DisputeCategoryNotFoundError);
   });

@@ -15,6 +15,7 @@ function validPayload(overrides: Partial<JWTPayload> = {}): JWTPayload {
     sub: "gaddr",
     walletAddress: "GADDR_VALID",
     jti: "test-jti-abc",
+    tv: 0,
     iat: NOW,
     exp: NOW + 86400,
     ...overrides,

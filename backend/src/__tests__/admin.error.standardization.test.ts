@@ -39,6 +39,12 @@ const mockContractService = {
 };
 const contractService = mockContractService as unknown as ContractService;
 
+const prisma = {
+  adminActionAudit: {
+    create: jest.fn().mockResolvedValue({}),
+  },
+};
+
 const adminAddress = StellarSdk.Keypair.random().publicKey();
 const outsiderAddress = StellarSdk.Keypair.random().publicKey();
 
@@ -56,7 +62,7 @@ function buildApp(): Express {
   const app = express();
   app.use(express.json());
   app.use(correlationIdMiddleware);
-  app.use("/", createAdminContractRouter(contractService));
+  app.use("/", createAdminContractRouter(contractService, prisma as never));
   app.use("/", createAdminFeaturesRouter());
   app.use("/api", createAdminStreamsRouter());
   app.use(errorHandler);

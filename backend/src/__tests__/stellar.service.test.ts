@@ -1,6 +1,6 @@
 import { __resetRetrySleepForTests, __setRetrySleepForTests } from "../lib/retry";
 import { StellarService } from "../services/stellar.service";
-import { StrKey, Account, Operation, Asset, TransactionBuilder } from "@stellar/stellar-sdk";
+import { StrKey, Account, Operation, Asset, TransactionBuilder, Keypair } from "@stellar/stellar-sdk";
 import { TOKEN_CONFIG } from "../config/token";
 
 jest.mock("../config/stellar", () => ({
@@ -14,6 +14,7 @@ jest.mock("../config/stellar", () => ({
 }));
 
 describe("StellarService network resilience", () => {
+  const realIsValidEd25519PublicKey = StrKey.isValidEd25519PublicKey;
   const sleepMock = jest.fn().mockResolvedValue(undefined);
   const validKey = "TEST_PUBLIC_KEY_FOR_MOCK";
   let loadAccountMock: jest.Mock;
@@ -23,7 +24,9 @@ describe("StellarService network resilience", () => {
     const { horizonServer } = require("../config/stellar");
     loadAccountMock = horizonServer.loadAccount;
     loadAccountMock.mockReset();
-    jest.spyOn(StrKey, "isValidEd25519PublicKey").mockImplementation((value) => value === validKey);
+    jest
+      .spyOn(StrKey, "isValidEd25519PublicKey")
+      .mockImplementation((value) => value === validKey || realIsValidEd25519PublicKey(value));
     sleepMock.mockClear();
   });
 
@@ -109,19 +112,20 @@ describe("StellarService network resilience", () => {
   });
 
   describe("buildTransaction", () => {
-    const sourceAccount = "GDQ6SBYUQQSA2Q7G2NQDAPJ6YVGAX7QW4Q7G2NQDAPJ6YVGAX7QW4Q7";
+    const sourceAccount = Keypair.random().publicKey();
 
     it("successfully builds a transaction and returns base64 XDR", async () => {
       const mockAccount = new Account(sourceAccount, "12345");
       loadAccountMock.mockResolvedValue(mockAccount);
 
-      const op = TransactionBuilder.fromXDR(
-        "AAAAAgAAAADg23/8uXJb4jHk4615a6oP64t4N7c5a3o2e3NzaWduZXIyAAAAAAAAAADg23/8uXJb4jHk4615a6oP64t4N7c5a3o2e3NzaWduZXIyAAAAAQAAAAAAAAAAAAAAAY637+gAAAAAAAAAAA==",
-        "Test SDF Network ; September 2015"
-      ).operations[0];
+      const op = Operation.payment({
+        destination: Keypair.random().publicKey(),
+        asset: Asset.native(),
+        amount: "1",
+      });
 
       const service = new StellarService();
-      const xdr = await service.buildTransaction(sourceAccount, [op]);
+      const xdr = await service.buildTransaction(sourceAccount, [op] as never);
 
       expect(xdr).toBeDefined();
       expect(typeof xdr).toBe("string");
@@ -157,13 +161,14 @@ describe("StellarService network resilience", () => {
       sendTransactionMock = sorobanRpcClient.sendTransaction;
       sendTransactionMock.mockReset();
 
-      const mockAccount = new Account("GDQ6SBYUQQSA2Q7G2NQDAPJ6YVGAX7QW4Q7G2NQDAPJ6YVGAX7QW4Q7", "12345");
+      const mockAddress = Keypair.random().publicKey();
+      const mockAccount = new Account(mockAddress, "12345");
       const tx = new TransactionBuilder(mockAccount, {
         fee: "100",
         networkPassphrase: "Test SDF Network ; September 2015",
       })
         .addOperation(Operation.payment({
-          destination: "GDQ6SBYUQQSA2Q7G2NQDAPJ6YVGAX7QW4Q7G2NQDAPJ6YVGAX7QW4Q7",
+          destination: mockAddress,
           asset: Asset.native(),
           amount: "1",
         }))

@@ -18,6 +18,8 @@ const mockIsValidEd25519PublicKey: jest.Mock = jest.fn();
 class MockTokenExpiredError extends Error {}
 class MockJsonWebTokenError extends Error {}
 
+jest.mock('../../lib/redis', () => ({ redis: mockRedis }));
+
 jest.mock(
   'ioredis',
   () => jest.fn().mockImplementation(() => mockRedis),
@@ -129,6 +131,7 @@ describe('AuthService challenge/verify flow', () => {
         iat: issuedAt,
         nbf: issuedAt,
         exp: issuedAt + 86_400,
+        tv: 0,
       },
       'jwt-secret',
       { algorithm: 'HS256' },

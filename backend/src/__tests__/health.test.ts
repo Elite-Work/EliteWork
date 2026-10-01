@@ -100,7 +100,8 @@ describe("GET /health", () => {
     expect(new Date(res.body.timestamp).toISOString()).toBe(res.body.timestamp);
   });
 
-  const integrationDescribe = process.env.DATABASE_URL ? describe : describe.skip;
+  const integrationDescribe =
+    process.env.RUN_INTEGRATION_TESTS === "true" ? describe : describe.skip;
   integrationDescribe("integration with real database", () => {
     it("should return 200 with healthy status", async () => {
       const app = createApp();

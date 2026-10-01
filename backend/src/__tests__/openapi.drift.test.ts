@@ -4,6 +4,27 @@ import request from "supertest";
 import YAML from "yamljs";
 import { createApp } from "../app";
 
+jest.mock("../services/health.service", () => ({
+  HealthService: jest.fn().mockImplementation(() => ({
+    performHealthCheck: jest.fn().mockResolvedValue({
+      status: "healthy",
+      timestamp: new Date().toISOString(),
+      checks: {},
+      details: {},
+    }),
+    performReadinessCheck: jest.fn().mockResolvedValue({
+      status: "ready",
+      timestamp: new Date().toISOString(),
+      checks: {},
+    }),
+    performStartupCheck: jest.fn().mockResolvedValue({
+      status: "ready",
+      timestamp: new Date().toISOString(),
+      checks: {},
+    }),
+  })),
+}));
+
 const SPEC_PATH = path.resolve(__dirname, "../docs/openapi.yaml");
 
 interface SchemaObject {
@@ -71,12 +92,13 @@ const IMPLEMENTED_ROUTES = [
   "/trades/{id}/history",
   "/trades/{id}/history/verify",
   "/goals",
+  "/stellar/fees",
   "/treasury/balance",
   "/treasury/withdraw",
   "/treasury/config",
-  "/admin/contract/mediators",
-  "/admin/contract/mediators/{address}",
-  "/admin/contract/fee",
+  "/api/admin/contract/mediators",
+  "/api/admin/contract/mediators/{address}",
+  "/api/admin/contract/fee",
   "/api/admin/audit",
   "/api/admin/features",
   "/api/admin/auth/claims",
@@ -87,6 +109,7 @@ const IMPLEMENTED_ROUTES = [
   "/api/admin/streams/{id}/resume",
   "/api/admin/streams/{id}/lock",
   "/api/admin/streams/{id}/unlock",
+  "/api/admin/streams/{id}/reconcile",
   "/api/admin/sessions/revoke",
   "/api/admin/streams/{id}/terminate",
   "/disputes",
@@ -145,10 +168,6 @@ describe("OpenAPI drift detection", () => {
     let app: ReturnType<typeof createApp>;
 
     beforeAll(() => {
-      // Isolate the app instance so database / external services are not hit.
-      jest.mock("../middleware/auth.middleware", () => ({
-        authMiddleware: (_req: any, _res: any, next: any) => next(),
-      }));
       app = createApp();
     });
 

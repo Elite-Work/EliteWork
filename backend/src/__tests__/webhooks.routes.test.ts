@@ -111,10 +111,12 @@ describe("Webhooks Routes", () => {
       expect(response.body.events).toEqual(["trade.created", "trade.completed"]);
       expect(prisma.webhookSubscription.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          url: "https://example.com/webhook",
-          events: ["trade.created", "trade.completed"],
-          userId: mockUserId,
-        })
+          data: expect.objectContaining({
+            url: "https://example.com/webhook",
+            events: ["trade.created", "trade.completed"],
+            userId: mockUserId,
+          }),
+        }),
       );
     });
 

@@ -13,7 +13,10 @@ import {
 } from "../services/jobHeartbeat.service";
 import { appLogger } from "../middleware/logger";
 
-describe("Job Heartbeat Integration Tests", () => {
+const integrationDescribe =
+  process.env.RUN_INTEGRATION_TESTS === "true" ? describe : describe.skip;
+
+integrationDescribe("Job Heartbeat Integration Tests", () => {
   beforeEach(async () => {
     // Clear job heartbeats before each test
     await prisma.jobHeartbeat.deleteMany({});

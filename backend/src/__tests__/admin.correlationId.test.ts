@@ -21,6 +21,7 @@ import {
 } from "../middleware/correlationId.middleware";
 import { AuthService } from "../services/auth.service";
 import { ContractService } from "../services/contract.service";
+import { AppError, ErrorCode } from "../errors/errorCodes";
 
 jest.mock("../services/auth.service", () => ({
   AuthService: {
@@ -45,6 +46,12 @@ const contractService = {
   buildUpdateFeeBpsTx: jest.fn().mockResolvedValue({ unsignedXdr: "xdr" }),
 } as unknown as MockedContractService;
 
+const prisma = {
+  adminActionAudit: {
+    create: jest.fn().mockResolvedValue({}),
+  },
+};
+
 const adminAddress = StellarSdk.Keypair.random().publicKey();
 const mediatorAddress = StellarSdk.Keypair.random().publicKey();
 
@@ -67,7 +74,7 @@ function buildApp(): Express {
   const app = express();
   app.use(express.json());
   app.use(correlationIdMiddleware);
-  app.use("/", createAdminContractRouter(contractService));
+  app.use("/", createAdminContractRouter(contractService, prisma as never));
   app.use(errorHandler);
   return app;
 }
@@ -92,7 +99,7 @@ describe("admin request correlation IDs (#21)", () => {
   describe("every admin request receives an ID", () => {
     it("echoes both a correlation ID and a request ID", async () => {
       const res = await request(app)
-        .post("/admin/contract/mediators")
+        .post("/api/admin/contract/mediators")
         .set("Authorization", `Bearer ${adminToken}`)
         .send({ mediatorAddress });
 
@@ -103,11 +110,11 @@ describe("admin request correlation IDs (#21)", () => {
 
     it("generates a fresh request ID per request", async () => {
       const first = await request(app)
-        .patch("/admin/contract/fee")
+        .patch("/api/admin/contract/fee")
         .set("Authorization", `Bearer ${adminToken}`)
         .send({ feeBps: 100 });
       const second = await request(app)
-        .patch("/admin/contract/fee")
+        .patch("/api/admin/contract/fee")
         .set("Authorization", `Bearer ${adminToken}`)
         .send({ feeBps: 100 });
 
@@ -116,7 +123,7 @@ describe("admin request correlation IDs (#21)", () => {
 
     it("propagates a caller-supplied correlation ID across the hop", async () => {
       const res = await request(app)
-        .post("/admin/contract/mediators")
+        .post("/api/admin/contract/mediators")
         .set("Authorization", `Bearer ${adminToken}`)
         .set(CORRELATION_ID_HEADER, "upstream-trace-1")
         .send({ mediatorAddress });
@@ -126,7 +133,7 @@ describe("admin request correlation IDs (#21)", () => {
 
     it("never trusts a caller-supplied request ID", async () => {
       const res = await request(app)
-        .post("/admin/contract/mediators")
+        .post("/api/admin/contract/mediators")
         .set("Authorization", `Bearer ${adminToken}`)
         .set(REQUEST_ID_HEADER, "forged-request-id")
         .send({ mediatorAddress });
@@ -139,7 +146,7 @@ describe("admin request correlation IDs (#21)", () => {
       ["exceeds the length cap", "a".repeat(129)],
     ])("replaces a correlation ID that %s", async (_label, supplied) => {
       const res = await request(app)
-        .post("/admin/contract/mediators")
+        .post("/api/admin/contract/mediators")
         .set("Authorization", `Bearer ${adminToken}`)
         .set(CORRELATION_ID_HEADER, supplied)
         .send({ mediatorAddress });
@@ -152,7 +159,7 @@ describe("admin request correlation IDs (#21)", () => {
   describe("IDs reach the service layer", () => {
     it("passes the trace context into buildAddMediatorTx", async () => {
       const res = await request(app)
-        .post("/admin/contract/mediators")
+        .post("/api/admin/contract/mediators")
         .set("Authorization", `Bearer ${adminToken}`)
         .set(CORRELATION_ID_HEADER, "trace-add")
         .send({ mediatorAddress });
@@ -171,7 +178,7 @@ describe("admin request correlation IDs (#21)", () => {
 
     it("passes the trace context into buildRemoveMediatorTx", async () => {
       const res = await request(app)
-        .delete(`/admin/contract/mediators/${mediatorAddress}`)
+        .delete(`/api/admin/contract/mediators/${mediatorAddress}`)
         .set("Authorization", `Bearer ${adminToken}`)
         .set(CORRELATION_ID_HEADER, "trace-remove");
 
@@ -187,7 +194,7 @@ describe("admin request correlation IDs (#21)", () => {
 
     it("passes the trace context into buildUpdateFeeBpsTx", async () => {
       const res = await request(app)
-        .patch("/admin/contract/fee")
+        .patch("/api/admin/contract/fee")
         .set("Authorization", `Bearer ${adminToken}`)
         .set(CORRELATION_ID_HEADER, "trace-fee")
         .send({ feeBps: 250 });
@@ -205,7 +212,7 @@ describe("admin request correlation IDs (#21)", () => {
 
     it("gives the service the same request ID the caller sees", async () => {
       const res = await request(app)
-        .patch("/admin/contract/fee")
+        .patch("/api/admin/contract/fee")
         .set("Authorization", `Bearer ${adminToken}`)
         .send({ feeBps: 100 });
 
@@ -217,10 +224,12 @@ describe("admin request correlation IDs (#21)", () => {
 
   describe("error responses carry the IDs", () => {
     it("includes both IDs in the body when a service call fails", async () => {
-      contractService.buildAddMediatorTx.mockRejectedValue(new Error("RPC unreachable"));
+      contractService.buildAddMediatorTx.mockRejectedValue(
+        new AppError(ErrorCode.INTERNAL_ERROR, "service unavailable", 500),
+      );
 
       const res = await request(app)
-        .post("/admin/contract/mediators")
+        .post("/api/admin/contract/mediators")
         .set("Authorization", `Bearer ${adminToken}`)
         .set(CORRELATION_ID_HEADER, "trace-error")
         .send({ mediatorAddress });
@@ -232,7 +241,7 @@ describe("admin request correlation IDs (#21)", () => {
 
     it("still returns the IDs as headers on a validation failure", async () => {
       const res = await request(app)
-        .patch("/admin/contract/fee")
+        .patch("/api/admin/contract/fee")
         .set("Authorization", `Bearer ${adminToken}`)
         .send({ feeBps: 9999 });
 

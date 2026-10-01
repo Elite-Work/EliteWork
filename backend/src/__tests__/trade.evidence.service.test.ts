@@ -4,13 +4,23 @@ import { IPFSService } from "../services/ipfs.service";
 
 describe("TradeEvidenceListService", () => {
   const now = new Date("2026-06-24T12:00:00.000Z");
-  const trade = { tradeId: "trade-1", buyerAddress: "g-buyer", sellerAddress: "g-seller", status: TradeStatus.DISPUTED };
-  const video = { id: 1, cid: "bafy-video", filename: "proof.mp4", mimeType: "video/mp4", uploadedBy: "g-seller", createdAt: now };
-  const prisma = {
-    trade: { findUnique: jest.fn() },
-    dispute: { findUnique: jest.fn() },
-    tradeEvidence: { findMany: jest.fn(), count: jest.fn() },
-    deliveryManifest: { findUnique: jest.fn() },
+  const trade: Trade = {
+    id: 1,
+    tradeId: "trade-1",
+    buyerAddress: "g-buyer",
+    sellerAddress: "g-seller",
+    amountUsdc: "100",
+    buyerLossBps: 5000,
+    sellerLossBps: 5000,
+    version: 0,
+    status: TradeStatus.DISPUTED,
+    fundedAt: null,
+    deliveredAt: null,
+    completedAt: null,
+    expiresAt: null,
+    expiredAt: null,
+    createdAt: now,
+    updatedAt: now,
   };
   const ipfs = { getSignedFileUrl: jest.fn() };
   const service = new TradeEvidenceListService(
@@ -21,7 +31,7 @@ describe("TradeEvidenceListService", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     prisma.trade.findUnique.mockResolvedValue(trade);
-    prisma.dispute.findUnique.mockResolvedValue({ tradeId: "trade-1" });
+    prisma.dispute.findUnique.mockResolvedValue(dispute);
     ipfs.getSignedFileUrl.mockReturnValue({
       url: "https://gateway.example/ipfs/bafy-video?expires=1&signature=sig",
       expiresAt: new Date(now.getTime() + 300000),

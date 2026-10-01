@@ -63,6 +63,8 @@ export async function main(): Promise<void> {
   await prisma.deliveryManifest.create({
     data: {
       tradeId: createdTrades[2].tradeId,
+      driverName: 'John Doe',
+      driverIdNumber: 'DRV-12345',
       driverNameHash: sha256('John Doe'),
       driverIdHash: sha256('DRV-12345'),
       vehicleRegistration: 'ABC-001',
@@ -73,8 +75,8 @@ export async function main(): Promise<void> {
 
   // ── TradeEvidence (2) ───────────────────────────────────────────────────────
   await Promise.all([
-    prisma.tradeEvidence.create({ data: { tradeId: createdTrades[3].tradeId, cid: 'bafybeiabc123stagingdelivery', mimeType: 'video/mp4', uploadedBy: buyer1.walletAddress } }),
-    prisma.tradeEvidence.create({ data: { tradeId: createdTrades[6].tradeId, cid: 'bafybeiabc456stagingdispute', mimeType: 'image/jpeg', uploadedBy: buyer2.walletAddress } }),
+    prisma.tradeEvidence.create({ data: { tradeId: createdTrades[3].tradeId, cid: 'bafybeiabc123stagingdelivery', filename: 'delivery.mp4', mimeType: 'video/mp4', uploadedBy: buyer1.walletAddress } }),
+    prisma.tradeEvidence.create({ data: { tradeId: createdTrades[6].tradeId, cid: 'bafybeiabc456stagingdispute', filename: 'dispute.jpg', mimeType: 'image/jpeg', uploadedBy: buyer2.walletAddress } }),
   ]);
 
   // ── ProcessedEvents (10) ────────────────────────────────────────────────────
@@ -95,18 +97,21 @@ export async function main(): Promise<void> {
   const vault2 = await prisma.vault.create({ data: { vaultId: 'vault-staging-002', ownerAddress: buyer2.walletAddress, balanceUsdc: '2000.00' } });
 
   // ── Goals (4, covering all 3 statuses) ─────────────────────────────────────
+  const goalDeadline = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
   await Promise.all([
-    prisma.goal.create({ data: { goalId: 'goal-staging-001', vaultId: vault1.vaultId, targetAmountUsdc: '500.00', currentAmountUsdc: '200.00', status: GoalStatus.ACTIVE } }),
-    prisma.goal.create({ data: { goalId: 'goal-staging-002', vaultId: vault1.vaultId, targetAmountUsdc: '300.00', currentAmountUsdc: '300.00', status: GoalStatus.COMPLETED } }),
-    prisma.goal.create({ data: { goalId: 'goal-staging-003', vaultId: vault2.vaultId, targetAmountUsdc: '1000.00', currentAmountUsdc: '750.00', status: GoalStatus.ACTIVE } }),
-    prisma.goal.create({ data: { goalId: 'goal-staging-004', vaultId: vault2.vaultId, targetAmountUsdc: '200.00', currentAmountUsdc: '0.00', status: GoalStatus.CANCELLED } }),
+    prisma.goal.create({ data: { goalId: 'goal-staging-001', vaultId: vault1.vaultId, userId: buyer1.id, targetAmountUsdc: '500.00', currentAmountUsdc: '200.00', deadline: goalDeadline, status: GoalStatus.ACTIVE } }),
+    prisma.goal.create({ data: { goalId: 'goal-staging-002', vaultId: vault1.vaultId, userId: buyer1.id, targetAmountUsdc: '300.00', currentAmountUsdc: '300.00', deadline: goalDeadline, status: GoalStatus.COMPLETED } }),
+    prisma.goal.create({ data: { goalId: 'goal-staging-003', vaultId: vault2.vaultId, userId: buyer2.id, targetAmountUsdc: '1000.00', currentAmountUsdc: '750.00', deadline: goalDeadline, status: GoalStatus.ACTIVE } }),
+    prisma.goal.create({ data: { goalId: 'goal-staging-004', vaultId: vault2.vaultId, userId: buyer2.id, targetAmountUsdc: '200.00', currentAmountUsdc: '0.00', deadline: goalDeadline, status: GoalStatus.CANCELLED } }),
   ]);
 
   await prisma.$disconnect();
 }
 
-main().catch((e) => {
-  console.error(e);
-  prisma.$disconnect();
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch((e) => {
+    console.error(e);
+    prisma.$disconnect();
+    process.exit(1);
+  });
+}

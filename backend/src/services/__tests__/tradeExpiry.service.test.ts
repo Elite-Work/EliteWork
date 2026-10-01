@@ -1,25 +1,24 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { TradeExpiryService } from '../tradeExpiry.service';
 import { TradeStatus } from '@prisma/client';
 
-vi.mock('../../jobs/queue', () => ({
-  notificationQueue: { add: vi.fn().mockResolvedValue({}) },
+jest.mock('../../jobs/queue', () => ({
+  notificationQueue: { add: jest.fn().mockResolvedValue({}) },
 }));
 
 function makePrisma(overrides: Partial<{
-  findMany: ReturnType<typeof vi.fn>;
-  updateMany: ReturnType<typeof vi.fn>;
+  findMany: ReturnType<typeof jest.fn>;
+  updateMany: ReturnType<typeof jest.fn>;
 }> = {}) {
   return {
     trade: {
-      findMany: overrides.findMany ?? vi.fn().mockResolvedValue([]),
-      updateMany: overrides.updateMany ?? vi.fn().mockResolvedValue({ count: 1 }),
+      findMany: overrides.findMany ?? jest.fn().mockResolvedValue([]),
+      updateMany: overrides.updateMany ?? jest.fn().mockResolvedValue({ count: 1 }),
     },
   };
 }
 
 describe('TradeExpiryService.sweepExpiredTrades', () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => jest.clearAllMocks());
 
   it('returns zero counts when no stale trades exist', async () => {
     const db = makePrisma();
@@ -38,8 +37,8 @@ describe('TradeExpiryService.sweepExpiredTrades', () => {
       status: TradeStatus.FUNDED,
       version: 3,
     };
-    const updateMany = vi.fn().mockResolvedValue({ count: 1 });
-    const db = makePrisma({ findMany: vi.fn().mockResolvedValue([fakeTrade]), updateMany });
+    const updateMany = jest.fn().mockResolvedValue({ count: 1 });
+    const db = makePrisma({ findMany: jest.fn().mockResolvedValue([fakeTrade]), updateMany });
     const service = new TradeExpiryService(db as never);
 
     const result = await service.sweepExpiredTrades();
@@ -65,8 +64,8 @@ describe('TradeExpiryService.sweepExpiredTrades', () => {
       status: TradeStatus.CREATED,
       version: 0,
     };
-    const updateMany = vi.fn().mockRejectedValue(new Error('db error'));
-    const db = makePrisma({ findMany: vi.fn().mockResolvedValue([fakeTrade]), updateMany });
+    const updateMany = jest.fn().mockRejectedValue(new Error('db error'));
+    const db = makePrisma({ findMany: jest.fn().mockResolvedValue([fakeTrade]), updateMany });
     const service = new TradeExpiryService(db as never);
 
     const result = await service.sweepExpiredTrades();
@@ -76,7 +75,7 @@ describe('TradeExpiryService.sweepExpiredTrades', () => {
   });
 
   it('respects batchSize limit passed to findMany', async () => {
-    const findMany = vi.fn().mockResolvedValue([]);
+    const findMany = jest.fn().mockResolvedValue([]);
     const db = makePrisma({ findMany });
     const service = new TradeExpiryService(db as never);
 
@@ -90,7 +89,7 @@ describe('TradeExpiryService.sweepExpiredTrades', () => {
 
 describe('TradeExpiryService.getPendingRefunds', () => {
   it('queries EXPIRED trades ordered by expiredAt asc', async () => {
-    const findMany = vi.fn().mockResolvedValue([]);
+    const findMany = jest.fn().mockResolvedValue([]);
     const db = makePrisma({ findMany });
     const service = new TradeExpiryService(db as never);
 

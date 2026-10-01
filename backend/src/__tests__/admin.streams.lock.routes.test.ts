@@ -15,6 +15,7 @@ jest.mock("../config/env", () => ({
     NODE_ENV: "test",
     JWT_SECRET: "test-jwt-secret-value-with-minimum-length-32",
   },
+  runtimeEnvValue: (key: string) => process.env[key] ?? false,
 }));
 
 jest.mock("../config/rateLimit", () => ({

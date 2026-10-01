@@ -32,6 +32,14 @@ jest.mock("../middleware/logger", () => ({
   appLogger: { debug: jest.fn(), info: jest.fn(), error: jest.fn(), warn: jest.fn() },
 }));
 
+beforeEach(() => {
+  __setRetrySleepForTests(jest.fn().mockResolvedValue(undefined));
+});
+
+afterEach(() => {
+  __resetRetrySleepForTests();
+});
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function sendTxMock(): jest.Mock {

@@ -1,5 +1,4 @@
 import request from "supertest";
-import { createApp } from "../app";
 import express from "express";
 
 const mockLoadAccount = jest.fn();
@@ -11,6 +10,8 @@ jest.mock("../config/stellar", () => ({
   sorobanRpcClient: {},
   networkPassphrase: "Test SDF Network ; September 2015",
 }));
+
+const { createApp } = require("../app") as typeof import("../app");
 
 const VALID_ADDRESS = "GDDD3FRCH55BSYNKISYY242HQNIBOH35CQP42NSJABR62XK2JOV5MED6";
 const MALFORMED_ADDRESS = "not-a-valid-stellar-address";

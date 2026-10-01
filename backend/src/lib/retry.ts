@@ -426,7 +426,7 @@ export async function retryAsync<T>(
 
       options.onRetry?.(error, attempt, delayMs);
 
-      appLogger.debug(
+      appLogger.debug?.(
         {
           operationName,
           attempt,

@@ -14,7 +14,7 @@ describe("Goals Routes", () => {
             const response = await request(app).get("/goals");
 
             expect(response.status).toBe(401);
-            expect(response.body.error).toBe("Unauthorized");
+            expect(response.body.error).toBe("Missing Authorization header");
         });
 
         it("should return goals analytics with valid token", async () => {

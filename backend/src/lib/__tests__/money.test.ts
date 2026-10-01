@@ -19,8 +19,12 @@ import {
   sumDecimalStrings,
 } from "../money";
 
-/** 2^53 stroops — the first amount a JS number can no longer hold exactly. */
-const UNSAFE_STROOPS = MAX_SAFE_STROOPS + 1n;
+/**
+ * 2^53 + 1 stroops — MAX_SAFE_STROOPS (2^53 - 1) plus 2. Doubles can still
+ * represent 2^53 exactly, so the first value a JS number is actually forced
+ * to round is 2^53 + 1 (odd, rounds to the nearest even representable value).
+ */
+const UNSAFE_STROOPS = MAX_SAFE_STROOPS + 2n;
 const UNSAFE_DECIMAL = formatStroopsToDecimal(UNSAFE_STROOPS);
 
 describe("parseDecimalToStroops", () => {

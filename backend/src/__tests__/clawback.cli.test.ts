@@ -14,10 +14,10 @@ import {
   buildUnsignedClawbackXdr,
   type ClawbackArgs,
 } from "../../scripts/clawback";
-import { Networks } from "@stellar/stellar-sdk";
+import { Keypair, Networks } from "@stellar/stellar-sdk";
 
 // A valid Stellar testnet secret key for testing
-const TEST_SECRET = "SCZANGBA5YELHNZ6WQUM4WKJLBJPBE24APSWCZXFXKGFQTEPNMFBQ2LA";
+const TEST_SECRET = Keypair.random().secret();
 
 // ---------------------------------------------------------------------------
 // parseArgs

@@ -49,7 +49,13 @@ export const adminMiddleware = async (
     } catch {
       // Ignore telemetry failure in mock/test
     }
-    res.status(403).json({ error: "Forbidden: admin access required" });
+    res.status(403).json({
+      code: "AUTH_ERROR",
+      message: "Forbidden: admin access required",
+      error: "Forbidden: admin access required",
+      details: {},
+      timestamp: new Date().toISOString(),
+    });
     return;
   }
 

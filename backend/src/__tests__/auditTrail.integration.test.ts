@@ -8,8 +8,10 @@ import {
     AuditTrailTradeNotFoundError,
 } from "../services/auditTrail.service";
 import { AuthService } from "../services/auth.service";
+import { errorHandler } from "../middleware/errorHandler";
 
 jest.spyOn(AuthService, "isTokenRevoked").mockResolvedValue(false);
+jest.spyOn(AuthService, "getTokenVersion").mockResolvedValue(0);
 
 const BUYER = "GCBUYER0000000000000000000000000000000000000000000000000";
 const SELLER = "GCSELLER000000000000000000000000000000000000000000000000";
@@ -60,11 +62,17 @@ describe("Audit Trail Routes — GET /trades/:id/history", () => {
     beforeEach(() => {
         // Create a fresh mock for each test and inject it via the factory parameter
         mockGetTradeHistory = jest.fn();
-        const mockService = { getTradeHistory: mockGetTradeHistory } as unknown as AuditTrailService;
+        const mockService = {
+            getTradeHistory: mockGetTradeHistory,
+            getCanonicalPayload: jest.fn((tradeId: string, events: unknown[]) => ({ tradeId, events })),
+            signPayload: jest.fn(() => "signature"),
+            verifyPayload: jest.fn(() => true),
+        } as unknown as AuditTrailService;
 
         app = express();
         app.use(express.json());
         app.use("/trades", createAuditTrailRouter(mockService));
+        app.use(errorHandler);
     });
 
     afterEach(() => {
@@ -75,7 +83,7 @@ describe("Audit Trail Routes — GET /trades/:id/history", () => {
         it("returns 401 when no Authorization header is provided", async () => {
             const res = await request(app).get(`/trades/${TRADE_ID}/history`);
             expect(res.status).toBe(401);
-            expect(res.body.error).toBe("Unauthorized");
+            expect(res.body.error).toBe("Missing Authorization header");
         });
 
         it("returns 401 for a malformed token", async () => {

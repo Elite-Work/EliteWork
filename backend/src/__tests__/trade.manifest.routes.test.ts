@@ -22,15 +22,41 @@ jest.mock("../services/auth.service", () => ({
 describe("Trade manifest submission route", () => {
   const sellerAddress = StellarSdk.Keypair.random().publicKey();
   let token: string;
-  const manifestService = {
-    submitManifest: jest.fn(),
-    getManifestByTradeId: jest.fn(),
+  type ManifestRouterService = Pick<
+    ManifestService,
+    "submitManifest" | "getManifestByTradeId"
+  >;
+  type ManifestServiceDependency = NonNullable<
+    Parameters<typeof createTradeManifestRouter>[0]
+  >;
+  type ManifestContract = NonNullable<
+    Parameters<typeof createTradeManifestRouter>[1]
+  >;
+  type ManifestIpfs = NonNullable<
+    Parameters<typeof createTradeManifestRouter>[2]
+  >;
+
+  const manifestService: jest.Mocked<ManifestRouterService> = {
+    submitManifest: jest.fn<
+      ReturnType<ManifestService["submitManifest"]>,
+      Parameters<ManifestService["submitManifest"]>
+    >(),
+    getManifestByTradeId: jest.fn<
+      ReturnType<ManifestService["getManifestByTradeId"]>,
+      Parameters<ManifestService["getManifestByTradeId"]>
+    >(),
   };
-  const contractService = {
-    buildSubmitTradeManifestTx: jest.fn(),
+  const contractService: jest.Mocked<ManifestContract> = {
+    buildSubmitTradeManifestTx: jest.fn<
+      ReturnType<ContractService["buildSubmitTradeManifestTx"]>,
+      Parameters<ContractService["buildSubmitTradeManifestTx"]>
+    >(),
   };
-  const ipfsService = {
-    uploadFile: jest.fn(),
+  const ipfsService: jest.Mocked<ManifestIpfs> = {
+    uploadFile: jest.fn<
+      ReturnType<IPFSService["uploadFile"]>,
+      Parameters<IPFSService["uploadFile"]>
+    >(),
   };
 
   const app = express();
@@ -78,7 +104,11 @@ describe("Trade manifest submission route", () => {
 
   it("pins manifest JSON and returns IPFS hash plus unsigned XDR", async () => {
     ipfsService.uploadFile.mockResolvedValue("bafy-manifest");
-    manifestService.submitManifest.mockResolvedValue({ manifestId: 77 });
+    manifestService.submitManifest.mockResolvedValue({
+      manifestId: 77,
+      driverNameHash: "a".repeat(64),
+      driverIdHash: "b".repeat(64),
+    });
     contractService.buildSubmitTradeManifestTx.mockResolvedValue({ unsignedXdr: "AAAA-manifest-xdr" });
 
     const res = await request(app)

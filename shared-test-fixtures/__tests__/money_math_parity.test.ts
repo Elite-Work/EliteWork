@@ -112,12 +112,9 @@ function loadCorpus(): Corpus {
 
 // ── Tests ────────────────────────────────────────────────────────────────────
 
-describe("Shared money-math corpus", () => {
-  let corpus: Corpus;
+const corpus = loadCorpus();
 
-  beforeAll(() => {
-    corpus = loadCorpus();
-  });
+describe("Shared money-math corpus", () => {
 
   describe("Corpus metadata", () => {
     it("has correct BPS divisor", () => {

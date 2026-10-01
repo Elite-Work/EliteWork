@@ -57,7 +57,8 @@ export interface ApiVersionedRequest {
 export const LEGACY_SUNSET_DATE = "Thu, 01 Jan 2027 00:00:00 GMT";
 
 function isVersionedPath(path: string): boolean {
-  return path === `/${API_VERSION}` || path.startsWith(`/${API_VERSION}/`);
+  const normalized = path.startsWith("/api/") ? path.slice(4) : path;
+  return normalized === `/${API_VERSION}` || normalized.startsWith(`/${API_VERSION}/`);
 }
 
 function isLegacyPublicPath(path: string): boolean {

@@ -3,11 +3,16 @@
   "info": {
     "title": "Amana Backend API",
     "version": "1.0.0",
-    "description": "OpenAPI coverage for the live Amana backend routes under `backend/src/routes`.\n\nAuthentication flow:\n1. Call `POST /auth/challenge` with a Stellar public key.\n2. Sign the returned challenge with the wallet.\n3. Exchange the signature at `POST /auth/verify` for a bearer token.\n4. Send `Authorization: Bearer <token>` to protected endpoints.\n\nJWT semantics enforced by middleware:\n- `iss` must match `JWT_ISSUER` (default `amana`)\n- `aud` must match `JWT_AUDIENCE` (default `amana-api`)\n- `jti` is required and checked against the revocation denylist\n  (revoked tokens are rejected — replay protection)\n- `iat` (issued-at) must be present and in the past\n- `exp` (expires-at) is enforced: expired tokens are rejected\n  (default TTL: 86400 s / 24 h, configurable via `JWT_EXPIRES_IN`)\n- `nbf` (not-before) must be present and not be in the future\n- Tokens signed with algorithms other than HS256 are rejected\n\nError code references in operation descriptions map to backend `ErrorCode` values in\n`backend/src/errors/errorCodes.ts`. Some route handlers still emit legacy `{ error }`\npayloads while centralized validation/runtime failures return `{ code, message, details }`."
+    "description": "OpenAPI coverage for the live Amana backend routes under `backend/src/routes`.\n\nAuthentication flow:\n1. Call `POST /auth/challenge` with a Stellar public key.\n2. Sign the returned challenge with the wallet.\n3. Exchange the signature at `POST /auth/verify` for a bearer token.\n4. Send `Authorization: Bearer <token>` to protected endpoints.\n\nJWT semantics enforced by middleware:\n- `iss` must match `JWT_ISSUER` (default `amana`)\n- `aud` must match `JWT_AUDIENCE` (default `amana-api`)\n- `jti` is required and checked against the revocation denylist\n  (revoked tokens are rejected — replay protection)\n- `iat` (issued-at) must be present and in the past\n- `exp` (expires-at) is enforced: expired tokens are rejected\n  (default TTL: 86400 s / 24 h, configurable via `JWT_EXPIRES_IN`)\n- `nbf` (not-before) must be present and not be in the future\n- Tokens signed with algorithms other than HS256 are rejected\n\nError code references in operation descriptions map to backend `ErrorCode` values in\n`backend/src/errors/errorCodes.ts`. Some route handlers still emit legacy `{ error }`\npayloads while centralized validation/runtime failures return `{ code, message, details }`.\n\n# API Versioning\n\nThe public API is served on two lanes that share identical behaviour:\n\n- **Versioned lane (current):** all paths below under the `api/v1` URL prefix,\n  e.g. `POST /api/v1/auth/login`.\n- **Legacy alias (deprecated):** the same paths without a version prefix, e.g.\n  `POST /auth/login`. Served for backwards compatibility with clients that have\n  not yet moved to `/api/v1`.\n\nThe legacy alias sends `Deprecation: true` and a `Sunset` header on every response;\nclient SDKs target `/api/v1`. Admin (`/admin`, `/api/admin`) and health (`/health`)\nroutes are internal/infra and are intentionally unversioned — they are out of scope\nfor the versioning policy in `docs/api-versioning.md`."
   },
   "servers": [
     {
-      "url": "http://localhost:4000"
+      "url": "http://localhost:4000/api/v1",
+      "description": "Current versioned lane (recommended)"
+    },
+    {
+      "url": "http://localhost:4000",
+      "description": "Deprecated legacy alias (serves Deprecation/Sunset headers)"
     }
   ],
   "tags": [
@@ -49,6 +54,9 @@
     },
     {
       "name": "Goals"
+    },
+    {
+      "name": "Stellar"
     }
   ],
   "components": {
@@ -241,6 +249,32 @@
         "schema": {
           "type": "string"
         }
+      },
+      "StreamIdPath": {
+        "in": "path",
+        "name": "id",
+        "required": true,
+        "description": "Stream identifier. Must be alphanumeric with optional hyphens or underscores, max 128 characters.",
+        "schema": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_-]+$"
+        },
+        "example": "stream-abc-123"
+      },
+      "FeatureNamePath": {
+        "in": "path",
+        "name": "name",
+        "required": true,
+        "description": "Feature flag name. Must be alphanumeric with optional dots, hyphens, or underscores, max 100 characters.",
+        "schema": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "pattern": "^[a-zA-Z0-9._-]+$"
+        },
+        "example": "beta"
       }
     },
     "schemas": {
@@ -271,8 +305,13 @@
               "NOT_FOUND",
               "INTERNAL_ERROR",
               "CLAWBACK_TOO_LARGE",
-              "CLAWBACK_INVALID_AMOUNT"
-            ]
+              "CLAWBACK_INVALID_AMOUNT",
+              "SUBMISSION_VALIDATION_ERROR",
+              "SUBMISSION_NETWORK_ERROR",
+              "SUBMISSION_CONTRACT_ERROR",
+              "SUBMISSION_AUTHORIZATION_ERROR"
+            ],
+            "description": "Error code classifying the failure type. Submission error codes:\n- `SUBMISSION_VALIDATION_ERROR`: Malformed transaction XDR (400)\n- `SUBMISSION_NETWORK_ERROR`: Network timeout, connection refused, or rate limiting (429/502/503/504)\n- `SUBMISSION_CONTRACT_ERROR`: Smart contract rejected the transaction (404/502)\n- `SUBMISSION_AUTHORIZATION_ERROR`: Transaction was not authorized (401/403)"
           },
           "message": {
             "type": "string"
@@ -1711,10 +1750,40 @@
           "Admin"
         ],
         "summary": "Query administrative audit log events",
-        "description": "Retrieve paginated administrative audit logs with optional filter parameters.",
+        "description": "Retrieve admin audit log entries, newest first. Uses opaque\ncursor-based pagination (`cursor` / `pageInfo.nextCursor`), which\nstays stable under concurrent inserts. The legacy `page`/`limit`\noffset params are still accepted for backward compatibility — the\nresponse then includes a `Warning` header and a `pagination` object\ninstead of `pageInfo` — but new clients should use `cursor`.",
         "security": [
           {
             "adminAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "Opaque cursor from a previous response's `pageInfo.nextCursor`.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "deprecated": true,
+            "description": "Legacy offset pagination. Ignored when `cursor` is present.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
           }
         ],
         "responses": {
@@ -1725,10 +1794,25 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "logs": {
+                    "items": {
                       "type": "array",
                       "items": {
                         "type": "object"
+                      }
+                    },
+                    "pageInfo": {
+                      "type": "object",
+                      "properties": {
+                        "nextCursor": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "hasNextPage": {
+                          "type": "boolean"
+                        },
+                        "limit": {
+                          "type": "integer"
+                        }
                       }
                     }
                   }
@@ -1739,8 +1823,7 @@
           "401": {
             "$ref": "#/components/responses/UnauthorizedError"
           }
-        },
-        "operationId": "get.api.admin.audit"
+        }
       }
     },
     "/api/admin/features": {
@@ -1762,8 +1845,7 @@
           "401": {
             "$ref": "#/components/responses/UnauthorizedError"
           }
-        },
-        "operationId": "get.api.admin.features"
+        }
       }
     },
     "/api/admin/streams": {
@@ -1848,8 +1930,63 @@
           "500": {
             "$ref": "#/components/responses/InternalError"
           }
-        },
-        "operationId": "get.api.admin.streams"
+        }
+      }
+    },
+    "/api/admin/streams/{id}": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Get stream state by ID",
+        "description": "Retrieve cached stream state for admin queries. Returns cached result\nwhen fresh, otherwise fetches from DB and caches it.\n\nError code references: `NOT_FOUND` (unknown stream), `VALIDATION_ERROR` (invalid stream ID format).",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "adminAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/StreamIdPath"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Stream state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid stream ID format.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenError"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
       }
     },
     "/api/admin/streams/{id}/clawback/preview": {
@@ -1869,14 +2006,7 @@
         ],
         "parameters": [
           {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "description": "Stream identifier.",
-            "schema": {
-              "type": "string",
-              "minLength": 1
-            }
+            "$ref": "#/components/parameters/StreamIdPath"
           }
         ],
         "requestBody": {
@@ -1901,7 +2031,7 @@
             }
           },
           "400": {
-            "description": "Invalid amount, or amount exceeds the remaining vested balance.",
+            "description": "Invalid stream ID format, invalid amount, or amount exceeds the remaining vested balance.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1932,8 +2062,7 @@
           "500": {
             "$ref": "#/components/responses/InternalError"
           }
-        },
-        "operationId": "post.api.admin.streams.id.clawback.preview"
+        }
       }
     },
     "/api/admin/streams/{id}/terminate": {
@@ -1953,14 +2082,7 @@
         ],
         "parameters": [
           {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "description": "Stream identifier.",
-            "schema": {
-              "type": "string",
-              "minLength": 1
-            }
+            "$ref": "#/components/parameters/StreamIdPath"
           }
         ],
         "requestBody": {
@@ -1985,7 +2107,14 @@
             }
           },
           "400": {
-            "$ref": "#/components/responses/LegacyValidationError"
+            "description": "Invalid stream ID format or validation error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppErrorResponse"
+                }
+              }
+            }
           },
           "401": {
             "$ref": "#/components/responses/UnauthorizedError"
@@ -2009,8 +2138,7 @@
           "500": {
             "$ref": "#/components/responses/InternalError"
           }
-        },
-        "operationId": "post.api.admin.streams.id.terminate"
+        }
       }
     },
     "/api/admin/streams/{id}/lock": {
@@ -2030,14 +2158,7 @@
         ],
         "parameters": [
           {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "description": "Stream identifier.",
-            "schema": {
-              "type": "string",
-              "minLength": 1
-            }
+            "$ref": "#/components/parameters/StreamIdPath"
           }
         ],
         "requestBody": {
@@ -2062,7 +2183,14 @@
             }
           },
           "400": {
-            "$ref": "#/components/responses/LegacyValidationError"
+            "description": "Invalid stream ID format or validation error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppErrorResponse"
+                }
+              }
+            }
           },
           "401": {
             "$ref": "#/components/responses/UnauthorizedError"
@@ -2076,8 +2204,7 @@
           "500": {
             "$ref": "#/components/responses/InternalError"
           }
-        },
-        "operationId": "post.api.admin.streams.id.lock"
+        }
       }
     },
     "/api/admin/streams/{id}/unlock": {
@@ -2097,14 +2224,7 @@
         ],
         "parameters": [
           {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "description": "Stream identifier.",
-            "schema": {
-              "type": "string",
-              "minLength": 1
-            }
+            "$ref": "#/components/parameters/StreamIdPath"
           }
         ],
         "requestBody": {
@@ -2129,7 +2249,14 @@
             }
           },
           "400": {
-            "$ref": "#/components/responses/LegacyValidationError"
+            "description": "Invalid stream ID format or validation error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppErrorResponse"
+                }
+              }
+            }
           },
           "401": {
             "$ref": "#/components/responses/UnauthorizedError"
@@ -2143,8 +2270,172 @@
           "500": {
             "$ref": "#/components/responses/InternalError"
           }
-        },
-        "operationId": "post.api.admin.streams.id.unlock"
+        }
+      }
+    },
+    "/api/admin/streams/{id}/reconcile": {
+      "post": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Reconcile a stream's backend state against on-chain events",
+        "description": "Compares a stream's backend database record against ingested on-chain\ncontract events (StreamClawbackEvent, ProcessedEvent) and admin audit\nactions, returning a structured reconciliation result.\n\nFields compared:\n- `pendingClawback`: DB value vs sum of on-chain StreamClawbackEvent amounts\n- `unclaimed`: computed (totalVested - claimed - onChainClawbacks) vs DB value\n- `status`: checks if an admin terminate audit record exists but the stream is still live\n- `claimed`: flags when on-chain clawbacks exist but claimed is zero\n\nThe response includes a snapshot of the current backend state and an\non-chain summary so the operator can see both sides at a glance.\nAdmin only. No request body required.\nError code references: `NOT_FOUND`.",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "adminAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Stream identifier.",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Reconciliation completed — check `consistent` field for result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StreamReconciliationResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenError"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/stellar/fees": {
+      "get": {
+        "tags": [
+          "Stellar"
+        ],
+        "summary": "Current network fee stats plus a congestion-buffered recommendation",
+        "description": "Proxies Horizon's fee-stats endpoint and adds a `recommended` block\n(issue #184). The recommendation takes a configurable percentile of\nrecent `fee_charged`, applies a safety multiplier that increases when\nthe network looks congested (`ledger_capacity_usage` high, or the\npercentile fee far above the base fee), and clamps the result to\n`[STELLAR_FEE_MIN_STROOPS, STELLAR_FEE_MAX_STROOPS]`.\n\nRaw Horizon fields (`feeCharged`, `maxFee`, `ledger`,\n`lastLedgerBaseFee`) are unchanged for backward compatibility.",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "operations",
+            "required": false,
+            "description": "Operation count used to size `recommended.transactionFee` (1–100).",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Fee stats and buffered recommendation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "feeCharged": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "string"
+                      }
+                    },
+                    "maxFee": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "string"
+                      }
+                    },
+                    "ledger": {
+                      "type": "integer"
+                    },
+                    "lastLedgerBaseFee": {
+                      "type": "integer"
+                    },
+                    "ledgerCapacityUsage": {
+                      "type": "number",
+                      "format": "float"
+                    },
+                    "recommended": {
+                      "type": "object",
+                      "properties": {
+                        "perOperationFee": {
+                          "type": "integer",
+                          "description": "Buffered per-operation inclusion fee, stroops."
+                        },
+                        "transactionFee": {
+                          "type": "integer",
+                          "description": "perOperationFee × operations, stroops."
+                        },
+                        "operations": {
+                          "type": "integer"
+                        },
+                        "percentile": {
+                          "type": "string",
+                          "example": "p90"
+                        },
+                        "percentileFee": {
+                          "type": "integer"
+                        },
+                        "multiplier": {
+                          "type": "number"
+                        },
+                        "congested": {
+                          "type": "boolean"
+                        },
+                        "cappedAtMax": {
+                          "type": "boolean"
+                        },
+                        "minStroops": {
+                          "type": "integer"
+                        },
+                        "maxStroops": {
+                          "type": "integer"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Horizon is unreachable or returned an error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/health": {
@@ -2182,8 +2473,7 @@
               }
             }
           }
-        },
-        "operationId": "get.health"
+        }
       }
     },
     "/health/live": {
@@ -2203,8 +2493,7 @@
               }
             }
           }
-        },
-        "operationId": "get.health.live"
+        }
       }
     },
     "/health/ready": {
@@ -2241,8 +2530,7 @@
               }
             }
           }
-        },
-        "operationId": "get.health.ready"
+        }
       }
     },
     "/health/startup": {
@@ -2280,8 +2568,7 @@
               }
             }
           }
-        },
-        "operationId": "get.health.startup"
+        }
       }
     },
     "/auth/challenge": {
@@ -2333,8 +2620,7 @@
               }
             }
           }
-        },
-        "operationId": "post.auth.challenge"
+        }
       }
     },
     "/auth/verify": {
@@ -2389,8 +2675,7 @@
               }
             }
           }
-        },
-        "operationId": "post.auth.verify"
+        }
       }
     },
     "/auth/logout": {
@@ -2422,8 +2707,7 @@
           "500": {
             "$ref": "#/components/responses/InternalError"
           }
-        },
-        "operationId": "post.auth.logout"
+        }
       }
     },
     "/wallet/balance": {
@@ -2468,8 +2752,7 @@
           "500": {
             "$ref": "#/components/responses/InternalError"
           }
-        },
-        "operationId": "get.wallet.balance"
+        }
       }
     },
     "/wallet/path-payment-quote": {
@@ -2524,8 +2807,7 @@
           "500": {
             "$ref": "#/components/responses/InternalError"
           }
-        },
-        "operationId": "get.wallet.path_payment_quote"
+        }
       }
     },
     "/users/me": {
@@ -2557,8 +2839,7 @@
           "500": {
             "$ref": "#/components/responses/InternalError"
           }
-        },
-        "operationId": "get.users.me"
+        }
       },
       "put": {
         "tags": [
@@ -2601,8 +2882,7 @@
           "500": {
             "$ref": "#/components/responses/InternalError"
           }
-        },
-        "operationId": "put.users.me"
+        }
       }
     },
     "/users/{address}": {
@@ -2644,8 +2924,7 @@
           "500": {
             "$ref": "#/components/responses/InternalError"
           }
-        },
-        "operationId": "get.users.address"
+        }
       }
     },
     "/dispute-categories": {
@@ -2685,8 +2964,7 @@
           "500": {
             "$ref": "#/components/responses/InternalError"
           }
-        },
-        "operationId": "get.dispute_categories"
+        }
       },
       "post": {
         "tags": [
@@ -2742,8 +3020,7 @@
           "500": {
             "$ref": "#/components/responses/InternalError"
           }
-        },
-        "operationId": "post.dispute_categories"
+        }
       }
     },
     "/dispute-categories/{id}": {
@@ -2785,8 +3062,7 @@
           "500": {
             "$ref": "#/components/responses/InternalError"
           }
-        },
-        "operationId": "get.dispute_categories.id"
+        }
       },
       "patch": {
         "tags": [
@@ -2850,8 +3126,7 @@
           "500": {
             "$ref": "#/components/responses/InternalError"
           }
-        },
-        "operationId": "patch.dispute_categories.id"
+        }
       },
       "delete": {
         "tags": [
@@ -2888,8 +3163,7 @@
           "500": {
             "$ref": "#/components/responses/InternalError"
           }
-        },
-        "operationId": "delete.dispute_categories.id"
+        }
       }
     },
     "/disputes": {
@@ -2971,8 +3245,7 @@
           "500": {
             "$ref": "#/components/responses/InternalError"
           }
-        },
-        "operationId": "get.disputes"
+        }
       }
     },
     "/disputes/{id}/transition": {
@@ -3052,8 +3325,7 @@
           "500": {
             "$ref": "#/components/responses/InternalError"
           }
-        },
-        "operationId": "post.disputes.id.transition"
+        }
       }
     },
     "/trades": {
@@ -3103,8 +3375,7 @@
           "500": {
             "$ref": "#/components/responses/InternalError"
           }
-        },
-        "operationId": "post.trades"
+        }
       },
       "get": {
         "tags": [
@@ -3154,8 +3425,7 @@
           "401": {
             "$ref": "#/components/responses/UnauthorizedError"
           }
-        },
-        "operationId": "get.trades"
+        }
       }
     },
     "/trades/stats": {
@@ -3184,8 +3454,7 @@
           "401": {
             "$ref": "#/components/responses/UnauthorizedError"
           }
-        },
-        "operationId": "get.trades.stats"
+        }
       }
     },
     "/trades/{id}": {
@@ -3234,8 +3503,7 @@
           "404": {
             "$ref": "#/components/responses/NotFoundError"
           }
-        },
-        "operationId": "get.trades.id"
+        }
       }
     },
     "/trades/{id}/deposit": {
@@ -3284,8 +3552,7 @@
           "500": {
             "$ref": "#/components/responses/InternalError"
           }
-        },
-        "operationId": "post.trades.id.deposit"
+        }
       }
     },
     "/trades/{id}/confirm": {
@@ -3350,8 +3617,7 @@
           "500": {
             "$ref": "#/components/responses/InternalError"
           }
-        },
-        "operationId": "post.trades.id.confirm"
+        }
       }
     },
     "/trades/{id}/release": {
@@ -3419,8 +3685,7 @@
           "500": {
             "$ref": "#/components/responses/InternalError"
           }
-        },
-        "operationId": "post.trades.id.release"
+        }
       }
     },
     "/trades/{id}/dispute": {
@@ -3501,8 +3766,7 @@
           "500": {
             "$ref": "#/components/responses/InternalError"
           }
-        },
-        "operationId": "post.trades.id.dispute"
+        }
       }
     },
     "/trades/{id}/manifest": {
@@ -3551,8 +3815,7 @@
           "500": {
             "$ref": "#/components/responses/InternalError"
           }
-        },
-        "operationId": "get.trades.id.manifest"
+        }
       },
       "post": {
         "tags": [
@@ -3622,8 +3885,7 @@
           "500": {
             "$ref": "#/components/responses/InternalError"
           }
-        },
-        "operationId": "post.trades.id.manifest"
+        }
       }
     },
     "/trades/{id}/evidence": {
@@ -3678,8 +3940,7 @@
           "404": {
             "$ref": "#/components/responses/NotFoundError"
           }
-        },
-        "operationId": "get.trades.id.evidence"
+        }
       }
     },
     "/evidence/{cid}/stream": {
@@ -3759,8 +4020,7 @@
               }
             }
           }
-        },
-        "operationId": "get.evidence.cid.stream"
+        }
       }
     },
     "/evidence/video": {
@@ -3872,8 +4132,7 @@
               }
             }
           }
-        },
-        "operationId": "post.evidence.video"
+        }
       }
     },
     "/trades/{id}/history": {
@@ -3933,8 +4192,7 @@
           "500": {
             "$ref": "#/components/responses/InternalError"
           }
-        },
-        "operationId": "get.trades.id.history"
+        }
       }
     },
     "/trades/{id}/history/verify": {
@@ -3998,8 +4256,7 @@
           "500": {
             "$ref": "#/components/responses/InternalError"
           }
-        },
-        "operationId": "get.trades.id.history.verify"
+        }
       }
     },
     "/api/admin/auth/claims": {
@@ -4058,8 +4315,7 @@
           "403": {
             "$ref": "#/components/responses/ForbiddenError"
           }
-        },
-        "operationId": "get.api.admin.auth.claims"
+        }
       }
     },
     "/api/admin/sessions/revoke": {
@@ -4121,8 +4377,7 @@
           "403": {
             "$ref": "#/components/responses/ForbiddenError"
           }
-        },
-        "operationId": "post.api.admin.sessions.revoke"
+        }
       }
     },
     "/treasury/balance": {
@@ -4165,8 +4420,7 @@
           "500": {
             "$ref": "#/components/responses/InternalError"
           }
-        },
-        "operationId": "get.treasury.balance"
+        }
       }
     },
     "/treasury/withdraw": {
@@ -4233,8 +4487,7 @@
           "500": {
             "$ref": "#/components/responses/InternalError"
           }
-        },
-        "operationId": "post.treasury.withdraw"
+        }
       }
     },
     "/treasury/config": {
@@ -4277,11 +4530,10 @@
           "500": {
             "$ref": "#/components/responses/InternalError"
           }
-        },
-        "operationId": "get.treasury.config"
+        }
       }
     },
-    "/admin/contract/mediators": {
+    "/api/admin/contract/mediators": {
       "post": {
         "tags": [
           "Admin"
@@ -4338,11 +4590,10 @@
           "500": {
             "$ref": "#/components/responses/InternalError"
           }
-        },
-        "operationId": "post.admin.contract.mediators"
+        }
       }
     },
-    "/admin/contract/mediators/{address}": {
+    "/api/admin/contract/mediators/{address}": {
       "delete": {
         "tags": [
           "Admin"
@@ -4391,11 +4642,10 @@
           "500": {
             "$ref": "#/components/responses/InternalError"
           }
-        },
-        "operationId": "delete.admin.contract.mediators.address"
+        }
       }
     },
-    "/admin/contract/fee": {
+    "/api/admin/contract/fee": {
       "patch": {
         "tags": [
           "Admin"
@@ -4454,8 +4704,7 @@
           "500": {
             "$ref": "#/components/responses/InternalError"
           }
-        },
-        "operationId": "patch.admin.contract.fee"
+        }
       }
     },
     "/api/admin/streams/{id}/suspend": {
@@ -4475,12 +4724,7 @@
         ],
         "parameters": [
           {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
+            "$ref": "#/components/parameters/StreamIdPath"
           }
         ],
         "requestBody": {
@@ -4503,6 +4747,7 @@
             "description": "Stream suspended."
           },
           "400": {
+            "description": "Invalid stream ID format or validation error.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4526,8 +4771,7 @@
           "500": {
             "$ref": "#/components/responses/InternalError"
           }
-        },
-        "operationId": "post.api.admin.streams.id.suspend"
+        }
       }
     },
     "/api/admin/streams/{id}/resume": {
@@ -4547,12 +4791,7 @@
         ],
         "parameters": [
           {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
+            "$ref": "#/components/parameters/StreamIdPath"
           }
         ],
         "requestBody": {
@@ -4575,6 +4814,7 @@
             "description": "Stream resumed."
           },
           "400": {
+            "description": "Invalid stream ID format or validation error.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4598,8 +4838,7 @@
           "500": {
             "$ref": "#/components/responses/InternalError"
           }
-        },
-        "operationId": "post.api.admin.streams.id.resume"
+        }
       }
     },
     "/goals": {
@@ -4631,8 +4870,7 @@
           "500": {
             "$ref": "#/components/responses/InternalError"
           }
-        },
-        "operationId": "get.goals"
+        }
       }
     }
   }

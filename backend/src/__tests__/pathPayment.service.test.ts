@@ -3,6 +3,11 @@ import * as StellarSdk from "@stellar/stellar-sdk";
 import { StellarService } from "../services/stellar.service";
 import { PathPaymentService } from "../services/pathPayment.service";
 
+jest.mock("../services/quoteCache.service", () => ({
+  getCachedQuote: jest.fn().mockResolvedValue(null),
+  setCachedQuote: jest.fn().mockResolvedValue(undefined),
+}));
+
 describe("PathPaymentService network resilience", () => {
   const sleepMock = jest.fn().mockResolvedValue(undefined);
   let strictSendPathsCall: jest.Mock;
@@ -48,7 +53,7 @@ describe("PathPaymentService network resilience", () => {
     const service = new PathPaymentService();
     const result = await service.getPathPaymentQuote("1000", "XLM");
 
-    expect(result).toEqual([
+    expect(result.quotes).toEqual([
       expect.objectContaining({
         source_amount: "1000",
         destination_amount: "50",
@@ -74,7 +79,8 @@ describe("PathPaymentService network resilience", () => {
     });
 
     const service = new PathPaymentService();
-    const [quote] = await service.getPathPaymentQuote("1000", "XLM");
+    const { quotes } = await service.getPathPaymentQuote("1000", "XLM");
+    const [quote] = quotes;
 
     expect(quote.path).toEqual([{ asset_code: "XLM", asset_type: "native" }]);
     expect(quote.destination_asset_code).toBe("USDC");
@@ -84,7 +90,7 @@ describe("PathPaymentService network resilience", () => {
     strictSendPathsCall.mockResolvedValue({ records: [] });
 
     const service = new PathPaymentService();
-    await expect(service.getPathPaymentQuote("1000", "XLM")).resolves.toEqual([]);
+    await expect(service.getPathPaymentQuote("1000", "XLM")).resolves.toEqual(expect.objectContaining({ quotes: [] }));
   });
 
   it("retries on 500 errors and succeeds", async () => {
@@ -93,7 +99,7 @@ describe("PathPaymentService network resilience", () => {
       .mockResolvedValueOnce({ records: [] });
 
     const service = new PathPaymentService();
-    await expect(service.getPathPaymentQuote("1000", "XLM")).resolves.toEqual([]);
+    await expect(service.getPathPaymentQuote("1000", "XLM")).resolves.toEqual(expect.objectContaining({ quotes: [] }));
     expect(strictSendPathsCall).toHaveBeenCalledTimes(2);
     expect(sleepMock).toHaveBeenCalledWith(1000);
   });
@@ -105,7 +111,7 @@ describe("PathPaymentService network resilience", () => {
       .mockResolvedValueOnce({ records: [] });
 
     const service = new PathPaymentService();
-    await expect(service.getPathPaymentQuote("1000", "XLM")).resolves.toEqual([]);
+    await expect(service.getPathPaymentQuote("1000", "XLM")).resolves.toEqual(expect.objectContaining({ quotes: [] }));
     expect(strictSendPathsCall).toHaveBeenCalledTimes(3);
     expect(sleepMock).toHaveBeenNthCalledWith(1, 1000);
     expect(sleepMock).toHaveBeenNthCalledWith(2, 2000);
@@ -117,7 +123,7 @@ describe("PathPaymentService network resilience", () => {
       .mockResolvedValueOnce({ records: [] });
 
     const service = new PathPaymentService();
-    await expect(service.getPathPaymentQuote("1000", "XLM")).resolves.toEqual([]);
+    await expect(service.getPathPaymentQuote("1000", "XLM")).resolves.toEqual(expect.objectContaining({ quotes: [] }));
     expect(strictSendPathsCall).toHaveBeenCalledTimes(2);
     expect(sleepMock).toHaveBeenCalledWith(1000);
   });

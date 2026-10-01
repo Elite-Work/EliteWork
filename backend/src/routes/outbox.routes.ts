@@ -13,7 +13,6 @@ import {
   exportOutboxGaps,
 } from "../lib/outbox/outboxScanner";
 import { adminMiddleware } from "../middleware/admin.middleware";
-import { prisma } from "../lib/db";
 
 const isAdmin = adminMiddleware;
 

@@ -108,7 +108,7 @@ export const idempotencyMiddleware = async (
       });
       res.setHeader("X-Idempotency-Cache", "HIT");
 
-      return res.status(status).json(deserializeCachedBody(body));
+      return res.status(status).json(body);
     }
 
     if (acquired !== 1) {
@@ -122,7 +122,7 @@ export const idempotencyMiddleware = async (
         });
         res.setHeader("X-Idempotency-Cache", "HIT");
 
-        return res.status(status).json(deserializeCachedBody(body));
+        return res.status(status).json(body);
       }
 
       res.setHeader("X-Idempotency-Cache", "IN_PROGRESS");

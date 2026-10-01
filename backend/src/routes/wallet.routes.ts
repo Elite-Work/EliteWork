@@ -41,12 +41,7 @@ walletRoutes.get("/path-payment-quote", authMiddleware, async (req, res) => {
       sourceAsset,
       sourceAssetIssuer,
     );
-    res.json({
-      routes: result.quotes,
-      cached: result.cached,
-      freshnessMs: result.freshnessMs,
-      quotedAt: result.quotedAt,
-    });
+    res.json({ routes: quotes });
   } catch (error) {
     res.status(500).json({ error: "Failed to fetch quotes" });
   }

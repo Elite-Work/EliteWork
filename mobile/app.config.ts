@@ -1,4 +1,4 @@
-import { ExpoConfig, getDefaultConfig } from 'expo/config';
+import type { ExpoConfig } from 'expo/config';
 
 // Deep-link scheme + universal/app-link hosts. Keep in step with
 // src/constants/links.ts and frontend/public/.well-known/* (issue #261).
@@ -6,7 +6,6 @@ const APP_SCHEME = 'amanavault';
 const LINK_HOSTS = ['amanavault.app', 'www.amanavault.app'];
 
 const config: ExpoConfig = {
-  ...getDefaultConfig(__dirname),
   name: 'Amana',
   slug: 'amana-mobile',
   version: '0.1.0',

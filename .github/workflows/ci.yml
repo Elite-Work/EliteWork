@@ -334,10 +334,13 @@ jobs:
           node-version: 22
 
       - name: Install ts-node
-        run: npm install -g ts-node typescript --prefer-offline
+        run: npm install -g ts-node typescript@5 --prefer-offline
 
       - name: Run catalog drift check
-        run: ts-node --skip-project scripts/check-flag-catalog-drift.ts
+        # Node 22 detects the module syntax in this .ts file and loads it as ESM,
+        # where __dirname is undefined; compile to CommonJS and skip type-checking
+        # (no @types/node in a global install).
+        run: ts-node --skip-project --transpile-only -O '{"module":"commonjs","esModuleInterop":true}' scripts/check-flag-catalog-drift.ts
 
   backend:
     name: Backend Required Gate
@@ -392,6 +395,8 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Apply database migrations
+        env:
+          DATABASE_URL: postgresql://test:test@localhost:5432/test
         run: pnpm exec prisma migrate deploy
 
       - name: Build
@@ -634,6 +639,10 @@ jobs:
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          # The default `tools` package no longer exists in current cmdline-tools
+          # and makes sdkmanager exit 1; platform-tools is all this job needs.
+          packages: platform-tools
 
       - name: Cache AVD
         uses: actions/cache@v4

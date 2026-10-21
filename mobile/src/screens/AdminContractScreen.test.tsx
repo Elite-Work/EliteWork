@@ -4,6 +4,10 @@ import AdminContractScreen from './AdminContractScreen';
 import { useAuthStore } from '../stores/authStore';
 import { adminApi } from '../api/admin';
 import { AdminApiError } from '../api/errors';
+import {
+  signAndSubmitXdr,
+  TransactionSigningError,
+} from '../services/freighterSigner';
 
 jest.mock('../stores/authStore', () => ({
   useAuthStore: jest.fn(),
@@ -25,6 +29,15 @@ jest.mock('../api/admin', () => ({
   },
 }));
 
+jest.mock('../services/freighterSigner', () => ({
+  ...jest.requireActual('../services/freighterSigner'),
+  signAndSubmitXdr: jest.fn(),
+}));
+
+const mockSignAndSubmit = signAndSubmitXdr as jest.MockedFunction<
+  typeof signAndSubmitXdr
+>;
+
 const mockAddMediator = adminApi.addMediator as jest.MockedFunction<
   typeof adminApi.addMediator
 >;
@@ -33,12 +46,14 @@ const mockUpdateFee = adminApi.updateContractFeeBps as jest.MockedFunction<
 >;
 
 const STELLAR_PUBKEY = 'G'.padEnd(56, 'A');
+const ADMIN_WALLET = 'G'.padEnd(56, 'B');
 
 describe('AdminContractScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     (useAuthStore as unknown as jest.Mock).mockReturnValue({
       role: 'admin',
+      walletAddress: ADMIN_WALLET,
       clearAuth: jest.fn().mockResolvedValue(undefined),
     });
   });
@@ -104,5 +119,129 @@ describe('AdminContractScreen', () => {
 
     expect(await findByTestId('admin-error-banner')).toBeTruthy();
     await waitFor(() => expect(mockUpdateFee).toHaveBeenCalledWith(500));
+  });
+  describe('Freighter signing', () => {
+    const navigation = { goBack: jest.fn(), navigate: jest.fn() };
+
+    function renderScreen() {
+      return render(
+        <AdminContractScreen
+          navigation={navigation as any}
+          route={{} as any}
+        />,
+      );
+    }
+
+    async function buildAddMediatorTx(utils: ReturnType<typeof renderScreen>) {
+      mockAddMediator.mockResolvedValue({ unsignedXdr: 'XDR_ADD_MEDIATOR' });
+      fireEvent.changeText(
+        utils.getByTestId('admin-contract-add-input'),
+        STELLAR_PUBKEY,
+      );
+      await act(async () => {
+        fireEvent.press(utils.getByTestId('admin-contract-add'));
+      });
+    }
+
+    async function buildFeeTx(utils: ReturnType<typeof renderScreen>) {
+      mockUpdateFee.mockResolvedValue({ unsignedXdr: 'XDR_UPDATE_FEE' });
+      await act(async () => {
+        fireEvent.press(utils.getByTestId('admin-contract-fee'));
+      });
+    }
+
+    it('offers no signing action until an XDR has been built', () => {
+      const { queryByTestId } = renderScreen();
+
+      expect(queryByTestId('admin-contract-add-sign')).toBeNull();
+      expect(queryByTestId('admin-contract-fee-sign')).toBeNull();
+    });
+
+    it('signs and submits the add-mediator XDR with the admin wallet', async () => {
+      mockSignAndSubmit.mockResolvedValue({ hash: 'HASH_ADD' });
+      const utils = renderScreen();
+      await buildAddMediatorTx(utils);
+
+      await act(async () => {
+        fireEvent.press(await utils.findByTestId('admin-contract-add-sign'));
+      });
+
+      expect(mockSignAndSubmit).toHaveBeenCalledWith('XDR_ADD_MEDIATOR', {
+        address: ADMIN_WALLET,
+      });
+      expect(utils.getByTestId('admin-contract-add-hash').props.children).toBe(
+        'HASH_ADD',
+      );
+      // The XDR stays visible/copyable after signing.
+      expect(utils.getByTestId('admin-contract-add-xdr')).toBeTruthy();
+    });
+
+    it('signs and submits the update-fee XDR with the admin wallet', async () => {
+      mockSignAndSubmit.mockResolvedValue({ hash: 'HASH_FEE' });
+      const utils = renderScreen();
+      await buildFeeTx(utils);
+
+      await act(async () => {
+        fireEvent.press(await utils.findByTestId('admin-contract-fee-sign'));
+      });
+
+      expect(mockSignAndSubmit).toHaveBeenCalledWith('XDR_UPDATE_FEE', {
+        address: ADMIN_WALLET,
+      });
+      expect(utils.getByTestId('admin-contract-fee-hash').props.children).toBe(
+        'HASH_FEE',
+      );
+    });
+
+    it('keeps the two sections independent', async () => {
+      mockSignAndSubmit.mockResolvedValue({ hash: 'HASH_ADD' });
+      const utils = renderScreen();
+      await buildAddMediatorTx(utils);
+      await buildFeeTx(utils);
+
+      await act(async () => {
+        fireEvent.press(await utils.findByTestId('admin-contract-add-sign'));
+      });
+
+      expect(mockSignAndSubmit).toHaveBeenCalledTimes(1);
+      expect(utils.queryByTestId('admin-contract-fee-hash')).toBeNull();
+      expect(utils.getByTestId('admin-contract-fee-sign')).toBeTruthy();
+    });
+
+    it('shows an inline error and keeps the copyable XDR when Freighter is unavailable', async () => {
+      mockSignAndSubmit.mockRejectedValue(
+        new TransactionSigningError(
+          'WALLET_UNAVAILABLE',
+          "Freighter isn't available on this device.",
+        ),
+      );
+      const utils = renderScreen();
+      await buildAddMediatorTx(utils);
+
+      await act(async () => {
+        fireEvent.press(await utils.findByTestId('admin-contract-add-sign'));
+      });
+
+      expect(utils.getByTestId('admin-contract-add-error')).toBeTruthy();
+      expect(utils.getByText('Freighter unavailable')).toBeTruthy();
+      expect(utils.getByTestId('admin-contract-add-xdr')).toBeTruthy();
+      // Signing problems are not backend errors, so no banner is raised.
+      expect(utils.queryByTestId('admin-error-banner')).toBeNull();
+    });
+
+    it('drops the previous signing result when a new XDR is built', async () => {
+      mockSignAndSubmit.mockResolvedValue({ hash: 'HASH_FIRST' });
+      const utils = renderScreen();
+      await buildAddMediatorTx(utils);
+      await act(async () => {
+        fireEvent.press(await utils.findByTestId('admin-contract-add-sign'));
+      });
+      expect(utils.getByTestId('admin-contract-add-hash')).toBeTruthy();
+
+      await buildAddMediatorTx(utils);
+
+      expect(utils.queryByTestId('admin-contract-add-hash')).toBeNull();
+      expect(utils.getByTestId('admin-contract-add-sign')).toBeTruthy();
+    });
   });
 });

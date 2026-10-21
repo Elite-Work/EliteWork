@@ -39,5 +39,5 @@
 
 ## No regression in actual mutation correctness
 
-- All existing `tradeStore.test.ts` scenarios still pass (fetch, setPage, setFilter, addTrade, update/remove happy path). New `pendingActions` is additive, not breaking.
+- All existing `src/__tests__/tradeStore.test.ts` scenarios still pass (fetch, setPage, setFilter, addTrade, update/remove happy path). New `pendingActions` is additive, not breaking.
 - `lib/api/trades.ts` now accepts optional `{idempotencyKey, correlationId}` without breaking callers that omit opts.

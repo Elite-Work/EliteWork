@@ -34,8 +34,12 @@ All mutations (create trade, deposit, confirm, dispute) go through `api.trades.*
 directly. When online they succeed immediately and the caller calls
 `invalidateAndRefetch()` to drop the stale entry and pull fresh data.
 
-When offline, mutations are expected to be queued by the offline write queue
-(issue #74). On replay success the server response is written into cache.
+When offline, mutations are queued by the offline write queue
+(`src/stores/offlineQueueStore.ts`, replayed from `ConnectivityBanner`; see
+`offline-resilience.md`). The queue does not touch this cache: replay does not
+write server responses into it, and it does not call `cacheInvalidate`. A cached
+entry is refreshed by the next `useCached*` revalidation or
+`invalidateAndRefetch()`.
 
 ---
 
@@ -70,8 +74,8 @@ The rule is: **server always wins on content; last write wins for timing**.
 | Scenario | Resolution | Behaviour |
 |---|---|---|
 | Online write succeeds (2xx) | **Server wins** | Cache invalidated; fresh fetch triggered by `invalidateAndRefetch()` |
-| Offline queue replayed; server returns 2xx | **Server wins** | Server response body written to cache; `isStale` cleared |
-| Offline queue replayed; server returns 409 Conflict | **Server wins** | Local entry evicted via `cacheInvalidate`; error surfaced to user; fresh fetch on next online event |
+| Offline queue replayed; server returns 2xx | **Server wins** | Action removed from the queue. The cache is not written by replay; the entry is refreshed by the next revalidation / `invalidateAndRefetch()` |
+| Offline queue replayed; server returns 409 Conflict | **Server wins** | Not special-cased: the action stays queued, the "Partial sync" toast is shown, and the cache entry is left as-is until the next revalidation |
 | Server data `updatedAt` > local `cachedAt` | **Server wins** | Overwrites local entry; `isStale` cleared |
 | Local `cachedAt` appears newer (clock skew ≤ 30s) | **Server wins** | Server response still overwrites; clock skew is logged but not acted upon |
 | Corruption in localStorage (JSON parse error) | **Neither** | Affected key removed; treat as cache miss; fresh fetch attempted |

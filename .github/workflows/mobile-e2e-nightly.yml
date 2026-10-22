@@ -109,6 +109,10 @@ jobs:
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          # The default `tools` package no longer exists in current cmdline-tools
+          # and makes sdkmanager exit 1; platform-tools is all this job needs.
+          packages: platform-tools system-images;android-34;google_apis;x86_64
 
       - name: Cache AVD
         uses: actions/cache@v4
@@ -196,6 +200,10 @@ jobs:
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          # The default `tools` package no longer exists in current cmdline-tools
+          # and makes sdkmanager exit 1; platform-tools is all this job needs.
+          packages: platform-tools system-images;android-34;google_apis;x86_64
 
       - name: Cache AVD
         uses: actions/cache@v4

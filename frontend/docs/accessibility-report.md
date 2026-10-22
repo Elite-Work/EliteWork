@@ -13,7 +13,7 @@
 | `/` (Landing) | 0 | ✅ Pass |
 | `/trades` | 0 | ✅ Pass |
 | `/trades/create` (Step1→Step3) | 0 | ✅ Pass after fixes |
-| `/trades/[id]` | 0 | ✅ Pass after prompt removal |
+| `/trades/[id]` | 0 | ✅ Pass (the dispute action still uses `window.prompt` — see note below) |
 | `/admin/streams` | 0 | ✅ Pass |
 | `/admin/streams/[id]` | 0 | ✅ Pass |
 | `/admin/audit` | 0 | ✅ Pass |
@@ -23,6 +23,25 @@
 | `/assets` | 0 | ✅ Pass |
 
 Run: `pnpm test -- src/__tests__/accessibility --verbose` (blocking in CI)
+
+> **Coverage notes (audited against `src/app/` on 2026-10-21)**
+>
+> - The route rows above come from `routes.axe.test.tsx`, which renders a
+>   minimal shell (`<h1>` + breadcrumb) per route, **not** the real page. It is a
+>   structural baseline only. Real-page axe checks live in the dedicated suites in
+>   `src/__tests__/accessibility/` (`assets`, `streams`, `vaultManage`,
+>   `mediatorDisputes`, `tradeWizard`, `cooperativeBulkImport`, `clawbackModal`,
+>   `connectivityBanner`, `focusSkipLinkContrast`).
+> - Routes that exist in `src/app/` but have no row in this baseline (and are not
+>   in `routes.axe.test.tsx`): `/assets/[id]`, `/reputation`, `/settings`,
+>   `/streams`, `/streams/[id]`, `/cooperative/bulk-import`, `/access-denied`.
+>   The `/mediator/disputes` row also names `[id]`, but `routes.axe.test.tsx`
+>   only lists `/mediator/disputes`.
+> - `/trades/[id]` still calls `window.prompt("Enter dispute reason (min 10
+>   characters):")` when a dispute is initiated
+>   (`src/app/trades/[id]/page.tsx`). That native prompt is not covered by axe and
+>   is not keyboard/screen-reader friendly; the "prompt removal" below applies to
+>   the create → deposit → release path only.
 
 ## Summary — Component Coverage
 
@@ -101,9 +120,9 @@ Run: `pnpm test -- src/__tests__/accessibility --verbose` (blocking in CI)
 6. Step 3 review: Tab to `Lock Funds & Create Trade` → Enter → `LegalDisclaimerModal` traps focus (`role="alertdialog"`, Esc closes, focus returns to trigger). Confirm → funds locked, success toast announced (`role="alert"`).
 7. Navigate to trade detail (`TradeListItem` card reachable via Tab, Enter to view)
 8. Tab to `Deposit` / `Release` action bar buttons — each has `aria-label` and `focus-visible` ring; confirm modals trap focus; no keyboard trap observed.
-9. Verify: full journey completable with keyboard only, no `window.prompt` (removed), no focus loss.
+9. Verify: full journey completable with keyboard only, no `window.prompt` on the create → deposit → release path, no focus loss. (The dispute action on `/trades/[id]` still uses `window.prompt`; it is not part of this journey.)
 
-Tested via `jest + @testing-library/user-event` tab simulation and manual Chromium `Tab` walkthrough recorded in `frontend/tests/a11y-keyboard-walkthrough.md`.
+Tested via `jest + @testing-library/user-event` tab simulation and a manual Chromium `Tab` walkthrough. The separate recording file `frontend/tests/a11y-keyboard-walkthrough.md` was never added to the repo; this section is the only written record.
 
 ## Screen-Reader Spot Checks (recorded 2026-08-31)
 
@@ -143,7 +162,7 @@ pnpm test -- src/__tests__/accessibility --verbose
 ## Audit Trail
 
 - Baseline recorded at `frontend/docs/accessibility-report.md#baseline---all-routes-2026-08-31`
-- CI gate: `.github/workflows/ci.yml:98` (`pnpm test -- src/__tests__/accessibility --verbose`)
-- Keyboard script: this file + `frontend/tests/a11y-keyboard-walkthrough.md` (if present, else this section)
+- CI gate: `.github/workflows/ci.yml`, step "A11y axe audit (blocking)" (`pnpm test -- src/__tests__/accessibility --verbose`)
+- Keyboard script: this file (there is no separate `frontend/tests/a11y-keyboard-walkthrough.md`)
 - Screen-reader log: table above
 

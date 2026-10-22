@@ -18,8 +18,8 @@ for content areas, no unstyled gaps, no layout shift when real data arrives.
 
 | Token | Value | Role |
 | --- | --- | --- |
-| `bg-skeleton-base` | `#1A3D2C` (surface-2) | Resting fill |
-| `bg-skeleton-sheen` | `rgba(240,245,241,0.08)` | Shimmer highlight |
+| `bg-skeleton-base` | `#E8EDE9` light / `#1A3D2C` dark | Resting fill |
+| `bg-skeleton-sheen` | `rgba(26,46,31,0.06)` light / `rgba(240,245,241,0.08)` dark | Shimmer highlight |
 | `animate-skeleton-pulse` | 1.6s opacity pulse | Resting motion (no reflow) |
 | `animate-skeleton-shimmer` | 1.6s translateX sweep | Highlight sweep |
 
@@ -36,41 +36,54 @@ for content areas, no unstyled gaps, no layout shift when real data arrives.
 
 ## Data-surface inventory
 
+Audited against `src/app/` on 2026-10-21.
+
 | Route / surface | Pattern | Boundary |
 | --- | --- | --- |
-| `/dashboard` header + stat cards | `Skeleton` header + 3× `SkeletonCard` | page-level `loading.tsx` |
-| `/dashboard` activity feed | `SkeletonList rows={4}` | inline (client fetch) |
-| `/trades` table | `TradesTableSkeleton` (rows of `Skeleton`) | inline (`loading` flag) |
-| `/trades/[id]` detail | `LoadingState variant="card"` ×2 | route `loading.tsx` |
-| `/trades/create` review totals | inline text `Skeleton` | inline |
-| `/vault` + `/vault/manage` | 4× `LoadingState variant="card"` | inline (`isLoading`) |
-| `/assets`, `/assets/[id]` | `LoadingState` | route segment |
-| `/reputation` | `Skeleton` header + `RepScoreRing` placeholder | inline |
-| `/mediator/disputes` list | `SkeletonList` | inline |
-| `/admin/streams`, `/admin/audit` | `LoadingState variant="row"` list | inline |
-| Wallet balance widget | inline `Skeleton width={80} height={16}` | inline |
+| `/dashboard` | `Skeleton` header + 4× `SkeletonCard` stat cards, then `SkeletonList rows={4}` for the activity feed | inline (`if (loading)` branch of `page.tsx`) |
+| `/trades` | `TradesTableSkeleton` (rows of `Skeleton`) | inline (`loading` flag) |
+| `/trades/[id]` | Centred `animate-spin` spinner while `useTradeDetail` loads — **gap**, not a skeleton | inline (`loading` flag) |
+| `/vault` | Static pulsing blocks in `loading.tsx`, then 4× `LoadingState variant="card"` | route `loading.tsx` + inline (`isLoading`) |
+| `/vault/manage` | No skeleton — only a "Loading…" button label / spinning icon — **gap** | none |
+| `/assets` | `AssetTableSkeleton` (built from `Skeleton`) | inline |
+| `/assets/[id]` | Page-local `LoadingState()` function (not the shared `LoadingState`) | inline (`isLoading`) |
+| `/reputation` | `SkeletonReputationPage`: `Skeleton` header + circular score-ring placeholder | inline |
+| `/mediator/disputes` | `SkeletonList rows={PAGE_SIZE}` | inline |
+| `/mediator/disputes/[id]` | No skeleton while evidence loads (tracks a `VideoLoadState` only) — **gap** | none |
+| `/admin/streams`, `/admin/audit` | `SkeletonList rows={PAGE_SIZE}` | inline |
+| `/admin/streams/[id]`, `/streams/[id]` | `LoadingState variant="card" rows={3}` | inline (`isLoading`) |
+
+No async content to skeleton: `/` (landing), `/access-denied`, `/streams`
+(static index with links), `/settings` (wallet connect / sign-in buttons only),
+`/cooperative/bulk-import` (upload form; the only request is the submit
+mutation) and the `/dev-test/*` fixtures.
 
 > Any surface not listed here that fetches async data needs a row added and a
-> skeleton wired before merge.
+> skeleton wired before merge. The three **gap** rows above predate this rule.
 
 ## Suspense boundary convention
 
 - **Route-level** (`app/<segment>/loading.tsx`): first paint of a navigation —
-  use `LoadingState` matching the page's primary layout.
+  use `LoadingState` matching the page's primary layout. Today only
+  `app/vault/loading.tsx` exists, and it uses static pulsing blocks rather than
+  `LoadingState`; every other route handles loading inline.
 - **Component-level** (`<Suspense>` / `isLoading` branch): secondary data that
   streams in after the shell — use the matching primitive from the inventory.
 
 ## CLS budget / Lighthouse CI
 
-`frontend/lighthouserc.json` asserts `cumulative-layout-shift ≤ 0.02` (Web Vitals
-"good" is ≤ 0.1; we hold a tighter internal budget) on the key routes. Wire into
-CI:
+Every Lighthouse config in `frontend/` asserts
+`cumulative-layout-shift ≤ 0.02` as an **error** (Web Vitals "good" is ≤ 0.1; we
+hold a tighter internal budget):
 
-```yaml
-- run: pnpm build && npx --yes @lhci/cli@0.13.x autorun
-```
+| Config | Routes | Run by |
+| --- | --- | --- |
+| `lighthouserc.json` | `/`, `/dashboard`, `/trades`, `/vault`, `/trades/create` | manual / local `lhci autorun` |
+| `lighthouserc.trades-create.json`, `lighthouserc.dashboard.json`, `lighthouserc.vault.json` | one critical page each | `.github/workflows/lighthouse.yml` ("Lighthouse — Critical Pages", `@lhci/cli@0.15.1`) |
 
-A regression above budget fails the job.
+CI only measures `/trades/create`, `/dashboard` and `/vault`; the other routes in
+the inventory are covered by the manual pass below. A regression above budget on
+any of the three fails the workflow.
 
 ## Slow-network manual pass
 

@@ -32,6 +32,15 @@ resolves to the `WALLET_TIMEOUT` sentinel → `timeout` state → visible retry,
 within 8 seconds. There is no code path where a user action produces no
 feedback.
 
+## Integration status
+
+`state-machine.ts` and `WalletStateCallout` (`src/components/wallet/`) are
+implemented and unit-tested, but no route renders `WalletStateCallout` yet and
+nothing outside that component imports the state machine. Until it is wired
+into a connect flow, the table above describes the behaviour the component
+produces in isolation, and the manual test matrix below only applies once it is
+mounted.
+
 ## Telemetry
 
 `trackWalletState(state, meta)` emits:

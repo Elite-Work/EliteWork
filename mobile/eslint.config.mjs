@@ -30,6 +30,7 @@ export default [
         FormData: 'readonly',
         Blob: 'readonly',
         fetch: 'readonly',
+        AbortController: 'readonly',
         URL: 'readonly',
         URLSearchParams: 'readonly',
       },
@@ -55,6 +56,7 @@ export default [
     ],
     languageOptions: {
       globals: {
+        global: 'readonly',
         jest: 'readonly',
         describe: 'readonly',
         it: 'readonly',

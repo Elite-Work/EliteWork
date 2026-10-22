@@ -17,6 +17,7 @@ import { useAuthStore } from '../stores/authStore';
 import { adminApi, ContractTxResult } from '../api/admin';
 import { viewForError } from '../api/errorInterceptor';
 import { AdminErrorBanner } from '../components/AdminErrorBanner';
+import { SignAndSubmitXdr } from '../components/SignAndSubmitXdr';
 import { buildSupportMailto } from '../constants/support';
 
 type Props = StackScreenProps<RootStackParamList, 'AdminContract'>;
@@ -28,9 +29,11 @@ type Props = StackScreenProps<RootStackParamList, 'AdminContract'>;
  *  - PATCH /api/admin/contract/fee
  *
  * All three return an `unsignedXdr` the admin must sign with their
- * Stellar wallet (Freighter). Until wallet signing is wired up, this
- * screen surfaces the XDR as a copy-only string (`selectable` lets the
- * user long-press to copy) so the admin can sign externally. The error
+ * Stellar wallet (Freighter). Each result card offers "Sign & submit with
+ * Freighter", which signs the XDR and submits it to the Stellar network
+ * (see `services/freighterSigner`). The XDR is still shown as a
+ * `selectable` string so the admin can long-press to copy it and sign
+ * externally when Freighter is not available on the device. The error
  * banner pattern is the same as AdminStreamsOverviewScreen.
  *
  * Two per-section error slots keep user input on failure: the add-input
@@ -39,7 +42,7 @@ type Props = StackScreenProps<RootStackParamList, 'AdminContract'>;
  */
 export default function AdminContractScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
-  const { role, clearAuth } = useAuthStore();
+  const { role, clearAuth, walletAddress } = useAuthStore();
   const isAdmin = role === 'admin';
 
   // Mediators section.
@@ -137,9 +140,9 @@ export default function AdminContractScreen({ navigation }: Props) {
         {/* --- Mediators section --- */}
         <Text style={styles.sectionTitle}>Add mediator</Text>
         <Text style={styles.sectionBody}>
-          Signs a backend-built `unsignedXdr`. Wallet signing is a
-          follow-up — copy the XDR (long-press the field) and sign
-          externally until Freighter wiring lands.
+          Builds a backend `unsignedXdr`, then signs and submits it with
+          Freighter. If Freighter isn't available on this device, copy the
+          XDR (long-press the field) and sign it externally.
         </Text>
         {medErrorView ? (
           <AdminErrorBanner
@@ -188,7 +191,11 @@ export default function AdminContractScreen({ navigation }: Props) {
             >
               {medTx.unsignedXdr}
             </Text>
-            {/* // TODO: sign unsignedXdr with @stellar/freighter-api and submit it. */}
+            <SignAndSubmitXdr
+              unsignedXdr={medTx.unsignedXdr}
+              address={walletAddress ?? undefined}
+              testIDPrefix="admin-contract-add"
+            />
           </View>
         ) : null}
 
@@ -237,6 +244,11 @@ export default function AdminContractScreen({ navigation }: Props) {
             >
               {feeTx.unsignedXdr}
             </Text>
+            <SignAndSubmitXdr
+              unsignedXdr={feeTx.unsignedXdr}
+              address={walletAddress ?? undefined}
+              testIDPrefix="admin-contract-fee"
+            />
           </View>
         ) : null}
       </ScrollView>

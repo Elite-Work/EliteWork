@@ -2,6 +2,18 @@
 
     use super::*;
     use quickcheck::{Arbitrary, Gen, QuickCheck, TestResult};
+
+    /// Fixed QuickCheck seed. Several of these properties drive a real `Env`,
+    /// so each generated case is written to `test_snapshots/`; an unseeded
+    /// generator rewrote that golden output on every run (#302). Change the
+    /// seed deliberately, and commit the regenerated snapshots with it.
+    const PROPERTY_SEED: u64 = 0xA3A7A_5EED;
+
+    /// `QuickCheck` with QuickCheck's default size (100) and [`PROPERTY_SEED`].
+    fn seeded_quickcheck() -> QuickCheck {
+        QuickCheck::new().rng(Gen::from_size_and_seed(100, PROPERTY_SEED))
+    }
+
     use soroban_sdk::testutils::Address as _;
     use soroban_sdk::{Address, Env, token};
     use std::boxed::Box;
@@ -110,7 +122,7 @@
 
     #[test]
     fn test_property_fund_conservation() {
-        QuickCheck::new()
+        seeded_quickcheck()
             .tests(100)
             .quickcheck(prop_fund_conservation as fn(DisputeTestCase) -> TestResult);
     }
@@ -153,7 +165,7 @@
 
     #[test]
     fn test_property_loss_distribution() {
-        QuickCheck::new()
+        seeded_quickcheck()
             .tests(100)
             .quickcheck(prop_loss_distribution as fn(DisputeTestCase) -> TestResult);
     }
@@ -203,7 +215,7 @@
 
     #[test]
     fn test_property_monotonicity() {
-        QuickCheck::new()
+        seeded_quickcheck()
             .tests(100)
             .quickcheck(prop_monotonicity as fn(DisputeTestCase) -> TestResult);
     }
@@ -239,7 +251,7 @@
 
     #[test]
     fn test_property_non_negativity() {
-        QuickCheck::new()
+        seeded_quickcheck()
             .tests(100)
             .quickcheck(prop_non_negativity as fn(DisputeTestCase) -> TestResult);
     }
@@ -973,7 +985,7 @@
 
     #[test]
     fn test_property_valid_lifecycle_transitions() {
-        QuickCheck::new()
+        seeded_quickcheck()
             .tests(20)
             .quickcheck(prop_valid_lifecycle_transitions as fn(LifecycleScenario) -> TestResult);
     }
@@ -1044,7 +1056,7 @@
 
     #[test]
     fn test_property_rejects_invalid_lifecycle_transitions() {
-        QuickCheck::new().tests(20).quickcheck(
+        seeded_quickcheck().tests(20).quickcheck(
             prop_rejects_invalid_lifecycle_transition as fn(LifecycleScenario) -> TestResult,
         );
     }

@@ -44,7 +44,7 @@
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM"
                 },
                 {
-                  "u32": 8574
+                  "u32": 4035
                 },
                 {
                   "address": "CACMVW2KK4H5FZDFF2AUCAKQTEJMZZWJUIZF23XMRVYQBSXYLHZ6BKWN"
@@ -69,7 +69,7 @@
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
                 },
                 {
-                  "i128": "1"
+                  "i128": "82778"
                 }
               ]
             }
@@ -94,13 +94,13 @@
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
                 },
                 {
-                  "i128": "1"
+                  "i128": "82778"
                 },
                 {
-                  "u32": 4549
+                  "u32": 784
                 },
                 {
-                  "u32": 5451
+                  "u32": 9216
                 },
                 "void"
               ]
@@ -139,7 +139,7 @@
                       "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM"
                     },
                     {
-                      "i128": "1"
+                      "i128": "82778"
                     }
                   ]
                 }
@@ -210,7 +210,7 @@
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM"
                 },
                 {
-                  "u32": 1063
+                  "u32": 93
                 }
               ]
             }
@@ -483,7 +483,7 @@
                           "symbol": "amount"
                         },
                         "val": {
-                          "i128": "1"
+                          "i128": "82778"
                         }
                       },
                       {
@@ -499,7 +499,7 @@
                           "symbol": "buyer_loss_bps"
                         },
                         "val": {
-                          "u32": 4549
+                          "u32": 784
                         }
                       },
                       {
@@ -543,7 +543,7 @@
                           "symbol": "seller_loss_bps"
                         },
                         "val": {
-                          "u32": 5451
+                          "u32": 9216
                         }
                       },
                       {
@@ -791,6 +791,18 @@
                       "key": {
                         "vec": [
                           {
+                            "symbol": "AccruedFees"
+                          }
+                        ]
+                      },
+                      "val": {
+                        "i128": "2905"
+                      }
+                    },
+                    {
+                      "key": {
+                        "vec": [
+                          {
                             "symbol": "Admin"
                           }
                         ]
@@ -820,7 +832,7 @@
                         ]
                       },
                       "val": {
-                        "u32": 8574
+                        "u32": 4035
                       }
                     },
                     {
@@ -1134,7 +1146,7 @@
                       "symbol": "amount"
                     },
                     "val": {
-                      "i128": "0"
+                      "i128": "2905"
                     }
                   },
                   {
@@ -1186,7 +1198,7 @@
                       "symbol": "amount"
                     },
                     "val": {
-                      "i128": "0"
+                      "i128": "75578"
                     }
                   },
                   {
@@ -1238,7 +1250,7 @@
                       "symbol": "amount"
                     },
                     "val": {
-                      "i128": "1"
+                      "i128": "4295"
                     }
                   },
                   {

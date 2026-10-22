@@ -13,6 +13,7 @@ on:
       - "mobile/**"
       - "contracts/**"
       - "scripts/**"
+      - "schemas/**"
       - "infra/**"
       - "package-lock.json"
       - "pnpm-lock.yaml"
@@ -26,6 +27,7 @@ on:
       - "backend/**"
       - "contracts/**"
       - "scripts/**"
+      - "schemas/**"
       - "infra/**"
       - "mobile/**"
       - "backend/pnpm-lock.yaml"
@@ -42,7 +44,6 @@ jobs:
       backend: ${{ steps.filter.outputs.backend }}
       mobile: ${{ steps.filter.outputs.mobile }}
       contracts: ${{ steps.filter.outputs.contracts }}
-      events: ${{ steps.filter.outputs.events }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -65,12 +66,6 @@ jobs:
               - 'contracts/**'
               - 'scripts/check-contract-deployment-safety.sh'
               - 'scripts/check-storage-layout-gate.sh'
-            events:
-              - 'schemas/events/**'
-              - 'scripts/codegen-events.mjs'
-              - 'contracts/amana_escrow/src/lib.rs'
-              - 'contracts/amana_escrow/src/generated/**'
-              - 'backend/src/types/generated/**'
 
   # The scripts/ tree holds CI gates (quarantine registry validator, contract
   # determinism verifier, lockfile drift check, ...). A bug inside a gate
@@ -236,11 +231,14 @@ jobs:
   # nothing tying them together, so a topic rename broke settlement silently.
   # This gate fails the build if the generated clients drift from the canonical
   # schema, or if the schema drifts from what the contract actually emits.
+  #
+  # Issue #303 — runs on every CI trigger rather than behind a path filter: it
+  # needs only Node and takes seconds, and an unconditional run means a
+  # hand-edit to contracts/amana_escrow/src/generated/ (or a new contract event
+  # missing from the schema) can't slip through a filter that didn't match.
   event-schema:
     name: Event Schema Drift Gate
     runs-on: ubuntu-latest
-    needs: changes
-    if: needs.changes.outputs.events == 'true'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -253,12 +251,14 @@ jobs:
       - name: Check generated event clients are up to date
         run: node scripts/codegen-events.mjs --check
 
-      - name: Fail on uncommitted generated output
+      - name: Re-run codegen and fail on drift
         run: |
           node scripts/codegen-events.mjs
-          if ! git diff --quiet -- contracts/amana_escrow/src/generated backend/src/types/generated; then
-            echo "Generated event clients are not committed. Run:"
-            echo "  node scripts/codegen-events.mjs"
+          # --porcelain also reports untracked files, which `git diff` misses.
+          DRIFT=$(git status --porcelain -- contracts/amana_escrow/src/generated backend/src/types/generated)
+          if [ -n "$DRIFT" ]; then
+            echo "::error::Generated event clients differ from codegen output. Run: node scripts/codegen-events.mjs"
+            echo "$DRIFT"
             git diff -- contracts/amana_escrow/src/generated backend/src/types/generated
             exit 1
           fi
@@ -745,11 +745,28 @@ jobs:
         if: needs.changes.outputs.contracts == 'true'
         run: node ../../scripts/check-contract-test-coverage.mjs
 
+      # Issue #302 — `cargo test` regenerates test_snapshots/ from scratch, so
+      # the "Snapshots are current" step below sees stale (modified), orphaned
+      # (deleted) and never-committed (untracked) snapshots alike.
+      - name: Clear snapshots before regenerating them
+        if: needs.changes.outputs.contracts == 'true'
+        run: rm -rf test_snapshots
+
       # Runs the inline #[cfg(test)] modules (src/tests/*) and every
       # integration suite in tests/*.rs.
       - name: Test (unit modules + integration suites)
         if: needs.changes.outputs.contracts == 'true'
         run: cargo test --locked
+
+      - name: Snapshots are current
+        if: needs.changes.outputs.contracts == 'true'
+        run: |
+          DRIFT=$(git status --porcelain -- test_snapshots)
+          if [ -n "$DRIFT" ]; then
+            echo "::error::test_snapshots/ is out of date. Run 'rm -rf test_snapshots && cargo test' in contracts/amana_escrow and commit the result."
+            echo "$DRIFT"
+            exit 1
+          fi
 
       - name: Build WASM artifact
         if: needs.changes.outputs.contracts == 'true'

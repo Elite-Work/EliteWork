@@ -34,6 +34,29 @@ function catalogFile(keys) {
   return `export const FLAG_CATALOG = {\n${listed}\n} as const;\n`;
 }
 
+function runTypeScript(filePath) {
+  try {
+    const out = execSync(`node --experimental-strip-types "${filePath}"`, {
+      stdio: "pipe",
+      encoding: "utf8",
+    });
+    return { code: 0, stdout: out, stderr: "" };
+  } catch (err) {
+    if (err.stderr && String(err.stderr).includes("ERR_NO_TYPESCRIPT")) {
+      try {
+        const out = execSync(`npx --yes tsx "${filePath}"`, {
+          stdio: "pipe",
+          encoding: "utf8",
+        });
+        return { code: 0, stdout: out, stderr: "" };
+      } catch (inner) {
+        return { code: inner.status ?? -1, stderr: inner.stderr, stdout: inner.stdout };
+      }
+    }
+    return { code: err.status ?? -1, stderr: err.stderr, stdout: err.stdout };
+  }
+}
+
 function makeDriftRun(flagsPath) {
   const dir = join(tmpdir(), `flag-drift-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   mkdirSync(dir, { recursive: true });
@@ -57,15 +80,7 @@ function makeDriftRun(flagsPath) {
     dir,
     run(flagsContent = catalogFile(BACKEND_KNOWN_FLAGS)) {
       writeFileSync(join(dir, "flags.ts"), flagsContent, "utf8");
-      try {
-        execSync(`node --experimental-strip-types "${join(dir, "drift-check.mts")}"`, {
-          stdio: "pipe",
-          encoding: "utf8",
-        });
-        return { code: 0 };
-      } catch (err) {
-        return { code: err.status ?? -1, stderr: err.stderr, stdout: err.stdout };
-      }
+      return runTypeScript(join(dir, "drift-check.mts"));
     },
   };
 }
@@ -102,14 +117,10 @@ describe("scripts/check-flag-catalog-drift.ts", () => {
         )};`,
       );
       writeFileSync(join(dir, "drift-check.mts"), patched, "utf8");
-      try {
-        execSync(`node --experimental-strip-types "${join(dir, "drift-check.mts")}"`, {
-          stdio: "pipe",
-          encoding: "utf8",
-        });
-      } catch (err) {
+      const result = runTypeScript(join(dir, "drift-check.mts"));
+      if (result.code !== 0) {
         throw new Error(
-          `real flag catalog should be in sync (exit 0), got ${err.status ?? -1}: ${err.stderr}`,
+          `real flag catalog should be in sync (exit 0), got ${result.code}: ${result.stderr}`,
         );
       }
     });
@@ -137,15 +148,8 @@ describe("scripts/check-flag-catalog-drift.ts", () => {
       );
       writeFileSync(join(dir, "drift-check.mts"), patched, "utf8");
       writeFileSync(join(dir, "flags.ts"), "export const FLAG_CATALOG = not valid ;;\n", "utf8");
-      try {
-        execSync(`node --experimental-strip-types "${join(dir, "drift-check.mts")}"`, {
-          stdio: "pipe",
-          encoding: "utf8",
-        });
-        throw new Error("expected exit 1 for unparseable catalog");
-      } catch (err) {
-        expect(err.status).toBe(1);
-      }
+      const result = runTypeScript(join(dir, "drift-check.mts"));
+      expect(result.code).toBe(1);
     });
 
     it("fails when the frontend catalog file does not exist", () => {
@@ -158,15 +162,8 @@ describe("scripts/check-flag-catalog-drift.ts", () => {
         `const frontendFlagsPath = ${JSON.stringify(resolve(dir, "does-not-exist.ts"))};`,
       );
       writeFileSync(join(dir, "drift-check.mts"), patched, "utf8");
-      try {
-        execSync(`node --experimental-strip-types "${join(dir, "drift-check.mts")}"`, {
-          stdio: "pipe",
-          encoding: "utf8",
-        });
-        throw new Error("expected exit 1 for missing catalog");
-      } catch (err) {
-        expect(err.status).toBe(1);
-      }
+      const result = runTypeScript(join(dir, "drift-check.mts"));
+      expect(result.code).toBe(1);
     });
   });
 });

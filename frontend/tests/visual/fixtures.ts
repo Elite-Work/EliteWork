@@ -174,6 +174,21 @@ async function seedAuthenticatedWallet(
         signTransaction: async (xdr: string) => ({ signedTxXdr: `signed-${xdr}` }),
       };
       Object.assign(window, { freighter, freighterApi: freighter });
+
+      window.addEventListener('message', (event) => {
+        if (event.data?.source === 'FREIGHTER_EXTERNAL_MSG_REQUEST') {
+          window.postMessage(
+            {
+              source: 'FREIGHTER_EXTERNAL_MSG_RESPONSE',
+              messagedId: event.data.messageId,
+              isAllowed: true,
+              isConnected: true,
+              publicKey: addr,
+            },
+            '*',
+          );
+        }
+      });
     },
     { tok: token, addr: address },
   );

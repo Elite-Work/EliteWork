@@ -333,11 +333,8 @@ jobs:
         with:
           node-version: 22
 
-      - name: Install ts-node
-        run: npm install -g ts-node typescript --prefer-offline
-
       - name: Run catalog drift check
-        run: ts-node --skip-project scripts/check-flag-catalog-drift.ts
+        run: npx --yes tsx scripts/check-flag-catalog-drift.ts
 
   backend:
     name: Backend Required Gate
@@ -392,6 +389,8 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Apply database migrations
+        env:
+          DATABASE_URL: postgresql://test:test@localhost:5432/test
         run: pnpm exec prisma migrate deploy
 
       - name: Build

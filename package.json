@@ -2,7 +2,7 @@
   "scripts": {
     "codegen:events": "node scripts/codegen-events.mjs",
     "codegen:events:check": "node scripts/codegen-events.mjs --check",
-    "test:scripts": "node --experimental-vm-modules node_modules/.bin/jest --config jest.scripts.config.mjs"
+    "test:scripts": "node --experimental-vm-modules node_modules/jest/bin/jest.js --config jest.scripts.config.mjs"
   },
   "devDependencies": {
     "@types/yamljs": "^0.2.34",

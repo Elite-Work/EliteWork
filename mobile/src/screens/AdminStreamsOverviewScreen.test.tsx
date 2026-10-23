@@ -93,10 +93,13 @@ describe('AdminStreamsOverviewScreen', () => {
       pagination: { page: 1, limit: 20, total: 1, totalPages: 1 },
     });
 
-    const { findByText, findAllByText } = renderAdmin();
+    const { findByText, findAllByText, queryByText } = renderAdmin();
 
     expect(await findByText('Admin stream overview')).toBeTruthy();
-    await findByText('stream-100');
+    await waitFor(() => {
+      expect(queryByText('stream-001')).toBeNull();
+      expect(queryByText('stream-100')).toBeTruthy();
+    });
     expect((await findAllByText('Clawback')).length).toBe(1);
     expect((await findAllByText('Lock')).length).toBe(1);
     expect((await findAllByText('Terminate')).length).toBe(1);

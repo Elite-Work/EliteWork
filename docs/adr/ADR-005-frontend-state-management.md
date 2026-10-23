@@ -57,7 +57,7 @@ separate from) the zustand-based stores, and mixing security-sensitive
 session state into the same store family as UI preferences wasn't judged
 worth the consistency gain.
 
-**Data-fetching hooks (`useTradeDetail`, `useTradeDetails`, etc.) wrap
+**Data-fetching hooks (`useTradeDetail`, etc.) wrap
 individual API calls in plain React state**, independent of the zustand
 stores, for data that's fetched once per view rather than needing the
 shared, mutable, list-level state a store provides.

@@ -69,7 +69,7 @@
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
                 },
                 {
-                  "i128": "284071"
+                  "i128": "497727"
                 }
               ]
             }
@@ -94,7 +94,7 @@
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
                 },
                 {
-                  "i128": "284071"
+                  "i128": "497727"
                 },
                 {
                   "u32": 0
@@ -127,7 +127,7 @@
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
                 },
                 {
-                  "i128": "284071"
+                  "i128": "497727"
                 },
                 {
                   "u32": 10000
@@ -490,7 +490,7 @@
                           "symbol": "amount"
                         },
                         "val": {
-                          "i128": "284071"
+                          "i128": "497727"
                         }
                       },
                       {
@@ -627,7 +627,7 @@
                           "symbol": "amount"
                         },
                         "val": {
-                          "i128": "284071"
+                          "i128": "497727"
                         }
                       },
                       {
@@ -1056,7 +1056,7 @@
                       "symbol": "amount"
                     },
                     "val": {
-                      "i128": "284071"
+                      "i128": "497727"
                     }
                   },
                   {

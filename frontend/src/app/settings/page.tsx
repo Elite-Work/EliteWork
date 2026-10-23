@@ -62,10 +62,11 @@ function Toggle({
   label: string;
   description?: string;
 }) {
+  const toggleId = `toggle-${label.toLowerCase().replace(/\s+/g, '-')}`;
   return (
     <div className="flex items-center justify-between gap-4">
       <div>
-        <p className="text-sm font-medium text-text-primary">{label}</p>
+        <p id={toggleId} className="text-sm font-medium text-text-primary">{label}</p>
         {description && (
           <p className="text-xs text-text-secondary mt-0.5">{description}</p>
         )}
@@ -74,6 +75,7 @@ function Toggle({
         type="button"
         role="switch"
         aria-checked={checked}
+        aria-labelledby={toggleId}
         onClick={() => onChange(!checked)}
         className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold ${
           checked ? "bg-gold" : "bg-bg-elevated"
@@ -104,15 +106,17 @@ function SelectField({
   options: { value: string; label: string }[];
   error?: string;
 }) {
+  const selectId = `select-${label.toLowerCase().replace(/\s+/g, '-')}`;
+  const errorId = error ? `${selectId}-error` : undefined;
   return (
     <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
       <div className="flex-1">
-        <p className="text-sm font-medium text-text-primary">{label}</p>
+        <p id={selectId} className="text-sm font-medium text-text-primary">{label}</p>
         {description && (
           <p className="text-xs text-text-secondary mt-0.5">{description}</p>
         )}
         {error && (
-          <p className="text-xs text-status-danger mt-1 flex items-center gap-1">
+          <p id={errorId} className="text-xs text-status-danger mt-1 flex items-center gap-1">
             <svg className="w-3 h-3" viewBox="0 0 16 16" fill="currentColor">
               <path d="M8 1a7 7 0 100 14A7 7 0 008 1zm0 10a1 1 0 110 2 1 1 0 010-2zm0-7a1 1 0 011 1v4a1 1 0 11-2 0V5a1 1 0 011-1z" />
             </svg>
@@ -121,10 +125,12 @@ function SelectField({
         )}
       </div>
       <select
+        id={selectId}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         aria-invalid={!!error}
-        aria-describedby={error ? `${label}-error` : undefined}
+        aria-describedby={errorId}
+        aria-labelledby={selectId}
         className={`rounded-lg border ${error ? "border-status-danger" : "border-border-default"} bg-bg-input text-text-primary text-sm px-3 py-2 focus:outline-none focus:border-border-focus transition-colors sm:w-44`}
       >
         {options.map((opt) => (

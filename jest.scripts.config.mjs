@@ -5,7 +5,7 @@
  * are written as ES modules (.mjs).
  *
  * Run:
- *   node --experimental-vm-modules node_modules/.bin/jest \
+ *   node --experimental-vm-modules node_modules/jest/bin/jest.js \
  *     --config jest.scripts.config.mjs
  *
  * Or via the npm script:  pnpm test:scripts

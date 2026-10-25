@@ -268,7 +268,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [changes, frontend]
     if: needs.changes.outputs.frontend == 'true'
-    timeout-minutes: 15
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: frontend

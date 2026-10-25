@@ -1,7 +1,7 @@
 # Supported Device Matrix
 
 This document defines the minimum and recommended OS versions for Amana Mobile.
-The Detox CI jobs enforce these via `.detoxrc.js` device configuration.
+The Detox CI jobs enforce these via `.detoxrc.cjs` device configuration.
 
 ## iOS
 
@@ -10,8 +10,8 @@ The Detox CI jobs enforce these via `.detoxrc.js` device configuration.
 | iPhone (modern)  | 16.0    | 17.5       | iPhone 15 / iOS 17.5 |
 | iPad (optional)  | 16.0    | 17.5       | iPad Pro 12.9"       |
 
-**Enforcement:** The `.detoxrc.js` `simulator` device config pins `iPhone 15 / iOS 17.5`.
-To test a new iOS major version, update both `.detoxrc.js` and this table in the same PR.
+**Enforcement:** The `.detoxrc.cjs` `simulator` device config pins `iPhone 15 / iOS 17.5`.
+To test a new iOS major version, update both `.detoxrc.cjs` and this table in the same PR.
 
 ## Android
 
@@ -21,7 +21,7 @@ To test a new iOS major version, update both `.detoxrc.js` and this table in the
 | Phone (low-end, min)   | 31 (12) | 31 (12)    | Pixel 3a API 31     |
 | Tablet                 | 31 (12) | 34 (14)    | —                   |
 
-**Enforcement:** The `.detoxrc.js` `emulator` device config pins `Pixel_6_API_34` (AVD name),
+**Enforcement:** The `.detoxrc.cjs` `emulator` device config pins `Pixel_6_API_34` (AVD name),
 and the `emulatorLowEnd` device config pins `Pixel_3a_API_31` — a representative low-end
 device at the *minimum* supported API, run with a constrained memory allocation
 (`-memory 2048`) to approximate real low-end hardware rather than the CI runner's default.
@@ -35,7 +35,7 @@ Both AVDs must exist on the CI runner; the CI workflow creates them via `avdmana
 
 ## Adding a new device configuration
 
-1. Add the device entry to the `devices` section of `.detoxrc.js`.
+1. Add the device entry to the `devices` section of `.detoxrc.cjs`.
 2. Add a corresponding configuration under `configurations`.
 3. Update this table.
 4. Add the new CI job step in `.github/workflows/mobile-e2e-nightly.yml` under the correct matrix entry.

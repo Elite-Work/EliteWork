@@ -11,7 +11,7 @@
  *   7. Test validation and error handling
  *
  * This suite runs against the Expo dev-client build on both Android emulator
- * and iOS simulator (see .detoxrc.js for device configs).
+ * and iOS simulator (see .detoxrc.cjs for device configs).
  *
  * The mock server (e2e/helpers/mockServer.ts) must be running before the
  * test; it is started by globalSetup via jest.config.js.

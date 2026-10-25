@@ -167,7 +167,7 @@ jobs:
   # Runs the same smoke suite against a low-end device from
   # mobile/docs/DEVICE_MATRIX.md's supported matrix (minimum API 31, on a
   # low-RAM/low-CPU profile) instead of the default Pixel 6 API 34 used
-  # above — see mobile/.detoxrc.js's `emulatorLowEnd` device.
+  # above — see mobile/.detoxrc.cjs's `emulatorLowEnd` device.
   mobile-e2e-android-lowend-nightly:
     name: Nightly Smoke — Android (low-end device)
     runs-on: ubuntu-latest

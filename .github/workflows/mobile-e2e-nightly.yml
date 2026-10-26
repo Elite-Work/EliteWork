@@ -156,6 +156,16 @@ jobs:
         env:
           CI: true
 
+      - name: Align Android Kotlin compiler
+        run: |
+          sed -i "s/kotlinVersion = findProperty('android.kotlinVersion') ?: '1.9.24'/kotlinVersion = findProperty('android.kotlinVersion') ?: '1.9.25'/" android/build.gradle
+          if grep -q '^android.kotlinVersion=' android/gradle.properties; then
+            sed -i 's/^android.kotlinVersion=.*/android.kotlinVersion=1.9.25/' android/gradle.properties
+          else
+            echo 'android.kotlinVersion=1.9.25' >> android/gradle.properties
+          fi
+          grep -n 'kotlinVersion' android/build.gradle android/gradle.properties
+
       - name: Build Android APK (debug)
         run: |
           cd android && ./gradlew assembleDebug assembleAndroidTest -DtestBuildType=debug

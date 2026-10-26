@@ -18,6 +18,7 @@ const config: ExpoConfig = {
   userInterfaceStyle: 'light',
   newArchEnabled: true,
   entryPoint: './src/index.tsx',
+  plugins: ['./plugins/with-kotlin-version.cjs'],
   ios: {
     supportsTabletMode: true,
     bundleIdentifier: 'com.amana.mobile',

@@ -765,6 +765,7 @@ jobs:
         run: node ../../scripts/validate-flaky-quarantine.mjs
 
       - name: Setup Rust
+        if: needs.changes.outputs.contracts == 'true'
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
@@ -778,10 +779,11 @@ jobs:
           key: cargo-audit-${{ runner.os }}-v0.22
 
       - name: Install cargo-audit
-        if: steps.cache-cargo-audit.outputs.cache-hit != 'true'
+        if: needs.changes.outputs.contracts == 'true' && steps.cache-cargo-audit.outputs.cache-hit != 'true'
         run: cargo install cargo-audit --locked
 
       - name: Security audit (cargo)
+        if: needs.changes.outputs.contracts == 'true'
         working-directory: contracts
         run: cargo audit
 

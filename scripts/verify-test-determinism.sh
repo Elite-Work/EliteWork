@@ -64,7 +64,7 @@ for i in $(seq 1 "$REPEAT_COUNT"); do
   else
     echo " ❌"
     # The log directory is removed on exit, so surface the failure now.
-    grep -E '^test .* FAILED$|panicked at|^error' "$RUN_LOG" | head -20 | sed 's/^/      /'
+    grep -E '^test .* FAILED$|panicked at|^error' "$RUN_LOG" | head -20 | sed 's/^/      /' || true
     FAIL=$((FAIL + 1))
     continue
   fi

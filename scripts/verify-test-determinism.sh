@@ -30,6 +30,13 @@ SNAPSHOT_DIR="$CONTRACT_DIR/test_snapshots"
 LOG_DIR=$(mktemp -d)
 trap 'rm -rf "$LOG_DIR"' EXIT
 
+if [[ ! -d "$CONTRACT_DIR" ]]; then
+  echo "❌ Determinism verification FAILED."
+  echo ""
+  echo "  Contract directory not found: $CONTRACT_DIR"
+  exit 1
+fi
+
 # Strip per-run timing so only the outcome counts are compared.
 summary() {
   grep '^test result:' "$1" | sed -E 's/; finished in [0-9.]+s$//' | sort

@@ -71,7 +71,8 @@
   },
   "pnpm": {
     "onlyBuiltDependencies": [
-      "@pact-foundation/pact-core"
+      "@pact-foundation/pact-core",
+      "detox"
     ]
   }
 }

@@ -45,15 +45,34 @@ jobs:
         env:
           CI: true
 
+      - name: Select available iOS simulator
+        run: |
+          set -euo pipefail
+          DEVICE=$(xcrun simctl list devices available -j | jq -r '
+            .devices | to_entries[] | .value[]
+            | select(.name | startswith("iPhone"))
+            | "\(.name)|\(.osVersion)|\(.udid)"
+          ' | head -1)
+          if [[ -z "$DEVICE" ]]; then
+            echo "No available iPhone simulator found" >&2
+            exit 1
+          fi
+          IFS='|' read -r DEVICE_NAME DEVICE_OS DEVICE_UDID <<< "$DEVICE"
+          echo "Using iOS simulator: $DEVICE_NAME ($DEVICE_OS, $DEVICE_UDID)"
+          echo "DETOX_IOS_DEVICE_TYPE=$DEVICE_NAME" >> "$GITHUB_ENV"
+          echo "DETOX_IOS_DEVICE_OS=iOS $DEVICE_OS" >> "$GITHUB_ENV"
+          echo "SIMULATOR_UDID=$DEVICE_UDID" >> "$GITHUB_ENV"
+
       - name: Build iOS app for simulator
         run: |
+          set -o pipefail
           xcodebuild \
             -workspace ios/Amana.xcworkspace \
             -scheme Amana \
             -configuration Debug \
             -sdk iphonesimulator \
             -derivedDataPath ios/build \
-            -destination "platform=iOS Simulator,name=iPhone 15,OS=17.5" \
+            -destination "id=$SIMULATOR_UDID" \
             build \
             | xcpretty --color
         env:
@@ -61,8 +80,7 @@ jobs:
 
       - name: Boot iOS simulator
         run: |
-          UDID=$(xcrun simctl list devices available | grep "iPhone 15" | grep "17.5" | head -1 | grep -E -o '\([-A-F0-9]+\)' | tr -d '()')
-          xcrun simctl boot "$UDID" || true
+          xcrun simctl boot "$SIMULATOR_UDID" || true
 
       - name: Run Detox smoke tests (iOS)
         run: pnpm test:e2e:ios

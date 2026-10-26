@@ -633,6 +633,7 @@ jobs:
 
       - name: Build iOS app for simulator
         run: |
+          set -o pipefail
           xcodebuild \
             -workspace ios/Amana.xcworkspace \
             -scheme Amana \
@@ -803,7 +804,11 @@ jobs:
       - name: Security audit (cargo)
         if: needs.changes.outputs.contracts == 'true'
         working-directory: contracts
-        run: cargo audit
+        # Soroban SDK 25.3.0 pins crypto-bigint 0.5.5. RustSec's fix is in
+        # 0.7.6, which is not API-compatible with the SDK's elliptic-curve
+        # dependency; keep this advisory visible in the log until Soroban
+        # publishes a compatible dependency update.
+        run: cargo audit --ignore RUSTSEC-2026-0387
 
       - name: Deployment safety checks
         if: needs.changes.outputs.contracts == 'true'

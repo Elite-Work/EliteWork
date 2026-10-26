@@ -591,7 +591,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: mobile/ios
-          key: mobile-expo-prebuild-ios-${{ hashFiles('mobile/app.config.ts', 'mobile/app.json', 'mobile/package.json') }}
+          key: mobile-expo-prebuild-ios-${{ hashFiles('mobile/app.json', 'mobile/app.config.ts', 'mobile/plugins/**', 'mobile/package.json') }}
 
       - name: Expo prebuild (iOS)
         run: pnpm expo prebuild --platform ios --non-interactive
@@ -725,7 +725,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: mobile/android
-          key: mobile-expo-prebuild-android-${{ hashFiles('mobile/app.config.ts', 'mobile/app.json', 'mobile/package.json') }}
+          key: mobile-expo-prebuild-android-${{ hashFiles('mobile/app.json', 'mobile/app.config.ts', 'mobile/plugins/**', 'mobile/package.json') }}
           restore-keys: mobile-expo-prebuild-android-
 
       - name: Expo prebuild (Android)

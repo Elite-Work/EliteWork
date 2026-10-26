@@ -557,17 +557,52 @@ jobs:
         with:
           xcode-version: latest-stable
 
+      # Key includes app.config.ts: the dynamic config is what prebuild
+      # consumes (app.json alone misses it) and a stale cached ios/ tree from
+      # an older config corrupts the non-clean prebuild sync.
       - name: Cache Expo prebuild
         uses: actions/cache@v4
         with:
           path: mobile/ios
-          key: mobile-expo-prebuild-ios-${{ hashFiles('mobile/app.json', 'mobile/package.json') }}
-          restore-keys: mobile-expo-prebuild-ios-
+          key: mobile-expo-prebuild-ios-${{ hashFiles('mobile/app.config.ts', 'mobile/app.json', 'mobile/package.json') }}
 
       - name: Expo prebuild (iOS)
         run: pnpm expo prebuild --platform ios --non-interactive
         env:
           CI: true
+
+      # Device names and simulator runtimes rotate with every Xcode release
+      # and are not pinned on the runner image, so resolve whatever iPhone the
+      # runner actually has instead of hardcoding "iPhone 15, OS=17.5".
+      - name: Resolve available iOS simulator
+        run: |
+          RESOLVED=$(xcrun simctl list devices available --json | node -e '
+            let raw = "";
+            process.stdin.on("data", (c) => (raw += c)).on("end", () => {
+              const data = JSON.parse(raw);
+              const runtimes = Object.keys(data.devices)
+                .filter((k) => k.startsWith("com.apple.CoreSimulator.SimRuntime.iOS-"))
+                .sort();
+              for (let i = runtimes.length - 1; i >= 0; i--) {
+                const os = "iOS " + runtimes[i].replace("com.apple.CoreSimulator.SimRuntime.iOS-", "").replace(/-/g, ".");
+                for (const dev of data.devices[runtimes[i]]) {
+                  if (dev.name.startsWith("iPhone")) {
+                    console.log(JSON.stringify({ name: dev.name, os, udid: dev.udid }));
+                    return;
+                  }
+                }
+              }
+              console.error("No available iPhone simulator found");
+              process.exit(1);
+            });
+          ')
+          NAME=$(node -e "console.log(JSON.parse(process.argv[1]).name)" "$RESOLVED")
+          OS=$(node -e "console.log(JSON.parse(process.argv[1]).os)" "$RESOLVED")
+          UDID=$(node -e "console.log(JSON.parse(process.argv[1]).udid)" "$RESOLVED")
+          echo "IOS_SIM_NAME=$NAME" >> "$GITHUB_ENV"
+          echo "IOS_SIM_OS=$OS" >> "$GITHUB_ENV"
+          echo "IOS_SIM_UDID=$UDID" >> "$GITHUB_ENV"
+          echo "Using iPhone simulator: $NAME ($OS, $UDID)"
 
       - name: Build iOS app for simulator
         run: |
@@ -577,7 +612,7 @@ jobs:
             -configuration Debug \
             -sdk iphonesimulator \
             -derivedDataPath ios/build \
-            -destination "platform=iOS Simulator,name=iPhone 15,OS=17.5" \
+            -destination "id=$IOS_SIM_UDID" \
             build \
             | xcpretty --color
         env:
@@ -585,14 +620,15 @@ jobs:
 
       - name: Boot iOS simulator
         run: |
-          UDID=$(xcrun simctl list devices available | grep "iPhone 15" | grep "17.5" | head -1 | grep -E -o '\([-A-F0-9]+\)' | tr -d '()')
-          xcrun simctl boot "$UDID" || true
-          echo "SIMULATOR_UDID=$UDID" >> $GITHUB_ENV
+          xcrun simctl boot "$IOS_SIM_UDID" || true
+          echo "SIMULATOR_UDID=$IOS_SIM_UDID" >> $GITHUB_ENV
 
       - name: Run Detox smoke tests (iOS)
         run: pnpm test:e2e:ios
         env:
           CI: true
+          DETOX_IOS_DEVICE_NAME: ${{ env.IOS_SIM_NAME }}
+          DETOX_IOS_DEVICE_OS: ${{ env.IOS_SIM_OS }}
 
       - name: Upload Detox artifacts on failure
         if: failure()
@@ -635,8 +671,11 @@ jobs:
           distribution: temurin
           java-version: 17
 
+      # v3 installs the removed `tools` SDK package, which now fails with
+      # "Failed to find package 'tools'" on cmdline-tools >= 12 (issue #537);
+      # v4 installs only the modern cmdline-tools.
       - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
 
       - name: Cache AVD
         uses: actions/cache@v4

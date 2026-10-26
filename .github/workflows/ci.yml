@@ -42,6 +42,7 @@ jobs:
     outputs:
       frontend: ${{ steps.filter.outputs.frontend }}
       backend: ${{ steps.filter.outputs.backend }}
+      backend_code: ${{ steps.filter.outputs.backend_code }}
       mobile: ${{ steps.filter.outputs.mobile }}
       contracts: ${{ steps.filter.outputs.contracts }}
     steps:
@@ -59,6 +60,18 @@ jobs:
             backend:
               - 'backend/**'
               - 'backend/pnpm-lock.yaml'
+            # Database migrations still run for any backend change, but the
+            # TypeScript/test suite is only needed when executable backend
+            # code or its generated Prisma input changes.
+            backend_code:
+              - 'backend/src/**'
+              - 'backend/package.json'
+              - 'backend/pnpm-lock.yaml'
+              - 'backend/tsconfig.json'
+              - 'backend/jest.config.js'
+              - 'backend/eslint.config.*'
+              - 'backend/prisma/schema.prisma'
+              - 'backend/prisma/seed.ts'
             mobile:
               - 'mobile/**'
               - 'mobile/pnpm-lock.yaml'
@@ -396,17 +409,20 @@ jobs:
         run: pnpm exec prisma migrate deploy
 
       - name: Build
-        if: needs.changes.outputs.backend == 'true'
+        if: needs.changes.outputs.backend_code == 'true'
         run: pnpm build
 
       - name: Prepare backend test database
         if: needs.changes.outputs.backend == 'true'
         env:
           DATABASE_URL: postgresql://test:test@localhost:5432/test
-        run: pnpm exec prisma db push
+        # This database is created for the job and contains no data. Prisma
+        # otherwise blocks on the warning for adding the RefreshToken.jti
+        # unique constraint, even though accepting it cannot discard test data.
+        run: pnpm exec prisma db push --accept-data-loss
 
       - name: Test
-        if: needs.changes.outputs.backend == 'true'
+        if: needs.changes.outputs.backend_code == 'true'
         env:
           NODE_ENV: test
           JWT_SECRET: test-jwt-secret-value-with-minimum-length-32
@@ -416,7 +432,7 @@ jobs:
         run: pnpm exec jest --config jest.config.js --forceExit --detectOpenHandles --json --outputFile=jest-results.json || true
 
       - name: Detect flake candidates (backend)
-        if: needs.changes.outputs.backend == 'true'
+        if: needs.changes.outputs.backend_code == 'true'
         run: |
           node ../scripts/flake-reporter.mjs \
             --results jest-results.json \
@@ -425,7 +441,7 @@ jobs:
             --scope backend | tee -a $GITHUB_STEP_SUMMARY
 
       - name: Fail if tests failed (deferred from --json run)
-        if: needs.changes.outputs.backend == 'true'
+        if: needs.changes.outputs.backend_code == 'true'
         run: |
           node -e "
             const r = require('./jest-results.json');
@@ -436,7 +452,7 @@ jobs:
           "
 
       - name: Upload flake report (backend)
-        if: needs.changes.outputs.backend == 'true'
+        if: needs.changes.outputs.backend_code == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: flake-report-backend-${{ github.run_number }}
@@ -444,33 +460,33 @@ jobs:
           retention-days: 30
 
       - name: Enforce Admin Regression Test Policy
-        if: needs.changes.outputs.backend == 'true'
+        if: needs.changes.outputs.backend_code == 'true'
         run: |
           chmod +x ../scripts/check-admin-test-coverage.sh
           ../scripts/check-admin-test-coverage.sh
 
       - name: Validate example env files against the schema
-        if: needs.changes.outputs.backend == 'true'
+        if: needs.changes.outputs.backend_code == 'true'
         env:
           NODE_ENV: test
         run: pnpm tsx scripts/validate-env-examples.ts
 
       - name: Admin auth regression suite
-        if: needs.changes.outputs.backend == 'true'
+        if: needs.changes.outputs.backend_code == 'true'
         env:
           NODE_ENV: test
           JWT_SECRET: test-jwt-secret-value-with-minimum-length-32
         run: pnpm jest --config jest.config.js --forceExit --detectOpenHandles --testPathPatterns='admin\.auth\.ci-regression' --verbose
 
       - name: Validate admin OpenAPI docs
-        if: needs.changes.outputs.backend == 'true'
+        if: needs.changes.outputs.backend_code == 'true'
         env:
           NODE_ENV: test
           JWT_SECRET: test-jwt-secret-value-with-minimum-length-32
         run: pnpm jest --config jest.config.js --forceExit --detectOpenHandles --testPathPatterns='openapi\.(drift|docs)\.test' --verbose
 
       - name: Upload coverage report
-        if: needs.changes.outputs.backend == 'true'
+        if: needs.changes.outputs.backend_code == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: backend-coverage

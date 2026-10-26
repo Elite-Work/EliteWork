@@ -7,7 +7,7 @@ import reactNative from 'eslint-plugin-react-native';
 export default [
   eslint.configs.recommended,
   {
-    files: ['**/*.{ts,tsx,js,jsx}'],
+    files: ['**/*.{ts,tsx,js,jsx,cjs}'],
     languageOptions: {
       parser: tsparser,
       parserOptions: {

@@ -543,7 +543,7 @@ jobs:
 
   mobile-e2e-ios:
     name: Mobile E2E Smoke — iOS
-    runs-on: macos-latest
+    runs-on: macos-15
     needs: [changes, mobile]
     if: needs.changes.outputs.mobile == 'true'
     timeout-minutes: 25
@@ -571,7 +571,7 @@ jobs:
       - name: Setup Xcode
         uses: maxim-lobanov/setup-xcode@v1
         with:
-          xcode-version: latest-stable
+          xcode-version: '16.4'
 
       # macOS 26 runner images no longer ship two tools this job needs:
       # xcpretty (the release gem set was dropped from the image) and
@@ -603,6 +603,7 @@ jobs:
       # runner actually has instead of hardcoding "iPhone 15, OS=17.5".
       - name: Resolve available iOS simulator
         run: |
+          set -euo pipefail
           RESOLVED=$(xcrun simctl list devices available --json | node -e '
             let raw = "";
             process.stdin.on("data", (c) => (raw += c)).on("end", () => {
@@ -745,7 +746,7 @@ jobs:
 
       - name: Build Android APK (debug)
         run: |
-          cd android && ./gradlew assembleDebug assembleAndroidTest -DtestBuildType=debug
+          cd android && ./gradlew -Pandroid.kotlinVersion=1.9.25 assembleDebug assembleAndroidTest -DtestBuildType=debug
         env:
           CI: true
 

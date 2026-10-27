@@ -66,7 +66,6 @@ module.exports = {
         // CI overrides these to whatever simulator the macOS runner image
         // currently ships; device names rotate with every Xcode release.
         type: process.env.DETOX_IOS_DEVICE_NAME || 'iPhone 15',
-        type: process.env.DETOX_IOS_DEVICE_NAME || 'iPhone 15',
         os: process.env.DETOX_IOS_DEVICE_OS || 'iOS 17.5',
       },
     },

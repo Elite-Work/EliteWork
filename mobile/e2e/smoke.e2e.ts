@@ -17,6 +17,7 @@
 
 import { device, element, by, expect as detoxExpect, waitFor } from 'detox';
 import { mockAuthLaunchArgs, MOCK_WALLET_ADDRESS } from './helpers/auth';
+import { startMockServer, stopMockServer } from './helpers/mockServer';
 
 const TIMEOUT = 15_000; // ms — generous for emulator cold-start
 
@@ -25,6 +26,8 @@ const TIMEOUT = 15_000; // ms — generous for emulator cold-start
 // ---------------------------------------------------------------------------
 
 beforeAll(async () => {
+  await startMockServer();
+
   // Launch with mock auth args so the app reads a pre-seeded JWT from
   // launchArgs and skips the real wallet-connect flow.
   await device.launchApp({
@@ -48,6 +51,7 @@ afterEach(async () => {
 
 afterAll(async () => {
   await device.terminateApp();
+  await stopMockServer();
 });
 
 // ---------------------------------------------------------------------------

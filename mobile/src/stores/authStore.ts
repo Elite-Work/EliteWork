@@ -1,9 +1,25 @@
 import { create } from 'zustand';
 import * as SecureStore from 'expo-secure-store';
+import { LaunchArguments } from 'react-native-launch-arguments';
 
 import { setAuthToken } from '../api/client';
 
 const REMEMBERED_WALLET_KEY = 'amana_remembered_wallet';
+
+interface E2ELaunchArguments {
+  E2E_MODE?: string;
+  E2E_MOCK_JWT?: string;
+  E2E_MOCK_WALLET_ADDRESS?: string;
+}
+
+function getE2ELaunchArguments(): E2ELaunchArguments {
+  try {
+    return LaunchArguments.value<E2ELaunchArguments>();
+  } catch {
+    // The native bridge is unavailable in unit-test environments.
+    return {};
+  }
+}
 
 export type AuthRole = 'admin' | 'user' | null;
 
@@ -65,6 +81,28 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   getToken: async () => {
     try {
+      const launchArgs = getE2ELaunchArguments();
+
+      // Detox launch arguments are the source of truth for E2E auth. Clear
+      // persisted state when a test explicitly launches unauthenticated so
+      // tests remain isolated across app reloads.
+      if (launchArgs.E2E_MODE === 'true') {
+        const mockToken = launchArgs.E2E_MOCK_JWT;
+        const walletAddress = launchArgs.E2E_MOCK_WALLET_ADDRESS ?? null;
+
+        if (mockToken) {
+          await SecureStore.setItemAsync('amana_token', mockToken);
+          setAuthToken(mockToken);
+          set({ token: mockToken, walletAddress });
+          return mockToken;
+        }
+
+        await SecureStore.deleteItemAsync('amana_token');
+        setAuthToken(null);
+        set({ token: null, walletAddress: null, role: null });
+        return null;
+      }
+
       const token = await SecureStore.getItemAsync('amana_token');
       setAuthToken(token);
       set({ token });

@@ -1,8 +1,26 @@
 import axios from 'axios';
+import { LaunchArguments } from 'react-native-launch-arguments';
 
 import { adminErrorResponseErrorInterceptor } from './errorInterceptor';
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:4000';
+interface E2ELaunchArguments {
+  E2E_API_BASE_URL?: string;
+}
+
+function getApiUrl(): string {
+  try {
+    const launchArgs = LaunchArguments.value<E2ELaunchArguments>();
+    return (
+      launchArgs.E2E_API_BASE_URL ||
+      process.env.EXPO_PUBLIC_API_URL ||
+      'http://localhost:4000'
+    );
+  } catch {
+    return process.env.EXPO_PUBLIC_API_URL || 'http://localhost:4000';
+  }
+}
+
+const API_URL = getApiUrl();
 
 /**
  * Version prefix prepended to consumer-facing API paths.

@@ -44,6 +44,7 @@ subprojects { subproject ->
     subproject.android {
       packagingOptions {
         jniLibs.pickFirsts.add('**/libc++_shared.so')
+        jniLibs.pickFirsts.add('**/libfbjni.so')
       }
     }
   }

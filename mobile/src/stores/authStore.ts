@@ -7,7 +7,7 @@ import { setAuthToken } from '../api/client';
 const REMEMBERED_WALLET_KEY = 'amana_remembered_wallet';
 
 interface E2ELaunchArguments {
-  E2E_MODE?: string;
+  E2E_MODE?: string | boolean;
   E2E_MOCK_JWT?: string;
   E2E_MOCK_WALLET_ADDRESS?: string;
 }
@@ -86,7 +86,9 @@ export const useAuthStore = create<AuthState>((set) => ({
       // Detox launch arguments are the source of truth for E2E auth. Clear
       // persisted state when a test explicitly launches unauthenticated so
       // tests remain isolated across app reloads.
-      if (launchArgs.E2E_MODE === 'true') {
+      // react-native-launch-arguments parses JSON-looking values, so the
+      // string passed by Detox (`true`) is exposed as the boolean `true`.
+      if (launchArgs.E2E_MODE === true || launchArgs.E2E_MODE === 'true') {
         const mockToken = launchArgs.E2E_MOCK_JWT;
         const walletAddress = launchArgs.E2E_MOCK_WALLET_ADDRESS ?? null;
 

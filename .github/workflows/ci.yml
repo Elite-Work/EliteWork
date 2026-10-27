@@ -743,8 +743,12 @@ jobs:
             echo 'android.kotlinVersion=1.9.25' >> android/gradle.properties
           fi
           sed -i 's/^kotlin = "1.9.24"$/kotlin = "1.9.25"/' node_modules/react-native/gradle/libs.versions.toml
+          REACT_NATIVE_GRADLE_PLUGIN_PACKAGE=$(node --print "require.resolve('@react-native/gradle-plugin/package.json', { paths: [require.resolve('react-native/package.json')] })")
+          REACT_NATIVE_GRADLE_PLUGIN_CATALOG="${REACT_NATIVE_GRADLE_PLUGIN_PACKAGE%/package.json}/gradle/libs.versions.toml"
+          sed -i 's/^kotlin = "1.9.24"$/kotlin = "1.9.25"/' "$REACT_NATIVE_GRADLE_PLUGIN_CATALOG"
           grep -n 'kotlinVersion' android/build.gradle android/gradle.properties
           grep -n '^kotlin =' node_modules/react-native/gradle/libs.versions.toml
+          grep -n '^kotlin =' "$REACT_NATIVE_GRADLE_PLUGIN_CATALOG"
 
       - name: Build Android APK (debug)
         run: |

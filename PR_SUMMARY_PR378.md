@@ -17,12 +17,16 @@ References: #280 (HomeScreen tests), #279 (EvidenceCaptureScreen tests).
    - **Backend Gate**: Skips `pnpm install` / `prisma migrate deploy` when no backend files changed.
    - **Scripts Tests & Determinism**: Fixed `verify-test-determinism.sh` to safely handle empty grep matches without aborting pipeline.
 4. **Setup-level Mobile E2E repairs**:
-   - **Android E2E Smoke**: Updated to `setup-android@v4` (resolving issue android-actions#537 where `@v3` attempted to install obsolete `tools` package).
+   - **Android E2E Smoke**:
+     - Updated to `setup-android@v4` (resolving issue android-actions#537 where `@v3` attempted to install obsolete `tools` package).
+     - Enabled KVM group permissions on Ubuntu runner for hardware-accelerated emulation.
+     - Removed broken manual `avdmanager create avd` step that failed on missing system-image packages; delegated AVD creation and system-image downloading to `reactivecircus/android-emulator-runner@v2` with `force-avd-creation: false` and `-no-snapshot-save`.
+     - Added `mobile/app.config.ts` to Android prebuild cache key to prevent stale cache corruption.
    - **iOS E2E Smoke**:
      - Corrected `mobile/app.config.ts` to export inline `ExpoConfig` without unexported `getDefaultConfig`.
      - Committed placeholder mobile assets referenced in configuration (`mobile/assets/README.md`).
      - Dynamically resolved available iOS simulator runtime and UDID at runtime.
-     - Installed required iOS test tooling (`xcpretty` and `applesimutils`) on macOS runners.
+     - Installed required iOS test tooling (`xcpretty` and `applesimutils`) with explicit Homebrew tap trust (`brew trust --formula wix/brew/applesimutils`).
 
 ## Verification
 

@@ -560,10 +560,12 @@ jobs:
       # macOS 26 runner images no longer ship two tools this job needs:
       # xcpretty (the release gem set was dropped from the image) and
       # applesimutils (required by Detox for iOS permission handling).
+      # Homebrew enforces tap trust for third-party taps.
       - name: Install iOS test tooling
         run: |
           gem install xcpretty --no-document
           brew tap wix/brew
+          brew trust --formula wix/brew/applesimutils || brew trust wix/brew
           brew install applesimutils
 
       # Key includes app.config.ts: the dynamic config is what prebuild
@@ -686,6 +688,13 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v4
 
+      # Hardware-accelerated emulation requires KVM access on Linux runners
+      - name: Enable KVM group perms
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
       - name: Cache AVD
         uses: actions/cache@v4
         id: avd-cache
@@ -695,21 +704,11 @@ jobs:
             ~/.android/adb*
           key: avd-Pixel_6_API_34-${{ runner.os }}
 
-      - name: Create AVD (if not cached)
-        if: steps.avd-cache.outputs.cache-hit != 'true'
-        run: |
-          echo "no" | avdmanager create avd \
-            --force \
-            --name Pixel_6_API_34 \
-            --abi google_apis/x86_64 \
-            --package "system-images;android-34;google_apis;x86_64" \
-            --device "pixel_6"
-
       - name: Cache Expo prebuild
         uses: actions/cache@v4
         with:
           path: mobile/android
-          key: mobile-expo-prebuild-android-${{ hashFiles('mobile/app.json', 'mobile/package.json') }}
+          key: mobile-expo-prebuild-android-${{ hashFiles('mobile/app.config.ts', 'mobile/app.json', 'mobile/package.json') }}
           restore-keys: mobile-expo-prebuild-android-
 
       - name: Expo prebuild (Android)
@@ -731,6 +730,9 @@ jobs:
           arch: x86_64
           profile: pixel_6
           avd-name: Pixel_6_API_34
+          force-avd-creation: false
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: true
           script: cd mobile && pnpm test:e2e:android
         env:
           CI: true

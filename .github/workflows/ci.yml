@@ -742,7 +742,9 @@ jobs:
           else
             echo 'android.kotlinVersion=1.9.25' >> android/gradle.properties
           fi
+          sed -i 's/^kotlin = "1.9.24"$/kotlin = "1.9.25"/' node_modules/react-native/gradle/libs.versions.toml
           grep -n 'kotlinVersion' android/build.gradle android/gradle.properties
+          grep -n '^kotlin =' node_modules/react-native/gradle/libs.versions.toml
 
       - name: Build Android APK (debug)
         run: |

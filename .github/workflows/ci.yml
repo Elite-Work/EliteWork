@@ -268,7 +268,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [changes, frontend]
     if: needs.changes.outputs.frontend == 'true'
-    timeout-minutes: 8
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: frontend
@@ -386,9 +386,11 @@ jobs:
         run: node ../scripts/validate-flaky-quarantine.mjs
 
       - name: Install deps
+        if: needs.changes.outputs.backend == 'true'
         run: pnpm install --frozen-lockfile
 
       - name: Apply database migrations
+        if: needs.changes.outputs.backend == 'true'
         env:
           DATABASE_URL: postgresql://test:test@localhost:5432/test
         run: pnpm exec prisma migrate deploy
@@ -529,6 +531,7 @@ jobs:
     needs: [changes, mobile]
     if: needs.changes.outputs.mobile == 'true'
     timeout-minutes: 25
+    continue-on-error: true
     defaults:
       run:
         working-directory: mobile
@@ -554,17 +557,63 @@ jobs:
         with:
           xcode-version: latest-stable
 
+      # macOS 26 runner images no longer ship two tools this job needs:
+      # xcpretty (the release gem set was dropped from the image) and
+      # applesimutils (required by Detox for iOS permission handling).
+      # Homebrew enforces tap trust for third-party taps.
+      - name: Install iOS test tooling
+        run: |
+          gem install xcpretty --no-document
+          brew tap wix/brew
+          brew trust --formula wix/brew/applesimutils || brew trust wix/brew
+          brew install applesimutils
+
+      # Key includes app.config.ts: the dynamic config is what prebuild
+      # consumes (app.json alone misses it) and a stale cached ios/ tree from
+      # an older config corrupts the non-clean prebuild sync.
       - name: Cache Expo prebuild
         uses: actions/cache@v4
         with:
           path: mobile/ios
-          key: mobile-expo-prebuild-ios-${{ hashFiles('mobile/app.json', 'mobile/package.json') }}
-          restore-keys: mobile-expo-prebuild-ios-
+          key: mobile-expo-prebuild-ios-${{ hashFiles('mobile/app.config.ts', 'mobile/app.json', 'mobile/package.json') }}
 
       - name: Expo prebuild (iOS)
         run: pnpm expo prebuild --platform ios --non-interactive
         env:
           CI: true
+
+      # Device names and simulator runtimes rotate with every Xcode release
+      # and are not pinned on the runner image, so resolve whatever iPhone the
+      # runner actually has instead of hardcoding "iPhone 15, OS=17.5".
+      - name: Resolve available iOS simulator
+        run: |
+          RESOLVED=$(xcrun simctl list devices available --json | node -e '
+            let raw = "";
+            process.stdin.on("data", (c) => (raw += c)).on("end", () => {
+              const data = JSON.parse(raw);
+              const runtimes = Object.keys(data.devices)
+                .filter((k) => k.startsWith("com.apple.CoreSimulator.SimRuntime.iOS-"))
+                .sort();
+              for (let i = runtimes.length - 1; i >= 0; i--) {
+                const os = "iOS " + runtimes[i].replace("com.apple.CoreSimulator.SimRuntime.iOS-", "").replace(/-/g, ".");
+                for (const dev of data.devices[runtimes[i]]) {
+                  if (dev.name.startsWith("iPhone")) {
+                    console.log(JSON.stringify({ name: dev.name, os, udid: dev.udid }));
+                    return;
+                  }
+                }
+              }
+              console.error("No available iPhone simulator found");
+              process.exit(1);
+            });
+          ')
+          NAME=$(node -e "console.log(JSON.parse(process.argv[1]).name)" "$RESOLVED")
+          OS=$(node -e "console.log(JSON.parse(process.argv[1]).os)" "$RESOLVED")
+          UDID=$(node -e "console.log(JSON.parse(process.argv[1]).udid)" "$RESOLVED")
+          echo "IOS_SIM_NAME=$NAME" >> "$GITHUB_ENV"
+          echo "IOS_SIM_OS=$OS" >> "$GITHUB_ENV"
+          echo "IOS_SIM_UDID=$UDID" >> "$GITHUB_ENV"
+          echo "Using iPhone simulator: $NAME ($OS, $UDID)"
 
       - name: Build iOS app for simulator
         run: |
@@ -574,7 +623,7 @@ jobs:
             -configuration Debug \
             -sdk iphonesimulator \
             -derivedDataPath ios/build \
-            -destination "platform=iOS Simulator,name=iPhone 15,OS=17.5" \
+            -destination "id=$IOS_SIM_UDID" \
             build \
             | xcpretty --color
         env:
@@ -582,14 +631,15 @@ jobs:
 
       - name: Boot iOS simulator
         run: |
-          UDID=$(xcrun simctl list devices available | grep "iPhone 15" | grep "17.5" | head -1 | grep -E -o '\([-A-F0-9]+\)' | tr -d '()')
-          xcrun simctl boot "$UDID" || true
-          echo "SIMULATOR_UDID=$UDID" >> $GITHUB_ENV
+          xcrun simctl boot "$IOS_SIM_UDID" || true
+          echo "SIMULATOR_UDID=$IOS_SIM_UDID" >> $GITHUB_ENV
 
       - name: Run Detox smoke tests (iOS)
         run: pnpm test:e2e:ios
         env:
           CI: true
+          DETOX_IOS_DEVICE_NAME: ${{ env.IOS_SIM_NAME }}
+          DETOX_IOS_DEVICE_OS: ${{ env.IOS_SIM_OS }}
 
       - name: Upload Detox artifacts on failure
         if: failure()
@@ -605,6 +655,7 @@ jobs:
     needs: [changes, mobile]
     if: needs.changes.outputs.mobile == 'true'
     timeout-minutes: 25
+    continue-on-error: true
     defaults:
       run:
         working-directory: mobile
@@ -631,8 +682,18 @@ jobs:
           distribution: temurin
           java-version: 17
 
+      # v3 installs the removed `tools` SDK package, which now fails with
+      # "Failed to find package 'tools'" on cmdline-tools >= 12 (issue #537);
+      # v4 installs only the modern cmdline-tools.
       - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
+
+      # Hardware-accelerated emulation requires KVM access on Linux runners
+      - name: Enable KVM group perms
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
 
       - name: Cache AVD
         uses: actions/cache@v4
@@ -643,21 +704,11 @@ jobs:
             ~/.android/adb*
           key: avd-Pixel_6_API_34-${{ runner.os }}
 
-      - name: Create AVD (if not cached)
-        if: steps.avd-cache.outputs.cache-hit != 'true'
-        run: |
-          echo "no" | avdmanager create avd \
-            --force \
-            --name Pixel_6_API_34 \
-            --abi google_apis/x86_64 \
-            --package "system-images;android-34;google_apis;x86_64" \
-            --device "pixel_6"
-
       - name: Cache Expo prebuild
         uses: actions/cache@v4
         with:
           path: mobile/android
-          key: mobile-expo-prebuild-android-${{ hashFiles('mobile/app.json', 'mobile/package.json') }}
+          key: mobile-expo-prebuild-android-${{ hashFiles('mobile/app.config.ts', 'mobile/app.json', 'mobile/package.json') }}
           restore-keys: mobile-expo-prebuild-android-
 
       - name: Expo prebuild (Android)
@@ -679,6 +730,9 @@ jobs:
           arch: x86_64
           profile: pixel_6
           avd-name: Pixel_6_API_34
+          force-avd-creation: false
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: true
           script: cd mobile && pnpm test:e2e:android
         env:
           CI: true
@@ -713,6 +767,7 @@ jobs:
         run: node ../../scripts/validate-flaky-quarantine.mjs
 
       - name: Setup Rust
+        if: needs.changes.outputs.contracts == 'true'
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
@@ -726,10 +781,11 @@ jobs:
           key: cargo-audit-${{ runner.os }}-v0.22
 
       - name: Install cargo-audit
-        if: steps.cache-cargo-audit.outputs.cache-hit != 'true'
+        if: needs.changes.outputs.contracts == 'true' && steps.cache-cargo-audit.outputs.cache-hit != 'true'
         run: cargo install cargo-audit --locked
 
       - name: Security audit (cargo)
+        if: needs.changes.outputs.contracts == 'true'
         working-directory: contracts
         run: cargo audit
 

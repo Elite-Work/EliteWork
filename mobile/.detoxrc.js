@@ -63,8 +63,10 @@ module.exports = {
       type: 'ios.simulator',
       device: {
         // Minimum supported iOS version — see docs/DEVICE_MATRIX.md.
-        type: 'iPhone 15',
-        os: 'iOS 17.5',
+        // CI overrides these to whatever simulator the macOS runner image
+        // currently ships; device names rotate with every Xcode release.
+        type: process.env.DETOX_IOS_DEVICE_NAME || 'iPhone 15',
+        os: process.env.DETOX_IOS_DEVICE_OS || 'iOS 17.5',
       },
     },
     emulator: {

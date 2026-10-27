@@ -34,24 +34,6 @@ module.exports = function withKotlinVersion(config) {
       "kotlinVersion = findProperty('android.kotlinVersion') ?: '1.9.25'",
     );
 
-    const marker = '// Amana Android native library compatibility';
-    if (!contents.includes(marker)) {
-      contents += `
-
-${marker}
-subprojects { subproject ->
-  subproject.plugins.withId('com.android.library') {
-    subproject.android {
-      packagingOptions {
-        jniLibs.pickFirsts.add('**/libc++_shared.so')
-        jniLibs.pickFirsts.add('**/libfbjni.so')
-      }
-    }
-  }
-}
-`;
-    }
-
     project.modResults.contents = contents;
 
     return project;

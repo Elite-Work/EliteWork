@@ -778,7 +778,7 @@ jobs:
 
       - name: Build Android APK (debug)
         run: |
-          cd android && ./gradlew -Pandroid.kotlinVersion=1.9.25 assembleDebug assembleAndroidTest -DtestBuildType=debug
+          cd android && ./gradlew -Pandroid.kotlinVersion=1.9.25 :app:assembleDebug :app:assembleDebugAndroidTest -DtestBuildType=debug
         env:
           CI: true
 

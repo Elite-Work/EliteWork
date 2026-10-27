@@ -568,6 +568,32 @@ jobs:
       - name: Install deps
         run: pnpm install --frozen-lockfile
 
+      # Expo SDK 52's expo-device uses the removed TARGET_OS_SIMULATOR macro;
+      # Xcode 16.4 requires Swift's targetEnvironment condition instead.
+      - name: Patch expo-device for Xcode 16.4
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const path = require('path');
+          const packagePath = require.resolve('expo-device/package.json');
+          const sourcePath = path.join(path.dirname(packagePath), 'ios', 'UIDevice.swift');
+          const source = fs.readFileSync(sourcePath, 'utf8');
+          const legacy = '    return TARGET_OS_SIMULATOR != 0';
+          const fixed = [
+            '    #if targetEnvironment(simulator)',
+            '    return true',
+            '    #else',
+            '    return false',
+            '    #endif',
+          ].join('\n');
+          if (source.includes(legacy)) {
+            fs.writeFileSync(sourcePath, source.replace(legacy, fixed));
+          } else if (!source.includes('#if targetEnvironment(simulator)')) {
+            throw new Error(`Unexpected expo-device source: ${sourcePath}`);
+          }
+          console.log(`Patched ${sourcePath}`);
+          NODE
+
       - name: Setup Xcode
         uses: maxim-lobanov/setup-xcode@v1
         with:

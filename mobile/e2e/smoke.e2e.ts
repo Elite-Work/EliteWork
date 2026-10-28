@@ -16,7 +16,7 @@
  */
 
 import { device, element, by, expect as detoxExpect, waitFor } from 'detox';
-import { mockAuthLaunchArgs, MOCK_WALLET_ADDRESS } from './helpers/auth';
+import { mockAuthLaunchArgs } from './helpers/auth';
 import { startMockServer, stopMockServer } from './helpers/mockServer';
 
 const TIMEOUT = 15_000; // ms — generous for emulator cold-start
@@ -197,8 +197,9 @@ describe('Offline banner', () => {
       .toBeVisible()
       .withTimeout(TIMEOUT);
 
-    // Simulate network disconnect.
-    await device.setStatusBar({ connectivity: 'offline' });
+    // Block requests to simulate a disconnected API. Detox 20 does not
+    // expose the old `connectivity` status-bar option.
+    await device.setURLBlacklist(['.*']);
     // Trigger a refresh to surface the error/offline state.
     await element(by.text('🌾 Trades')).swipe('down', 'fast', 0.5);
 
@@ -211,6 +212,6 @@ describe('Offline banner', () => {
       .withTimeout(TIMEOUT);
 
     // Restore network.
-    await device.setStatusBar({ connectivity: 'wifi' });
+    await device.setURLBlacklist([]);
   });
 });

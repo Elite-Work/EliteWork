@@ -18,10 +18,16 @@
  */
 
 import { device, element, by, expect as detoxExpect, waitFor } from 'detox';
-import { mockAuthLaunchArgs, MOCK_WALLET_ADDRESS, MOCK_SELLER_ADDRESS } from './helpers/auth';
+import { mockAuthLaunchArgs, MOCK_SELLER_ADDRESS } from './helpers/auth';
 import { startMockServer, stopMockServer, resetTradeState } from './helpers/mockServer';
+import { inputByPlaceholder } from './helpers/selectors';
 
 const TIMEOUT = 20_000; // ms — generous for emulator cold-start
+
+async function expectContinueEnabled(enabled: boolean): Promise<void> {
+  const attributes = await element(by.id('trade-continue-button')).getAttributes();
+  expect((attributes as { enabled: boolean }).enabled).toBe(enabled);
+}
 
 // ---------------------------------------------------------------------------
 // Suite setup / teardown
@@ -118,7 +124,7 @@ describe('Trade Creation Flow — Step 1: Details', () => {
     await element(by.text('Maize')).tap();
 
     // Verify selection
-    await detoxExpect(element(by.text('Maize'))).toHaveAttribute('testID', 'chip-active');
+    await detoxExpect(element(by.id('trade-commodity-maize'))).toExist();
   });
 
   it('allows entering quantity and unit', async () => {
@@ -126,27 +132,27 @@ describe('Trade Creation Flow — Step 1: Details', () => {
     await element(by.text('Maize')).tap();
 
     // Enter quantity
-    await element(by.placeholder('e.g. 500')).replaceText('1000');
+    await element(inputByPlaceholder('e.g. 500')).replaceText('1000');
 
     // Select unit (tonnes)
     await element(by.text('tonnes')).tap();
 
     // Verify values
-    await detoxExpect(element(by.placeholder('e.g. 500'))).toHaveText('1000');
+    await detoxExpect(element(inputByPlaceholder('e.g. 500'))).toHaveText('1000');
   });
 
   it('allows entering price per unit', async () => {
     await element(by.text('Maize')).tap();
 
-    await element(by.placeholder('e.g. 450')).replaceText('500');
+    await element(inputByPlaceholder('e.g. 450')).replaceText('500');
 
-    await detoxExpect(element(by.placeholder('e.g. 450'))).toHaveText('500');
+    await detoxExpect(element(inputByPlaceholder('e.g. 450'))).toHaveText('500');
   });
 
   it('shows estimated total when quantity and price are entered', async () => {
     await element(by.text('Maize')).tap();
-    await element(by.placeholder('e.g. 500')).replaceText('1000');
-    await element(by.placeholder('e.g. 450')).replaceText('500');
+    await element(inputByPlaceholder('e.g. 500')).replaceText('1000');
+    await element(inputByPlaceholder('e.g. 450')).replaceText('500');
 
     // Estimated total should show NGN 500,000
     await waitFor(element(by.text('NGN 500,000')))
@@ -156,33 +162,33 @@ describe('Trade Creation Flow — Step 1: Details', () => {
 
   it('allows entering seller Stellar address', async () => {
     await element(by.text('Maize')).tap();
-    await element(by.placeholder('e.g. 500')).replaceText('1000');
-    await element(by.placeholder('e.g. 450')).replaceText('500');
+    await element(inputByPlaceholder('e.g. 500')).replaceText('1000');
+    await element(inputByPlaceholder('e.g. 450')).replaceText('500');
 
-    await element(by.placeholder('G...')).replaceText(MOCK_SELLER_ADDRESS);
+    await element(inputByPlaceholder('G...')).replaceText(MOCK_SELLER_ADDRESS);
 
-    await detoxExpect(element(by.placeholder('G...'))).toHaveText(MOCK_SELLER_ADDRESS);
+    await detoxExpect(element(inputByPlaceholder('G...'))).toHaveText(MOCK_SELLER_ADDRESS);
   });
 
   it('enables Continue button only when all required fields are valid', async () => {
     // Initially Continue should be disabled
-    await detoxExpect(element(by.text('Continue'))).toBeDisabled();
+    await expectContinueEnabled(false);
 
     // Fill all required fields
     await element(by.text('Maize')).tap();
-    await element(by.placeholder('e.g. 500')).replaceText('1000');
-    await element(by.placeholder('e.g. 450')).replaceText('500');
-    await element(by.placeholder('G...')).replaceText(MOCK_SELLER_ADDRESS);
+    await element(inputByPlaceholder('e.g. 500')).replaceText('1000');
+    await element(inputByPlaceholder('e.g. 450')).replaceText('500');
+    await element(inputByPlaceholder('G...')).replaceText(MOCK_SELLER_ADDRESS);
 
     // Continue should now be enabled
-    await detoxExpect(element(by.text('Continue'))).toBeEnabled();
+    await expectContinueEnabled(true);
   });
 
   it('navigates to Step 2 when Continue is tapped with valid data', async () => {
     await element(by.text('Maize')).tap();
-    await element(by.placeholder('e.g. 500')).replaceText('1000');
-    await element(by.placeholder('e.g. 450')).replaceText('500');
-    await element(by.placeholder('G...')).replaceText(MOCK_SELLER_ADDRESS);
+    await element(inputByPlaceholder('e.g. 500')).replaceText('1000');
+    await element(inputByPlaceholder('e.g. 450')).replaceText('500');
+    await element(inputByPlaceholder('G...')).replaceText(MOCK_SELLER_ADDRESS);
 
     await element(by.text('Continue')).tap();
 
@@ -209,9 +215,9 @@ describe('Trade Creation Flow — Step 2: Negotiation', () => {
 
     // Fill Step 1
     await element(by.text('Maize')).tap();
-    await element(by.placeholder('e.g. 500')).replaceText('1000');
-    await element(by.placeholder('e.g. 450')).replaceText('500');
-    await element(by.placeholder('G...')).replaceText(MOCK_SELLER_ADDRESS);
+    await element(inputByPlaceholder('e.g. 500')).replaceText('1000');
+    await element(inputByPlaceholder('e.g. 450')).replaceText('500');
+    await element(inputByPlaceholder('G...')).replaceText(MOCK_SELLER_ADDRESS);
     await element(by.text('Continue')).tap();
 
     await waitFor(element(by.text('Step 2: Negotiation')))
@@ -251,9 +257,9 @@ describe('Trade Creation Flow — Step 2: Negotiation', () => {
   });
 
   it('allows entering delivery window in days', async () => {
-    await element(by.placeholder('7')).replaceText('14');
+    await element(inputByPlaceholder('7')).replaceText('14');
 
-    await detoxExpect(element(by.placeholder('7'))).toHaveText('14');
+    await detoxExpect(element(inputByPlaceholder('7'))).toHaveText('14');
   });
 
   it('shows platform fee note', async () => {
@@ -295,9 +301,9 @@ describe('Trade Creation Flow — Step 3: Review & Submit', () => {
 
     // Fill Step 1
     await element(by.text('Maize')).tap();
-    await element(by.placeholder('e.g. 500')).replaceText('1000');
-    await element(by.placeholder('e.g. 450')).replaceText('500');
-    await element(by.placeholder('G...')).replaceText(MOCK_SELLER_ADDRESS);
+    await element(inputByPlaceholder('e.g. 500')).replaceText('1000');
+    await element(inputByPlaceholder('e.g. 450')).replaceText('500');
+    await element(inputByPlaceholder('G...')).replaceText(MOCK_SELLER_ADDRESS);
     await element(by.text('Continue')).tap();
 
     await waitFor(element(by.text('Step 2: Negotiation')))
@@ -416,8 +422,8 @@ describe('Trade Creation Flow — Draft Persistence', () => {
 
     // Fill partial data
     await element(by.text('Maize')).tap();
-    await element(by.placeholder('e.g. 500')).replaceText('500');
-    await element(by.placeholder('e.g. 450')).replaceText('400');
+    await element(inputByPlaceholder('e.g. 500')).replaceText('500');
+    await element(inputByPlaceholder('e.g. 450')).replaceText('400');
 
     // Go to Step 2
     await element(by.text('Continue')).tap();
@@ -473,9 +479,9 @@ describe('Trade Creation Flow — Draft Persistence', () => {
       .withTimeout(TIMEOUT);
 
     await element(by.text('Maize')).tap();
-    await element(by.placeholder('e.g. 500')).replaceText('500');
-    await element(by.placeholder('e.g. 450')).replaceText('400');
-    await element(by.placeholder('G...')).replaceText(MOCK_SELLER_ADDRESS);
+    await element(inputByPlaceholder('e.g. 500')).replaceText('500');
+    await element(inputByPlaceholder('e.g. 450')).replaceText('400');
+    await element(inputByPlaceholder('G...')).replaceText(MOCK_SELLER_ADDRESS);
     await element(by.text('Continue')).tap();
 
     await waitFor(element(by.text('Step 2: Negotiation')))
@@ -513,7 +519,7 @@ describe('Trade Creation Flow — Draft Persistence', () => {
       .withTimeout(TIMEOUT);
 
     // Commodity should not be pre-selected
-    await detoxExpect(element(by.text('Maize'))).not.toHaveAttribute('testID', 'chip-active');
+    await detoxExpect(element(by.id('trade-commodity-maize'))).toExist();
   });
 });
 
@@ -532,12 +538,12 @@ describe('Trade Creation Flow — Validation', () => {
       .withTimeout(TIMEOUT);
 
     await element(by.text('Maize')).tap();
-    await element(by.placeholder('e.g. 500')).replaceText('1000');
-    await element(by.placeholder('e.g. 450')).replaceText('500');
-    await element(by.placeholder('G...')).replaceText('INVALID_ADDRESS');
+    await element(inputByPlaceholder('e.g. 500')).replaceText('1000');
+    await element(inputByPlaceholder('e.g. 450')).replaceText('500');
+    await element(inputByPlaceholder('G...')).replaceText('INVALID_ADDRESS');
 
     // Continue should remain disabled
-    await detoxExpect(element(by.text('Continue'))).toBeDisabled();
+    await expectContinueEnabled(false);
   });
 
   it('does not allow quantity of zero or negative', async () => {
@@ -550,15 +556,15 @@ describe('Trade Creation Flow — Validation', () => {
       .withTimeout(TIMEOUT);
 
     await element(by.text('Maize')).tap();
-    await element(by.placeholder('e.g. 500')).replaceText('0');
-    await element(by.placeholder('e.g. 450')).replaceText('500');
-    await element(by.placeholder('G...')).replaceText(MOCK_SELLER_ADDRESS);
+    await element(inputByPlaceholder('e.g. 500')).replaceText('0');
+    await element(inputByPlaceholder('e.g. 450')).replaceText('500');
+    await element(inputByPlaceholder('G...')).replaceText(MOCK_SELLER_ADDRESS);
 
-    await detoxExpect(element(by.text('Continue'))).toBeDisabled();
+    await expectContinueEnabled(false);
 
     // Test negative
-    await element(by.placeholder('e.g. 500')).replaceText('-100');
-    await detoxExpect(element(by.text('Continue'))).toBeDisabled();
+    await element(inputByPlaceholder('e.g. 500')).replaceText('-100');
+    await expectContinueEnabled(false);
   });
 
   it('does not allow price of zero or negative', async () => {
@@ -571,11 +577,11 @@ describe('Trade Creation Flow — Validation', () => {
       .withTimeout(TIMEOUT);
 
     await element(by.text('Maize')).tap();
-    await element(by.placeholder('e.g. 500')).replaceText('1000');
-    await element(by.placeholder('e.g. 450')).replaceText('0');
-    await element(by.placeholder('G...')).replaceText(MOCK_SELLER_ADDRESS);
+    await element(inputByPlaceholder('e.g. 500')).replaceText('1000');
+    await element(inputByPlaceholder('e.g. 450')).replaceText('0');
+    await element(inputByPlaceholder('G...')).replaceText(MOCK_SELLER_ADDRESS);
 
-    await detoxExpect(element(by.text('Continue'))).toBeDisabled();
+    await expectContinueEnabled(false);
   });
 });
 
@@ -596,9 +602,9 @@ describe('Trade Creation Flow — Step Indicator', () => {
       .withTimeout(TIMEOUT);
 
     await element(by.text('Maize')).tap();
-    await element(by.placeholder('e.g. 500')).replaceText('1000');
-    await element(by.placeholder('e.g. 450')).replaceText('500');
-    await element(by.placeholder('G...')).replaceText(MOCK_SELLER_ADDRESS);
+    await element(inputByPlaceholder('e.g. 500')).replaceText('1000');
+    await element(inputByPlaceholder('e.g. 450')).replaceText('500');
+    await element(inputByPlaceholder('G...')).replaceText(MOCK_SELLER_ADDRESS);
     await element(by.text('Continue')).tap();
 
     // Step 2 - second dot should be active
@@ -659,9 +665,9 @@ describe('Trade Creation Flow — Accessibility', () => {
 
     await detoxExpect(element(by.label('Go back'))).toExist();
     await element(by.text('Maize')).tap();
-    await element(by.placeholder('e.g. 500')).replaceText('1000');
-    await element(by.placeholder('e.g. 450')).replaceText('500');
-    await element(by.placeholder('G...')).replaceText(MOCK_SELLER_ADDRESS);
+    await element(inputByPlaceholder('e.g. 500')).replaceText('1000');
+    await element(inputByPlaceholder('e.g. 450')).replaceText('500');
+    await element(inputByPlaceholder('G...')).replaceText(MOCK_SELLER_ADDRESS);
 
     await detoxExpect(element(by.text('Continue'))).toExist();
   });

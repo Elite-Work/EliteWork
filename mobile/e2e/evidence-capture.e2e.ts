@@ -18,7 +18,7 @@
  */
 
 import { device, element, by, expect as detoxExpect, waitFor } from 'detox';
-import { mockAuthLaunchArgs, MOCK_WALLET_ADDRESS } from './helpers/auth';
+import { mockAuthLaunchArgs } from './helpers/auth';
 import { startMockServer, stopMockServer, resetTradeState } from './helpers/mockServer';
 
 const TIMEOUT = 20_000; // ms — generous for emulator cold-start

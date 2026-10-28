@@ -102,6 +102,8 @@ function Step1Details({
           {COMMODITIES.map((c) => (
             <TouchableOpacity
               key={c}
+              testID={`trade-commodity-${c.toLowerCase()}`}
+              accessibilityState={{ selected: data.commodity === c }}
               style={[stepStyles.chip, data.commodity === c && stepStyles.chipActive]}
               onPress={() => update({ commodity: c })}
             >
@@ -115,6 +117,7 @@ function Step1Details({
         <View style={[stepStyles.field, { flex: 2 }]}>
           <Text style={stepStyles.label}>Quantity</Text>
           <TextInput
+            testID="trade-quantity-input"
             style={stepStyles.input}
             keyboardType="numeric"
             placeholder="e.g. 500"
@@ -141,6 +144,7 @@ function Step1Details({
       <View style={stepStyles.field}>
         <Text style={stepStyles.label}>Price per unit (NGN)</Text>
         <TextInput
+          testID="trade-price-input"
           style={stepStyles.input}
           keyboardType="numeric"
           placeholder="e.g. 450"
@@ -157,6 +161,7 @@ function Step1Details({
       <View style={stepStyles.field}>
         <Text style={stepStyles.label}>Seller Stellar Address</Text>
         <TextInput
+          testID="trade-seller-input"
           style={stepStyles.input}
           autoCapitalize="none"
           autoCorrect={false}
@@ -167,6 +172,7 @@ function Step1Details({
       </View>
 
       <TouchableOpacity
+        testID="trade-continue-button"
         style={[stepStyles.btn, !valid && stepStyles.btnDisabled]}
         onPress={onNext}
         disabled={!valid}
@@ -224,6 +230,7 @@ function Step2Negotiation({
       <View style={stepStyles.field}>
         <Text style={stepStyles.label}>Delivery Window (days)</Text>
         <TextInput
+          testID="trade-delivery-days-input"
           style={stepStyles.input}
           keyboardType="numeric"
           placeholder="7"

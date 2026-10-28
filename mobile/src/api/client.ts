@@ -1,20 +1,6 @@
 import axios from 'axios';
-import { LaunchArguments } from 'react-native-launch-arguments';
 
 import { adminErrorResponseErrorInterceptor } from './errorInterceptor';
-
-interface E2ELaunchArguments {
-  E2E_API_BASE_URL?: string;
-}
-
-function getE2EApiBaseUrl(): string | undefined {
-  try {
-    const launchArgs = LaunchArguments.value<E2ELaunchArguments>();
-    return launchArgs.E2E_API_BASE_URL;
-  } catch {
-    return undefined;
-  }
-}
 
 /**
  * Version prefix prepended to consumer-facing API paths.
@@ -32,7 +18,10 @@ const API_VERSION_PREFIX =
 const UNVERSIONED_PREFIXES = ['/admin', '/api/admin', '/health'];
 
 const apiClient = axios.create({
-  baseURL: process.env.EXPO_PUBLIC_API_URL || 'http://localhost:4000',
+  baseURL:
+    process.env.EXPO_PUBLIC_E2E_API_BASE_URL ||
+    process.env.EXPO_PUBLIC_API_URL ||
+    'http://localhost:4000',
   timeout: 10000,
 });
 
@@ -48,11 +37,6 @@ export function setAuthToken(token: string | null): void {
 
 // Add token to requests
 apiClient.interceptors.request.use((config) => {
-  const e2eApiBaseUrl = getE2EApiBaseUrl();
-  if (e2eApiBaseUrl) {
-    config.baseURL = e2eApiBaseUrl;
-  }
-
   if (authToken) {
     config.headers.set('Authorization', `Bearer ${authToken}`);
   }

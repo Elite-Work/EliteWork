@@ -3,7 +3,6 @@ import * as SecureStore from 'expo-secure-store';
 
 import { useAuthStore, AuthRole } from './authStore';
 import { setAuthToken } from '../api/client';
-import { LaunchArguments } from 'react-native-launch-arguments';
 
 jest.mock('expo-secure-store', () => ({
   setItemAsync: jest.fn(),
@@ -15,9 +14,6 @@ jest.mock('../api/client', () => ({
   setAuthToken: jest.fn(),
 }));
 
-jest.mock('react-native-launch-arguments', () => ({
-  LaunchArguments: { value: jest.fn(() => ({})) },
-}));
 
 const mockSetItemAsync = SecureStore.setItemAsync as jest.MockedFunction<
   typeof SecureStore.setItemAsync
@@ -29,9 +25,6 @@ const mockDeleteItemAsync = SecureStore.deleteItemAsync as jest.MockedFunction<
   typeof SecureStore.deleteItemAsync
 >;
 const mockSetAuthToken = setAuthToken as jest.MockedFunction<typeof setAuthToken>;
-const mockLaunchArguments = LaunchArguments.value as jest.MockedFunction<
-  typeof LaunchArguments.value
->;
 
 function resetStore(): void {
   act(() => {
@@ -50,7 +43,6 @@ describe('useAuthStore', () => {
   beforeEach(() => {
     resetStore();
     jest.clearAllMocks();
-    mockLaunchArguments.mockReturnValue({});
     consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
     mockSetItemAsync.mockResolvedValue();
     mockGetItemAsync.mockResolvedValue(null);
@@ -180,24 +172,6 @@ describe('useAuthStore', () => {
   });
 
   describe('getToken', () => {
-    it('honors Detox E2E launch arguments after boolean parsing', async () => {
-      const mockToken = 'e2e-jwt-token';
-      mockLaunchArguments.mockReturnValue({
-        E2E_MODE: true,
-        E2E_MOCK_JWT: mockToken,
-        E2E_MOCK_WALLET_ADDRESS: 'G_E2E_WALLET',
-      });
-
-      let returnedToken: string | null = null;
-      await act(async () => {
-        returnedToken = await useAuthStore.getState().getToken();
-      });
-
-      expect(returnedToken).toBe(mockToken);
-      expect(mockSetItemAsync).toHaveBeenCalledWith('amana_token', mockToken);
-      expect(useAuthStore.getState().walletAddress).toBe('G_E2E_WALLET');
-    });
-
     it('retrieves token from SecureStore, updates apiClient and state, and returns it', async () => {
       const storedToken = 'stored-jwt-token';
       mockGetItemAsync.mockResolvedValueOnce(storedToken);

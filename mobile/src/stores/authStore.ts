@@ -1,24 +1,16 @@
 import { create } from 'zustand';
 import * as SecureStore from 'expo-secure-store';
-import { LaunchArguments } from 'react-native-launch-arguments';
+import { Linking } from 'react-native';
 
 import { setAuthToken } from '../api/client';
 
 const REMEMBERED_WALLET_KEY = 'amana_remembered_wallet';
 
-interface E2ELaunchArguments {
-  E2E_MODE?: string | boolean;
-  E2E_MOCK_JWT?: string;
-  E2E_MOCK_WALLET_ADDRESS?: string;
-}
+const DEFAULT_E2E_WALLET_ADDRESS =
+  'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA001';
 
-function getE2ELaunchArguments(): E2ELaunchArguments {
-  try {
-    return LaunchArguments.value<E2ELaunchArguments>();
-  } catch {
-    // The native bridge is unavailable in unit-test environments.
-    return {};
-  }
+function isE2EBuild(): boolean {
+  return process.env.EXPO_PUBLIC_E2E_MODE === 'true';
 }
 
 export type AuthRole = 'admin' | 'user' | null;
@@ -81,28 +73,33 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   getToken: async () => {
     try {
-      const launchArgs = getE2ELaunchArguments();
-
-      // Detox launch arguments are the source of truth for E2E auth. Clear
-      // persisted state when a test explicitly launches unauthenticated so
-      // tests remain isolated across app reloads.
-      // react-native-launch-arguments parses JSON-looking values, so the
-      // string passed by Detox (`true`) is exposed as the boolean `true`.
-      if (launchArgs.E2E_MODE === true || launchArgs.E2E_MODE === 'true') {
-        const mockToken = launchArgs.E2E_MOCK_JWT;
-        const walletAddress = launchArgs.E2E_MOCK_WALLET_ADDRESS ?? null;
-
-        if (mockToken) {
-          await SecureStore.setItemAsync('amana_token', mockToken);
-          setAuthToken(mockToken);
-          set({ token: mockToken, walletAddress });
-          return mockToken;
+      if (isE2EBuild()) {
+        // E2E builds use compile-time Expo variables so the native bridge is
+        // not needed during Detox startup. A dedicated URL lets smoke tests
+        // still exercise the unauthenticated route.
+        let initialUrl: string | null = null;
+        try {
+          initialUrl = await Linking.getInitialURL();
+        } catch {
+          // Linking is unavailable in unit-test environments.
         }
 
-        await SecureStore.deleteItemAsync('amana_token');
-        setAuthToken(null);
-        set({ token: null, walletAddress: null, role: null });
-        return null;
+        if (initialUrl?.includes('/e2e/unauth')) {
+          await SecureStore.deleteItemAsync('amana_token');
+          setAuthToken(null);
+          set({ token: null, walletAddress: null, role: null });
+          return null;
+        }
+
+        const mockToken = process.env.EXPO_PUBLIC_E2E_MOCK_JWT || 'e2e-token';
+        const walletAddress =
+          process.env.EXPO_PUBLIC_E2E_MOCK_WALLET_ADDRESS ||
+          DEFAULT_E2E_WALLET_ADDRESS;
+
+        await SecureStore.setItemAsync('amana_token', mockToken);
+        setAuthToken(mockToken);
+        set({ token: mockToken, walletAddress });
+        return mockToken;
       }
 
       const token = await SecureStore.getItemAsync('amana_token');

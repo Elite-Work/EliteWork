@@ -91,6 +91,7 @@ describe('WalletConnect screen', () => {
         E2E_MODE: 'true',
         // No E2E_MOCK_JWT — triggers unauthenticated initial route.
       },
+      url: 'amanavault://e2e/unauth',
     });
 
     await waitFor(element(by.text('Connect Wallet')))
@@ -100,6 +101,9 @@ describe('WalletConnect screen', () => {
     await waitFor(element(by.text('Amana')))
       .toBeVisible()
       .withTimeout(TIMEOUT);
+
+    // Restore the authenticated build state for the following smoke cases.
+    await device.launchApp({ newInstance: true });
   });
 });
 

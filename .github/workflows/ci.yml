@@ -684,6 +684,9 @@ jobs:
             | xcpretty --color
         env:
           CI: true
+          EXPO_PUBLIC_E2E_MODE: true
+          EXPO_PUBLIC_E2E_API_BASE_URL: http://localhost:4001
+          EXPO_PUBLIC_E2E_MOCK_WALLET_ADDRESS: GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA001
 
       - name: Boot iOS simulator
         run: |
@@ -793,6 +796,9 @@ jobs:
           cd android && ./gradlew -Pandroid.kotlinVersion=1.9.25 :app:assembleDebug :app:assembleDebugAndroidTest -DtestBuildType=debug
         env:
           CI: true
+          EXPO_PUBLIC_E2E_MODE: true
+          EXPO_PUBLIC_E2E_API_BASE_URL: http://localhost:4001
+          EXPO_PUBLIC_E2E_MOCK_WALLET_ADDRESS: GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA001
 
       - name: Start Android emulator and run Detox smoke tests
         uses: reactivecircus/android-emulator-runner@v2

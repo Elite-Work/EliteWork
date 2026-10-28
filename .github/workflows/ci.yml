@@ -741,6 +741,9 @@ jobs:
           distribution: temurin
           java-version: 17
 
+      - name: Setup Gradle dependency cache
+        uses: gradle/actions/setup-gradle@v4
+
       # v3 installs the removed `tools` SDK package, which now fails with
       # "Failed to find package 'tools'" on cmdline-tools >= 12 (issue #537);
       # v4 installs only the modern cmdline-tools.
@@ -793,7 +796,16 @@ jobs:
 
       - name: Build Android APK (debug)
         run: |
-          cd android && ./gradlew -Pandroid.kotlinVersion=1.9.25 :app:assembleDebug :app:assembleDebugAndroidTest -DtestBuildType=debug
+          set -euo pipefail
+          cd android
+          for attempt in 1 2 3; do
+            if ./gradlew -Pandroid.kotlinVersion=1.9.25 :app:assembleDebug :app:assembleDebugAndroidTest -DtestBuildType=debug; then
+              exit 0
+            fi
+            echo "Gradle build attempt ${attempt} failed; retrying Maven/Gradle dependency resolution..."
+            sleep 15
+          done
+          exit 1
         env:
           CI: true
           EXPO_PUBLIC_E2E_MODE: true

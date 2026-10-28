@@ -2,8 +2,6 @@ import axios from 'axios';
 
 import { adminErrorResponseErrorInterceptor } from './errorInterceptor';
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:4000';
-
 /**
  * Version prefix prepended to consumer-facing API paths.
  *
@@ -20,7 +18,10 @@ const API_VERSION_PREFIX =
 const UNVERSIONED_PREFIXES = ['/admin', '/api/admin', '/health'];
 
 const apiClient = axios.create({
-  baseURL: API_URL,
+  baseURL:
+    process.env.EXPO_PUBLIC_E2E_API_BASE_URL ||
+    process.env.EXPO_PUBLIC_API_URL ||
+    'http://localhost:4000',
   timeout: 10000,
 });
 

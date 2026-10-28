@@ -11,7 +11,7 @@
  *   7. Evidence upload completes successfully
  *
  * This suite runs against the Expo dev-client build on both Android emulator
- * and iOS simulator (see .detoxrc.js for device configs).
+ * and iOS simulator (see .detoxrc.cjs for device configs).
  *
  * The mock server (e2e/helpers/mockServer.ts) must be running before the
  * test; it is started by globalSetup via jest.config.js.
@@ -20,6 +20,7 @@
 import { device, element, by, waitFor } from 'detox';
 import { mockAuthLaunchArgs } from './helpers/auth';
 import { resetTradeState } from './helpers/mockServer';
+import { inputByPlaceholder } from './helpers/selectors';
 
 const TIMEOUT = 20_000; // ms — generous for emulator cold-start
 
@@ -41,7 +42,13 @@ describe('Dispute Resolution Flow', () => {
 
   beforeEach(async () => {
     resetTradeState();
-    await device.reloadReactNative();
+    await device.launchApp({
+      newInstance: true,
+      launchArgs: {
+        ...mockAuthLaunchArgs(),
+        E2E_API_BASE_URL: 'http://localhost:4001',
+      },
+    });
   });
 
   afterAll(async () => {
@@ -80,7 +87,7 @@ describe('Dispute Resolution Flow', () => {
       .withTimeout(TIMEOUT);
 
     // Enter dispute reason
-    await element(by.placeholder('e.g. Goods arrived damaged, quantity mismatch…'))
+    await element(inputByPlaceholder('e.g. Goods arrived damaged, quantity mismatch…'))
       .typeText('Goods arrived damaged - packages torn and wet');
 
     // Tap Submit

@@ -13,6 +13,7 @@
 
 import { device, element, by, waitFor } from 'detox';
 import { mockAuthLaunchArgs } from './helpers/auth';
+import { startMockServer, stopMockServer } from './helpers/mockServer';
 
 const TIMEOUT = 15_000; // ms — generous for emulator cold-start
 
@@ -31,6 +32,15 @@ function tradeStatusNotification(tradeId: string) {
 }
 
 describe('Push notification tap-through — TradeDetailScreen', () => {
+  beforeAll(async () => {
+    await startMockServer();
+  });
+
+  afterAll(async () => {
+    await device.terminateApp();
+    await stopMockServer();
+  });
+
   beforeEach(async () => {
     await device.launchApp({
       newInstance: true,

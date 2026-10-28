@@ -3,7 +3,7 @@
 
 -- CreateTable JobHeartbeat
 CREATE TABLE "JobHeartbeat" (
-    "id" SERIAL NOT NULL PRIMARY KEY,
+    "id" SERIAL NOT NULL,
     "jobType" VARCHAR(100) NOT NULL UNIQUE,
     "lastHeartbeat" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "status" VARCHAR(50) NOT NULL DEFAULT 'idle',

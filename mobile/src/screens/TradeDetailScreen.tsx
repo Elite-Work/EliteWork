@@ -434,6 +434,7 @@ export default function TradeDetailScreen({ route, navigation }: Props) {
             <Text style={styles.modalTitle}>Initiate Dispute</Text>
             <Text style={styles.modalBody}>Describe the issue with this trade:</Text>
             <TextInput
+              testID="trade-dispute-reason-input"
               style={styles.textInput}
               multiline
               numberOfLines={4}

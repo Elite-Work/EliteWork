@@ -57,13 +57,14 @@ const config: ExpoConfig = {
     favicon: './assets/favicon.png',
   },
   plugins: [
+    './plugins/with-kotlin-version.cjs',
     'expo-secure-store',
     [
       'expo-notifications',
       {
         icon: './assets/notification-icon.png',
         color: '#ffffff',
-        sounds: ['./assets/notification-sound.wav'],
+        sounds: ['./assets/notification_sound.wav'],
       },
     ],
   ],

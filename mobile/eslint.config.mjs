@@ -7,7 +7,7 @@ import reactNative from 'eslint-plugin-react-native';
 export default [
   eslint.configs.recommended,
   {
-    files: ['**/*.{ts,tsx,js,jsx}'],
+    files: ['**/*.{ts,tsx,js,jsx,cjs}'],
     languageOptions: {
       parser: tsparser,
       parserOptions: {
@@ -30,6 +30,7 @@ export default [
         FormData: 'readonly',
         Blob: 'readonly',
         fetch: 'readonly',
+        AbortController: 'readonly',
         URL: 'readonly',
         URLSearchParams: 'readonly',
       },
@@ -55,6 +56,7 @@ export default [
     ],
     languageOptions: {
       globals: {
+        global: 'readonly',
         jest: 'readonly',
         describe: 'readonly',
         it: 'readonly',

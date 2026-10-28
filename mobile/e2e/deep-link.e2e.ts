@@ -13,6 +13,7 @@
 
 import { device, element, by, waitFor } from 'detox';
 import { mockAuthLaunchArgs } from './helpers/auth';
+import { startMockServer, stopMockServer } from './helpers/mockServer';
 
 const TIMEOUT = 15_000; // ms — generous for emulator cold-start
 
@@ -25,6 +26,15 @@ function tradeDeepLink(tradeId: string): string {
 }
 
 describe('Deep linking — TradeDetailScreen', () => {
+  beforeAll(async () => {
+    await startMockServer();
+  });
+
+  afterAll(async () => {
+    await device.terminateApp();
+    await stopMockServer();
+  });
+
   it('cold start: launching with a trade deep link lands directly on that trade\'s detail screen', async () => {
     await device.launchApp({
       newInstance: true,

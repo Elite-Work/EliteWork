@@ -99,6 +99,8 @@ Configure for your environment:
   to use the versioned backend lane; set empty to fall back to legacy aliases (deprecated).
   Admin and health endpoints are never versioned.
 - `EXPO_PUBLIC_STELLAR_NETWORK` – testnet or public network
+- `EXPO_PUBLIC_STELLAR_RPC_URL` – optional Soroban RPC used to submit signed transactions
+  (defaults to the public RPC for the selected network)
 - `EXPO_PUBLIC_PUSH_PROVIDER` – expo or firebase
 
 ### Run in development

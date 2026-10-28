@@ -13,7 +13,7 @@ on:
 jobs:
   mobile-e2e-ios-nightly:
     name: Nightly Smoke — iOS
-    runs-on: macos-latest
+    runs-on: macos-15
     timeout-minutes: 25
     defaults:
       run:
@@ -38,22 +38,41 @@ jobs:
       - name: Setup Xcode
         uses: maxim-lobanov/setup-xcode@v1
         with:
-          xcode-version: latest-stable
+          xcode-version: '16.4'
 
       - name: Expo prebuild (iOS)
         run: pnpm expo prebuild --platform ios --non-interactive
         env:
           CI: true
 
+      - name: Select available iOS simulator
+        run: |
+          set -euo pipefail
+          DEVICE=$(xcrun simctl list devices available -j | jq -r '
+            .devices | to_entries[] as $runtime | $runtime.value[]
+            | select(.name | startswith("iPhone"))
+            | "\(.name)|\($runtime.key | sub("^com.apple.CoreSimulator.SimRuntime.iOS-"; "") | gsub("-"; "."))|\(.udid)"
+          ' | head -1)
+          if [[ -z "$DEVICE" ]]; then
+            echo "No available iPhone simulator found" >&2
+            exit 1
+          fi
+          IFS='|' read -r DEVICE_NAME DEVICE_OS DEVICE_UDID <<< "$DEVICE"
+          echo "Using iOS simulator: $DEVICE_NAME ($DEVICE_OS, $DEVICE_UDID)"
+          echo "DETOX_IOS_DEVICE_TYPE=$DEVICE_NAME" >> "$GITHUB_ENV"
+          echo "DETOX_IOS_DEVICE_OS=iOS $DEVICE_OS" >> "$GITHUB_ENV"
+          echo "SIMULATOR_UDID=$DEVICE_UDID" >> "$GITHUB_ENV"
+
       - name: Build iOS app for simulator
         run: |
+          set -o pipefail
           xcodebuild \
             -workspace ios/Amana.xcworkspace \
             -scheme Amana \
             -configuration Debug \
             -sdk iphonesimulator \
             -derivedDataPath ios/build \
-            -destination "platform=iOS Simulator,name=iPhone 15,OS=17.5" \
+            -destination "id=$SIMULATOR_UDID" \
             build \
             | xcpretty --color
         env:
@@ -61,8 +80,7 @@ jobs:
 
       - name: Boot iOS simulator
         run: |
-          UDID=$(xcrun simctl list devices available | grep "iPhone 15" | grep "17.5" | head -1 | grep -E -o '\([-A-F0-9]+\)' | tr -d '()')
-          xcrun simctl boot "$UDID" || true
+          xcrun simctl boot "$SIMULATOR_UDID" || true
 
       - name: Run Detox smoke tests (iOS)
         run: pnpm test:e2e:ios
@@ -109,6 +127,10 @@ jobs:
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          # The default `tools` package no longer exists in current cmdline-tools
+          # and makes sdkmanager exit 1; platform-tools is all this job needs.
+          packages: platform-tools system-images;android-34;google_apis;x86_64
 
       - name: Cache AVD
         uses: actions/cache@v4
@@ -134,9 +156,19 @@ jobs:
         env:
           CI: true
 
+      - name: Align Android Kotlin compiler
+        run: |
+          sed -i "s/kotlinVersion = findProperty('android.kotlinVersion') ?: '1.9.24'/kotlinVersion = findProperty('android.kotlinVersion') ?: '1.9.25'/" android/build.gradle
+          if grep -q '^android.kotlinVersion=' android/gradle.properties; then
+            sed -i 's/^android.kotlinVersion=.*/android.kotlinVersion=1.9.25/' android/gradle.properties
+          else
+            echo 'android.kotlinVersion=1.9.25' >> android/gradle.properties
+          fi
+          grep -n 'kotlinVersion' android/build.gradle android/gradle.properties
+
       - name: Build Android APK (debug)
         run: |
-          cd android && ./gradlew assembleDebug assembleAndroidTest -DtestBuildType=debug
+          cd android && ./gradlew -Pandroid.kotlinVersion=1.9.25 assembleDebug assembleAndroidTest -DtestBuildType=debug
         env:
           CI: true
 
@@ -163,7 +195,7 @@ jobs:
   # Runs the same smoke suite against a low-end device from
   # mobile/docs/DEVICE_MATRIX.md's supported matrix (minimum API 31, on a
   # low-RAM/low-CPU profile) instead of the default Pixel 6 API 34 used
-  # above — see mobile/.detoxrc.js's `emulatorLowEnd` device.
+  # above — see mobile/.detoxrc.cjs's `emulatorLowEnd` device.
   mobile-e2e-android-lowend-nightly:
     name: Nightly Smoke — Android (low-end device)
     runs-on: ubuntu-latest
@@ -196,6 +228,10 @@ jobs:
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          # The default `tools` package no longer exists in current cmdline-tools
+          # and makes sdkmanager exit 1; platform-tools is all this job needs.
+          packages: platform-tools system-images;android-34;google_apis;x86_64
 
       - name: Cache AVD
         uses: actions/cache@v4

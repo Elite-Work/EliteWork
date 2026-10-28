@@ -14,6 +14,7 @@ jest.mock('../api/client', () => ({
   setAuthToken: jest.fn(),
 }));
 
+
 const mockSetItemAsync = SecureStore.setItemAsync as jest.MockedFunction<
   typeof SecureStore.setItemAsync
 >;

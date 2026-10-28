@@ -11,14 +11,14 @@
  *   7. Test error handling when upload fails
  *
  * This suite runs against the Expo dev-client build on both Android emulator
- * and iOS simulator (see .detoxrc.js for device configs).
+ * and iOS simulator (see .detoxrc.cjs for device configs).
  *
  * The mock server (e2e/helpers/mockServer.ts) must be running before the
  * test; it is started by globalSetup via jest.config.js.
  */
 
 import { device, element, by, expect as detoxExpect, waitFor } from 'detox';
-import { mockAuthLaunchArgs, MOCK_WALLET_ADDRESS } from './helpers/auth';
+import { mockAuthLaunchArgs } from './helpers/auth';
 import { startMockServer, stopMockServer, resetTradeState } from './helpers/mockServer';
 
 const TIMEOUT = 20_000; // ms — generous for emulator cold-start
@@ -43,9 +43,16 @@ beforeAll(async () => {
 });
 
 afterEach(async () => {
-  // Reload the app between tests to start from a clean state.
-  await device.reloadReactNative();
   resetTradeState();
+  // A full relaunch is more reliable than Detox's React Native reload hook on
+  // the CI emulator, where the Metro websocket can disappear after a test.
+  await device.launchApp({
+    newInstance: true,
+    launchArgs: {
+      ...mockAuthLaunchArgs(),
+      E2E_API_BASE_URL: 'http://localhost:4001',
+    },
+  });
 });
 
 afterAll(async () => {

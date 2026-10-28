@@ -5,6 +5,13 @@ import { setAuthToken } from '../api/client';
 
 const REMEMBERED_WALLET_KEY = 'amana_remembered_wallet';
 
+const DEFAULT_E2E_WALLET_ADDRESS =
+  'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA001';
+
+function isE2EBuild(): boolean {
+  return process.env.EXPO_PUBLIC_E2E_MODE === 'true';
+}
+
 export type AuthRole = 'admin' | 'user' | null;
 
 interface AuthState {
@@ -65,6 +72,20 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   getToken: async () => {
     try {
+      if (isE2EBuild()) {
+        // E2E builds use compile-time Expo variables so no native bridge is
+        // needed during Detox startup.
+        const mockToken = process.env.EXPO_PUBLIC_E2E_MOCK_JWT || 'e2e-token';
+        const walletAddress =
+          process.env.EXPO_PUBLIC_E2E_MOCK_WALLET_ADDRESS ||
+          DEFAULT_E2E_WALLET_ADDRESS;
+
+        await SecureStore.setItemAsync('amana_token', mockToken);
+        setAuthToken(mockToken);
+        set({ token: mockToken, walletAddress });
+        return mockToken;
+      }
+
       const token = await SecureStore.getItemAsync('amana_token');
       setAuthToken(token);
       set({ token });

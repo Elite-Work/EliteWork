@@ -632,7 +632,16 @@ jobs:
           key: mobile-expo-prebuild-ios-${{ hashFiles('mobile/app.json', 'mobile/app.config.ts', 'mobile/plugins/**', 'mobile/package.json') }}
 
       - name: Expo prebuild (iOS)
-        run: pnpm expo prebuild --platform ios --non-interactive
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            if pnpm expo prebuild --platform ios --non-interactive; then
+              exit 0
+            fi
+            echo "Expo iOS prebuild attempt ${attempt} failed; retrying CocoaPods dependency resolution..."
+            sleep 15
+          done
+          exit 1
         env:
           CI: true
 

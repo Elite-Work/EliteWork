@@ -759,6 +759,9 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v4
 
+      - name: Install Android emulator runtime dependencies
+        run: sudo apt-get update && sudo apt-get install -y libpulse0
+
       # Hardware-accelerated emulation requires KVM access on Linux runners
       - name: Enable KVM group perms
         run: |

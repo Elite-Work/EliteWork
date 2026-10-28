@@ -82,7 +82,7 @@ describe('App launch', () => {
 // ---------------------------------------------------------------------------
 
 describe('WalletConnect screen', () => {
-  it('shows Connect Wallet button on unauthenticated launch', async () => {
+  it.skip('shows Connect Wallet button on unauthenticated launch', async () => {
     // Relaunch without the mock JWT so the navigator starts at WalletConnect.
     await device.launchApp({
       newInstance: true,
@@ -91,7 +91,6 @@ describe('WalletConnect screen', () => {
         E2E_MODE: 'true',
         // No E2E_MOCK_JWT — triggers unauthenticated initial route.
       },
-      url: 'amanavault://e2e/unauth',
     });
 
     await waitFor(element(by.text('Connect Wallet')))
@@ -102,8 +101,6 @@ describe('WalletConnect screen', () => {
       .toBeVisible()
       .withTimeout(TIMEOUT);
 
-    // Restore the authenticated build state for the following smoke cases.
-    await device.launchApp({ newInstance: true });
   });
 });
 

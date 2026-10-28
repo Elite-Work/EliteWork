@@ -1,6 +1,5 @@
 import { create } from 'zustand';
 import * as SecureStore from 'expo-secure-store';
-import { Linking } from 'react-native';
 
 import { setAuthToken } from '../api/client';
 
@@ -74,23 +73,8 @@ export const useAuthStore = create<AuthState>((set) => ({
   getToken: async () => {
     try {
       if (isE2EBuild()) {
-        // E2E builds use compile-time Expo variables so the native bridge is
-        // not needed during Detox startup. A dedicated URL lets smoke tests
-        // still exercise the unauthenticated route.
-        let initialUrl: string | null = null;
-        try {
-          initialUrl = await Linking.getInitialURL();
-        } catch {
-          // Linking is unavailable in unit-test environments.
-        }
-
-        if (initialUrl?.includes('/e2e/unauth')) {
-          await SecureStore.deleteItemAsync('amana_token');
-          setAuthToken(null);
-          set({ token: null, walletAddress: null, role: null });
-          return null;
-        }
-
+        // E2E builds use compile-time Expo variables so no native bridge is
+        // needed during Detox startup.
         const mockToken = process.env.EXPO_PUBLIC_E2E_MOCK_JWT || 'e2e-token';
         const walletAddress =
           process.env.EXPO_PUBLIC_E2E_MOCK_WALLET_ADDRESS ||

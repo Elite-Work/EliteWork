@@ -42,7 +42,13 @@ describe('Dispute Resolution Flow', () => {
 
   beforeEach(async () => {
     resetTradeState();
-    await device.reloadReactNative();
+    await device.launchApp({
+      newInstance: true,
+      launchArgs: {
+        ...mockAuthLaunchArgs(),
+        E2E_API_BASE_URL: 'http://localhost:4001',
+      },
+    });
   });
 
   afterAll(async () => {

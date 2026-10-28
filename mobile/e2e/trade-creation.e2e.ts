@@ -49,9 +49,16 @@ beforeAll(async () => {
 });
 
 afterEach(async () => {
-  // Reload the app between tests to start from a clean state.
-  await device.reloadReactNative();
   resetTradeState();
+  // A full relaunch is more reliable than Detox's React Native reload hook on
+  // the CI emulator, where the Metro websocket can disappear after a test.
+  await device.launchApp({
+    newInstance: true,
+    launchArgs: {
+      ...mockAuthLaunchArgs(),
+      E2E_API_BASE_URL: 'http://localhost:4001',
+    },
+  });
 });
 
 afterAll(async () => {

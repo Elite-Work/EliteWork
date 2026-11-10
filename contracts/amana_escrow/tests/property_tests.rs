@@ -462,6 +462,23 @@ fn test_boundary_fee_calculation_extremes() {
     }
 }
 
+fn expected_dispute_payouts(
+    amount: i128,
+    buyer_loss_bps: u32,
+    seller_loss_bps: u32,
+    seller_gets_bps: u32,
+    fee_bps: u32,
+) -> (i128, i128, i128) {
+    debug_assert_eq!(buyer_loss_bps + seller_loss_bps, 10_000);
+    let loss_bps = 10_000i128 - seller_gets_bps as i128;
+    let seller_loss = amount * loss_bps * (seller_loss_bps as i128) / (10_000i128 * 10_000i128);
+    let seller_raw = amount - seller_loss;
+    let fee = seller_raw * (fee_bps as i128) / 10_000i128;
+    let seller_net = seller_raw - fee;
+    let buyer_refund = amount - seller_raw;
+    (seller_net, buyer_refund, fee)
+}
+
 #[test]
 fn test_boundary_split_then_merge_metamorphic() {
     let seed = get_seed();
@@ -476,6 +493,9 @@ fn test_boundary_split_then_merge_metamorphic() {
         let seller_loss_bps = 10_000 - buyer_loss_bps;
         let fee_bps = rng.gen_range(1u32..=500);
 
+        let (s_full, b_full, f_full) =
+            expected_dispute_payouts(amount, buyer_loss_bps, seller_loss_bps, 5000u32, fee_bps);
+
         let pe2 = PropEnv::new(fee_bps);
         let (s_half1, b_half1, f_half1) = pe2.resolve(buyer_loss_bps, seller_loss_bps, 5000u32, amount / 2);
 
@@ -486,6 +506,7 @@ fn test_boundary_split_then_merge_metamorphic() {
         let total_buyer = b_half1 + b_half2;
         let total_fee = f_half1 + f_half2;
 
+        assert_eq!(s_full + b_full + f_full, amount);
         assert_eq!(
             total_seller + total_buyer + total_fee,
             amount,
@@ -493,6 +514,18 @@ fn test_boundary_split_then_merge_metamorphic() {
              total={} expected={}  replay: AMANA_PROP_SEED={seed}",
             total_seller + total_buyer + total_fee,
             amount
+        );
+        assert!(
+            (total_seller - s_full).abs() <= 2,
+            "[#191] split_then_merge seller drift exceeded bound: total_seller={total_seller} s_full={s_full}"
+        );
+        assert!(
+            (total_buyer - b_full).abs() <= 1,
+            "[#191] split_then_merge buyer drift exceeded bound: total_buyer={total_buyer} b_full={b_full}"
+        );
+        assert!(
+            (total_fee - f_full).abs() <= 1,
+            "[#191] split_then_merge fee drift exceeded bound: total_fee={total_fee} f_full={f_full}"
         );
     }
 }

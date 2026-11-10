@@ -260,15 +260,19 @@ fn test_admin_clawback_updates_trade_history() {
     client.admin_clawback(&trade_id, &amount, &h.buyer);
 
     let history = client.get_trade_history(&trade_id);
+    assert!(
+        !history.is_empty(),
+        "Trade history should not be empty after admin clawback"
+    );
     let clawback_events: std::vec::Vec<_> = history
         .iter()
         .filter(|e| {
-            let et = e.event_type.clone();
+            let et = &e.event_type;
             // Soroban String has no std Display; compare via to_string helper on bytes length / known tags
             !et.is_empty()
-                && (et == soroban_sdk::String::from_str(&h.env, "clawback_full")
-                    || et == soroban_sdk::String::from_str(&h.env, "clawback_partial")
-                    || et == soroban_sdk::String::from_str(&h.env, "admin_clawback"))
+                && (*et == soroban_sdk::String::from_str(&h.env, "clawback_full")
+                    || *et == soroban_sdk::String::from_str(&h.env, "clawback_partial")
+                    || *et == soroban_sdk::String::from_str(&h.env, "admin_clawback"))
         })
         .collect();
 

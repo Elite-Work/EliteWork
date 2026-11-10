@@ -492,6 +492,8 @@ mod bps_fuzz_tests {
         // 100/0 split: buyer bears all loss
         let buyer_loss_bps = 10_000u32;
         let seller_loss_bps = 0u32;
+        assert_eq!(buyer_loss_bps + seller_loss_bps, 10_000);
+        assert_eq!(fee_amount(total, fee_bps), Some(100));
 
         // seller_gets_bps = 10_000 (seller gets 100%, no loss)
         let seller_gets_bps = 10_000u32;
@@ -508,6 +510,7 @@ mod bps_fuzz_tests {
         // 0/100 split: seller bears all loss
         let buyer_loss_bps = 0u32;
         let seller_loss_bps = 10_000u32;
+        assert_eq!(buyer_loss_bps + seller_loss_bps, 10_000);
 
         // seller_gets_bps = 10_000 (seller gets 100%, but seller_loss_bps=10000 means seller bears full loss)
         let seller_gets_bps = 10_000u32;
@@ -564,7 +567,7 @@ mod bps_fuzz_tests {
                 // For loss amount with very small amounts
                 for &slbps in &[1000, 5000, 10000] {
                     let loss = loss_amount(amount, 5000, slbps).unwrap_or(0);
-                    assert!(loss >= 0 && loss <= amount);
+                    assert!((0..=amount).contains(&loss));
                 }
             }
         }
@@ -608,6 +611,11 @@ mod bps_fuzz_tests {
             let total_seller_net = sn1 + sn2;
             let total_fee = f1 + f2;
             let total_buyer_refund = br1 + br2;
+
+            assert_eq!(buyer_loss_bps + seller_loss_bps, 10_000);
+            assert_eq!(full_seller_net + full_buyer_refund + full_fee, amount);
+            assert!((total_seller_net - full_seller_net).abs() <= 2);
+            assert!((total_buyer_refund - full_buyer_refund).abs() <= 1);
 
             // Conservation must hold
             assert_eq!(

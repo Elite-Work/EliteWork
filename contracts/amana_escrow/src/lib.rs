@@ -1952,7 +1952,7 @@ impl EscrowContract {
         });
 
         Self::record_trade_event(
-            &env,
+            env,
             trade.trade_id,
             "cancelled",
             caller.clone(),
@@ -2474,7 +2474,7 @@ impl EscrowContract {
     pub fn get_dispute_votes(env: Env, trade_id: u64) -> Vec<MediatorVote> {
         Self::quorum_state(&env, trade_id)
             .map(|state| state.votes)
-            .unwrap_or(Vec::new(&env))
+            .unwrap_or_else(|| Vec::new(&env))
     }
 
     /// Cast a weighted vote on a high-value dispute (#195).
@@ -2787,7 +2787,7 @@ impl EscrowContract {
             .storage()
             .persistent()
             .get(&evidence_key)
-            .unwrap_or(Vec::new(&env));
+            .unwrap_or_else(|| Vec::new(&env));
 
         // Create new evidence record
         let now = env.ledger().timestamp();
@@ -2829,7 +2829,7 @@ impl EscrowContract {
         env.storage()
             .persistent()
             .get(&DataKey::EvidenceList(trade_id))
-            .unwrap_or(Vec::new(&env))
+            .unwrap_or_else(|| Vec::new(&env))
     }
 
     /// Return the evidence hash most recently submitted by `submitter` (legacy).

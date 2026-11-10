@@ -174,7 +174,7 @@ impl AdminUpdateFeePayload {
     /// - If `new_fee_bps` is 0 or > 500.
     pub fn new(new_fee_bps: u32) -> Self {
         assert!(
-            new_fee_bps >= 1 && new_fee_bps <= 500,
+            (1..=500).contains(&new_fee_bps),
             "AdminUpdateFeePayload: new_fee_bps must be in [1, 500]"
         );
         Self { new_fee_bps }

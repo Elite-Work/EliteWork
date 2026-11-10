@@ -1,4 +1,35 @@
-/// Issue #18 — Fuzz tests for BPS boundaries and overflow safety
+/// Issue #18 & Issue #42 — Fuzz and boundary tests for BPS loss-allocation math
+///
+/// ## ADR-002 Loss-Allocation Audit Summary (#42)
+///
+/// Checked existing coverage across `bps_fuzz_tests.rs`, `property_tests.rs`, and
+/// `parity_money_math.rs`:
+/// - `checked_fee_amount` & `checked_loss_amount` QuickCheck properties over
+///   clamped `1..=i64::MAX` amounts and `0..=10_000` BPS values.
+/// - Exhaustive single-sweep of `0..=10_000` BPS against representative small/medium
+///   amounts (`1`, `99`, `100`, `1_000`, `10_000`, `1_000_000`).
+/// - Cross-layer Rust/TypeScript parity vectors in `parity_money_math.rs`.
+///
+/// Newly added / strengthened ADR-002 boundary coverage in this module:
+/// 1. **0/100 and 100/0 asymmetric loss splits** (`test_loss_ratio_0_100_boundaries`):
+///    Verifies full dispute resolution conservation (`seller_net + buyer_refund + fee == total`)
+///    and exact fee deductions at extreme `buyer_loss_bps = 10_000 / seller_loss_bps = 0`
+///    and `buyer_loss_bps = 0 / seller_loss_bps = 10_000` boundaries.
+/// 2. **Odd non-divisible BPS & largest-remainder rounding drift**
+///    (`test_odd_bps_largest_remainder_drift_bound`):
+///    Exercises prime/odd stroop amounts (`1`, `3`, `7`, `13`, `99`, `10_001`) against
+///    non-divisible splits (`1/9999`, `3333/6667`, `1429/8571`, `9999/1`) and odd
+///    `seller_gets_bps` values, confirming zero stranded stroops and that rounding
+///    drift between independent floor divisions and `total * loss_bps / 10_000` is
+///    at most 1 stroop (ADR-002 Addendum #182).
+/// 3. **`MAX_TRADE_VALUE` and `i128` overflow guard boundaries**
+///    (`test_max_trade_value_dispute_resolution_boundaries`, `test_i128_overflow_boundary`):
+///    Confirms overflow-free dispute settlement at `MAX_TRADE_VALUE` (`1_000_000_000_000`)
+///    and verifies that `checked_loss_amount` returns `None` as soon as the intermediate
+///    product `total * loss_bps * seller_loss_bps` exceeds `i128::MAX`.
+/// 4. **Split-then-merge metamorphic drift bounds** (`test_split_then_merge_invariant`):
+///    Verifies that splitting a trade into halves changes `seller_net`, `buyer_refund`,
+///    and `fee` by at most rounding-floor bounds while preserving exact conservation.
 ///
 /// Covers:
 ///   1. `checked_fee_amount` — fuzz `amount` × `fee_bps` for overflow, negative
@@ -492,6 +523,8 @@ mod bps_fuzz_tests {
         // 100/0 split: buyer bears all loss
         let buyer_loss_bps = 10_000u32;
         let seller_loss_bps = 0u32;
+        assert_eq!(buyer_loss_bps + seller_loss_bps, 10_000);
+        assert_eq!(fee_amount(total, fee_bps), Some(100));
 
         // seller_gets_bps = 10_000 (seller gets 100%, no loss)
         let seller_gets_bps = 10_000u32;
@@ -508,6 +541,7 @@ mod bps_fuzz_tests {
         // 0/100 split: seller bears all loss
         let buyer_loss_bps = 0u32;
         let seller_loss_bps = 10_000u32;
+        assert_eq!(buyer_loss_bps + seller_loss_bps, 10_000);
 
         // seller_gets_bps = 10_000 (seller gets 100%, but seller_loss_bps=10000 means seller bears full loss)
         let seller_gets_bps = 10_000u32;
@@ -541,6 +575,10 @@ mod bps_fuzz_tests {
         // This is equivalent to total, so overflow only happens at i128::MAX
         let max_total_for_loss = i128::MAX / (10_000 * 10_000);
         assert!(loss_amount(max_total_for_loss, 10_000, 10_000).is_some());
+        assert!(
+            loss_amount(max_total_for_loss + 1, 10_000, 10_000).is_none(),
+            "max_total_for_loss + 1 must return None on i128 intermediate overflow"
+        );
     }
 
     /// ADR-002: Edge case where amount is smaller than the BPS divisor, causing
@@ -564,7 +602,7 @@ mod bps_fuzz_tests {
                 // For loss amount with very small amounts
                 for &slbps in &[1000, 5000, 10000] {
                     let loss = loss_amount(amount, 5000, slbps).unwrap_or(0);
-                    assert!(loss >= 0 && loss <= amount);
+                    assert!((0..=amount).contains(&loss));
                 }
             }
         }
@@ -609,12 +647,101 @@ mod bps_fuzz_tests {
             let total_fee = f1 + f2;
             let total_buyer_refund = br1 + br2;
 
+            assert_eq!(buyer_loss_bps + seller_loss_bps, 10_000);
+            assert_eq!(full_seller_net + full_buyer_refund + full_fee, amount);
+            assert!((total_seller_net - full_seller_net).abs() <= 2);
+            assert!((total_buyer_refund - full_buyer_refund).abs() <= 1);
+
             // Conservation must hold
             assert_eq!(
                 total_seller_net + total_buyer_refund + total_fee,
                 amount,
                 "split-then-merge conservation failed for amount={amount}"
             );
+        }
+    }
+
+    /// ADR-002 Addendum (#182): Verify odd/non-divisible BPS splits on prime and
+    /// small stroop amounts never strand stroops and bound floor-rounding drift to <= 1 stroop.
+    #[test]
+    fn test_odd_bps_largest_remainder_drift_bound() {
+        let odd_amounts = [1_i128, 3, 7, 13, 99, 1_001, 10_001, 999_999];
+        let odd_splits: [(u32, u32); 5] = [
+            (1, 9_999),
+            (3_333, 6_667),
+            (1_429, 8_571),
+            (5_001, 4_999),
+            (9_999, 1),
+        ];
+        let odd_seller_gets = [0u32, 1, 2_500, 3_333, 5_000, 6_667, 7_000, 9_999, 10_000];
+        let fee_bps_values = [0u32, 1, 33, 100, 500];
+
+        for &total in &odd_amounts {
+            for &(buyer_loss_bps, seller_loss_bps) in &odd_splits {
+                assert_eq!(buyer_loss_bps + seller_loss_bps, 10_000);
+                for &seller_gets_bps in &odd_seller_gets {
+                    let loss_bps = BPS_DIVISOR - seller_gets_bps as i128;
+                    let seller_loss = loss_amount(total, loss_bps, seller_loss_bps).unwrap();
+                    let buyer_loss = loss_amount(total, loss_bps, buyer_loss_bps).unwrap();
+                    let total_loss = (total * loss_bps) / BPS_DIVISOR;
+
+                    // Independent floor divisions can differ from total_loss by at most 1 stroop
+                    let loss_drift = total_loss - (seller_loss + buyer_loss);
+                    assert!(
+                        (0..=1).contains(&loss_drift),
+                        "loss drift out of [0, 1] for total={total}, loss_bps={loss_bps}, split=({buyer_loss_bps},{seller_loss_bps}): drift={loss_drift}"
+                    );
+
+                    // Contract dispute settlement absorbs any remainder via buyer_refund = total - seller_raw
+                    let seller_raw = total - seller_loss;
+                    let buyer_refund = total - seller_raw;
+                    for &fee_bps in &fee_bps_values {
+                        let fee = fee_amount(seller_raw, fee_bps).unwrap();
+                        let seller_net = seller_raw - fee;
+                        assert!(seller_net >= 0 && buyer_refund >= 0 && fee >= 0);
+                        assert_eq!(
+                            seller_net + buyer_refund + fee,
+                            total,
+                            "stroop conservation failed for total={total}, seller_gets_bps={seller_gets_bps}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    /// ADR-002: Verify MAX_TRADE_VALUE (1_000_000_000_000 stroops) settles without
+    /// overflow and preserves exact conservation across 0/100, 100/0, 50/50, and odd splits.
+    #[test]
+    fn test_max_trade_value_dispute_resolution_boundaries() {
+        let max_trade = crate::MAX_TRADE_VALUE;
+        let splits: [(u32, u32); 5] = [
+            (0, 10_000),
+            (10_000, 0),
+            (5_000, 5_000),
+            (1, 9_999),
+            (3_333, 6_667),
+        ];
+        let outcomes = [0u32, 1, 3_333, 5_000, 9_999, 10_000];
+        let fees = [0u32, 1, 100, 500];
+
+        for &(buyer_loss_bps, seller_loss_bps) in &splits {
+            assert_eq!(buyer_loss_bps + seller_loss_bps, 10_000);
+            for &seller_gets_bps in &outcomes {
+                let loss_bps = BPS_DIVISOR - seller_gets_bps as i128;
+                let seller_loss = loss_amount(max_trade, loss_bps, seller_loss_bps)
+                    .expect("MAX_TRADE_VALUE must not overflow checked_loss_amount");
+                let seller_raw = max_trade - seller_loss;
+                let buyer_refund = max_trade - seller_raw;
+
+                for &fee_bps in &fees {
+                    let fee = fee_amount(seller_raw, fee_bps)
+                        .expect("MAX_TRADE_VALUE must not overflow checked_fee_amount");
+                    let seller_net = seller_raw - fee;
+                    assert!(seller_net >= 0 && buyer_refund >= 0 && fee >= 0);
+                    assert_eq!(seller_net + buyer_refund + fee, max_trade);
+                }
+            }
         }
     }
 }

@@ -25,6 +25,9 @@ on:
       - "docs/money-math-invariant-catalog.md"
       - ".github/workflows/money-math-parity.yml"
 
+permissions:
+  contents: read
+
 jobs:
   parity:
     name: Cross-Language Money-Math Parity

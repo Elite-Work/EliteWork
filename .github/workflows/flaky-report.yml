@@ -13,6 +13,9 @@ on:
         required: false
         default: "on-demand flake report"
 
+permissions:
+  contents: read
+
 jobs:
   # ─── Step 1: Validate the quarantine registry ─────────────────────────────
   validate-registry:

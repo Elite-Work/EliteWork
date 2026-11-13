@@ -16,6 +16,9 @@ on:
       - "scripts/slo-fault-test.sh"
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   fault-test:
     name: SLO burn-alert staged fault test

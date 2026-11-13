@@ -13,6 +13,9 @@ on:
         required: false
         default: "on-demand mutation check"
 
+permissions:
+  contents: read
+
 jobs:
   mutation-money-math:
     name: StrykerJS — feeComputation + lossAllocation

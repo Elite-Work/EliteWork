@@ -4,8 +4,12 @@ import {
     EvidenceAccessDeniedError,
     EvidenceTradeNotFoundError,
     EvidenceScanError,
+    EvidenceValidationError,
+    sanitizeEvidenceFilename,
 } from "../services/evidence.service";
-import { EvidenceValidationError } from "../services/evidence.service";
+import { IPFSService } from "../services/ipfs.service";
+import { __setPinataClientForTests, __resetPinataClient } from "../config/ipfs";
+import { appLogger } from "../middleware/logger";
 
 const BUYER = "GCBUYER0000000000000000000000000000000000000000000000000";
 const SELLER = "GCSELLER000000000000000000000000000000000000000000000000";
@@ -350,5 +354,113 @@ describe("EvidenceService", () => {
             }),
         );
         delete process.env.EVIDENCE_SCAN_REQUIRED;
+    });
+
+    describe("uploadVideoEvidence filename XSS & injection sanitization (#486)", () => {
+        const unsafePattern = /[<>"'&;\r\n\0/\\]|\.\./;
+
+        afterEach(() => {
+            __resetPinataClient();
+            jest.restoreAllMocks();
+        });
+
+        it.each([
+            ["<script>alert(1)</script>.mp4", "video/mp4"],
+            ["<scr<script>ipt>alert(1)</script>.mp4", "video/mp4"],
+            ["\"><img src=x onerror=alert(1)>.mp4", "video/mp4"],
+            ["<svg/onload=alert(1)>.webm", "video/webm"],
+            ["../../etc/<img src=x>.mp4", "video/mp4"],
+            ["..\\..\\windows\\evil.mp4", "video/mp4"],
+            ["clip\r\nFAKE_LOG=true.mp4", "video/mp4"],
+            ["&lt;script&gt;xss&lt;/script&gt;.mp4", "video/mp4"],
+        ])(
+            "sanitizes malicious filename %s before IPFS upload and DB persistence",
+            async (maliciousName, mimetype) => {
+                prisma.trade.findUnique = jest.fn().mockResolvedValue(mockTrade);
+                const createMock = jest.fn().mockResolvedValue({ id: 77 });
+                prisma.tradeEvidence.create = createMock;
+
+                const uploadFileMock = jest.fn().mockResolvedValue("bafysafe");
+                const safeService = new EvidenceService(prisma, {
+                    uploadFile: uploadFileMock,
+                    getFileUrl: (cid: string) => `https://gateway.test/ipfs/${cid}`,
+                } as unknown as IPFSService);
+
+                const file = {
+                    buffer: mimetype === "video/webm" ? makeWebmBuffer() : makeMp4Buffer(),
+                    originalname: maliciousName,
+                    mimetype,
+                    size: 16,
+                } as unknown as Express.Multer.File;
+
+                await safeService.uploadVideoEvidence(TRADE_ID, BUYER, file);
+
+                expect(uploadFileMock).toHaveBeenCalledTimes(1);
+                const loggedAndUploadedName = uploadFileMock.mock.calls[0][1] as string;
+                expect(loggedAndUploadedName).not.toMatch(unsafePattern);
+                expect(loggedAndUploadedName.length).toBeGreaterThan(0);
+
+                expect(createMock).toHaveBeenCalledWith({
+                    data: expect.objectContaining({
+                        tradeId: TRADE_ID,
+                        cid: "bafysafe",
+                        filename: loggedAndUploadedName,
+                        mimeType: mimetype,
+                        uploadedBy: BUYER.toLowerCase(),
+                    }),
+                });
+            },
+        );
+
+        it("falls back to safe default when malicious input strips cleanly to empty or extension-only", () => {
+            expect(sanitizeEvidenceFilename("<script></script>", "video/mp4")).toBe("evidence.mp4");
+            expect(sanitizeEvidenceFilename("../../<img src=x>.webm", "video/webm")).toBe("evidence.webm");
+            expect(sanitizeEvidenceFilename("proof-1.mp4", "video/mp4")).toBe("proof-1.mp4");
+            expect(sanitizeEvidenceFilename(`${"a".repeat(300)}.mp4`, "video/mp4").length).toBeLessThanOrEqual(255);
+        });
+
+        it("ensures unsanitized XSS/CRLF filenames never reach IPFS Pinata metadata or appLogger logs", async () => {
+            prisma.trade.findUnique = jest.fn().mockResolvedValue(mockTrade);
+            const createMock = jest.fn().mockResolvedValue({ id: 88 });
+            prisma.tradeEvidence.create = createMock;
+
+            const pinFileToIPFS = jest.fn().mockResolvedValue({ IpfsHash: "bafycleanlog" });
+            __setPinataClientForTests({ pinFileToIPFS } as unknown as Parameters<typeof __setPinataClientForTests>[0]);
+
+            const infoSpy = jest.spyOn(appLogger, "info").mockImplementation(() => appLogger);
+            const realIpfsService = new IPFSService();
+            const serviceWithRealIpfs = new EvidenceService(prisma, realIpfsService);
+
+            const maliciousName = "<script>alert('xss')</script>\r\nevil.mp4";
+            const file = {
+                buffer: makeMp4Buffer(),
+                originalname: maliciousName,
+                mimetype: "video/mp4",
+                size: 16,
+            } as unknown as Express.Multer.File;
+
+            await serviceWithRealIpfs.uploadVideoEvidence(TRADE_ID, BUYER, file);
+
+            const expectedSafe = sanitizeEvidenceFilename(maliciousName, "video/mp4");
+            expect(expectedSafe).not.toMatch(unsafePattern);
+            expect(pinFileToIPFS).toHaveBeenCalledWith(
+                expect.anything(),
+                expect.objectContaining({
+                    pinataMetadata: { name: expectedSafe },
+                }),
+            );
+            expect(infoSpy).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    cid: "bafycleanlog",
+                    filename: expectedSafe,
+                }),
+                "[IPFSService] File uploaded successfully",
+            );
+            expect(createMock).toHaveBeenCalledWith({
+                data: expect.objectContaining({
+                    filename: expectedSafe,
+                }),
+            });
+        });
     });
 });

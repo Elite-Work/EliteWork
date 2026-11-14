@@ -173,6 +173,90 @@ impl EscrowContract {
         assert!(!paused, "contract is paused");
     }
 
+    /// Panics with "trade is frozen" when the per-trade emergency freeze flag is set (#498).
+    fn assert_trade_not_frozen(env: &Env, trade_id: u64) {
+        let frozen: bool = env
+            .storage()
+            .persistent()
+            .get(&DataKey::FrozenTrade(trade_id))
+            .unwrap_or(false);
+        assert!(!frozen, "trade is frozen");
+    }
+
+    /// Emergency per-trade pause entry point (#498).
+    /// Blocks deposit, release, clawback, and other state transitions for 	rade_id
+    /// without affecting other active trades. Admin only.
+    pub fn freeze_trade(env: Env, trade_id: u64) {
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .expect("Not initialized");
+        admin.require_auth();
+
+        let _trade: Trade = Self::load_trade(&env, &DataKey::Trade(trade_id));
+        env.storage()
+            .persistent()
+            .set(&DataKey::FrozenTrade(trade_id), &true);
+
+        let now = env.ledger().timestamp();
+        Self::record_trade_event(
+            &env,
+            trade_id,
+            "frozen",
+            admin.clone(),
+            "trade frozen by admin",
+        );
+        TradeFrozenEvent {
+            trade_id,
+            admin,
+            timestamp: now,
+            schema_version: EVENT_SCHEMA_VERSION,
+        }
+        .publish(&env);
+        Self::bump_instance_ttl(&env);
+    }
+
+    /// Unfreezes a previously frozen trade (#498). Admin only.
+    pub fn unfreeze_trade(env: Env, trade_id: u64) {
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .expect("Not initialized");
+        admin.require_auth();
+
+        let _trade: Trade = Self::load_trade(&env, &DataKey::Trade(trade_id));
+        env.storage()
+            .persistent()
+            .remove(&DataKey::FrozenTrade(trade_id));
+
+        let now = env.ledger().timestamp();
+        Self::record_trade_event(
+            &env,
+            trade_id,
+            "unfrozen",
+            admin.clone(),
+            "trade unfrozen by admin",
+        );
+        TradeUnfrozenEvent {
+            trade_id,
+            admin,
+            timestamp: now,
+            schema_version: EVENT_SCHEMA_VERSION,
+        }
+        .publish(&env);
+        Self::bump_instance_ttl(&env);
+    }
+
+    /// Returns 	rue when 	rade_id is currently frozen (#498).
+    pub fn is_trade_frozen(env: Env, trade_id: u64) -> bool {
+        env.storage()
+            .persistent()
+            .get::<_, bool>(&DataKey::FrozenTrade(trade_id))
+            .unwrap_or(false)
+    }
+
     // -----------------------------------------------------------------------
     // Admin / Setup
     // -----------------------------------------------------------------------
@@ -818,6 +902,8 @@ impl EscrowContract {
             .expect("Not initialized");
         admin.require_auth();
 
+        Self::assert_trade_not_frozen(&env, trade_id);
+
         assert!(
             Self::is_clawback_enabled(env.clone()),
             "admin_clawback: clawback feature is currently disabled"
@@ -1313,6 +1399,7 @@ impl EscrowContract {
     /// - Emits `Deposited` event.
     pub fn deposit(env: Env, trade_id: u64) {
         Self::assert_not_paused(&env);
+        Self::assert_trade_not_frozen(&env, trade_id);
         let key = DataKey::Trade(trade_id);
         let mut trade: Trade = Self::load_trade(&env, &key);
         assert!(
@@ -2029,6 +2116,7 @@ impl EscrowContract {
     /// - Emits `FundsReleased` event.
     pub fn release_funds(env: Env, trade_id: u64, caller: Address) {
         Self::assert_not_paused(&env);
+        Self::assert_trade_not_frozen(&env, trade_id);
         let key = DataKey::Trade(trade_id);
         let mut trade: Trade = Self::load_trade(&env, &key);
         assert!(

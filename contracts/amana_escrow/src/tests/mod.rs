@@ -1,6 +1,7 @@
 pub mod bps_fuzz_tests;
 pub mod event_schema_tests;
 pub mod fee_update_tests;
+pub mod freeze_trade_tests;
 pub mod generated_schema_tests;
 pub mod gas_footprint_tests;
 pub mod max_trade_value_tests;

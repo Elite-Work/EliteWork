@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { Response, Router } from 'express';
 import { z } from 'zod';
 import { authMiddleware } from '../middleware/auth.middleware';
@@ -5,7 +6,9 @@ import { adminMiddleware } from '../middleware/admin.middleware';
 import { validateRequest } from '../middleware/validateRequest';
 import { AuthRequest } from '../services/auth.service';
 import { appLogger } from '../middleware/logger';
-import { getDeadLetterQueue } from '../jobs/deadLetter';
+import { createWalletRateLimiter } from '../lib/rateLimit';
+import { RATE_LIMIT_CONFIG } from '../config/rateLimit';
+import { getDeadLetterQueue, type DeadLetterEntry } from '../jobs/deadLetter';
 import {
   webhookQueue,
   notificationQueue,
@@ -28,10 +31,76 @@ const listQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(200).default(50),
 });
 
+const listSummaryQuerySchema = listQuerySchema.extend({
+  queue: z.string().trim().min(1).default('webhooks'),
+});
+
+export interface DlqEventSummary {
+  eventId: string;
+  queue: string;
+  jobName: string;
+  payloadHash: string;
+  failureReason: string;
+  errorClass: string;
+  retryCount: number;
+  failedAt: string;
+}
+
+export function hashDlqPayload(payload: unknown): string {
+  const serialized = JSON.stringify(payload ?? null);
+  return crypto.createHash('sha256').update(serialized).digest('hex');
+}
+
+function toDlqEventSummary(
+  jobId: string | undefined,
+  queueName: string,
+  entry: DeadLetterEntry,
+): DlqEventSummary {
+  return {
+    eventId: String(jobId ?? ''),
+    queue: entry.originalQueue || queueName,
+    jobName: entry.jobName,
+    payloadHash: hashDlqPayload(entry.data),
+    failureReason: entry.errorMessage,
+    errorClass: entry.errorClass,
+    retryCount: entry.attemptsMade,
+    failedAt: entry.failedAt,
+  };
+}
+
 export function createAdminDlqRouter(): Router {
   const router = Router();
+  const adminRateLimit = createWalletRateLimiter(RATE_LIMIT_CONFIG.admin);
 
-  router.use(authMiddleware, adminMiddleware);
+  router.use(authMiddleware, adminMiddleware, adminRateLimit);
+
+  /** GET /api/admin/dlq — list failed event summaries with error details (defaults to webhooks) */
+  router.get(
+    '/api/admin/dlq',
+    validateRequest({ query: listSummaryQuerySchema }),
+    async (req: AuthRequest, res: Response) => {
+      const { queue: queueName, page, limit } = listSummaryQuerySchema.parse(req.query);
+      if (!QUEUE_REGISTRY[queueName]) {
+        return res.status(404).json({ error: 'Unknown queue' });
+      }
+      try {
+        const dlq = getDeadLetterQueue(queueName);
+        const start = (page - 1) * limit;
+        const jobs = await dlq.getJobs(['waiting', 'delayed', 'active'], start, start + limit - 1);
+        const depth = await dlq.count();
+        res.json({
+          queue: queueName,
+          depth,
+          page,
+          limit,
+          events: jobs.map((job) => toDlqEventSummary(job.id, queueName, job.data)),
+        });
+      } catch (err) {
+        appLogger.error({ err, queueName }, 'Failed to list dead-letter event summaries');
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    },
+  );
 
   /** GET /api/admin/dlq/:queue — list dead-lettered jobs for a queue family */
   router.get(

@@ -1163,6 +1163,84 @@ components:
               - $ref: "#/components/schemas/ErrorEnvelope"
               - $ref: "#/components/schemas/AppErrorResponse"
 paths:
+  /api/admin/dlq:
+    get:
+      tags: [Admin]
+      summary: List dead-letter queue event summaries
+      description: |-
+        Returns a paginated list of dead-lettered job summaries (defaulting to
+        the `webhooks` queue) including event ID, SHA-256 payload hash, failure
+        reason, error class, retry count, and failure timestamp.
+      security:
+        - adminAuth: []
+      parameters:
+        - name: queue
+          in: query
+          description: Source queue name (defaults to `webhooks`).
+          schema:
+            type: string
+            default: webhooks
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+      responses:
+        "200":
+          description: Dead-letter event summaries
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  queue:
+                    type: string
+                  depth:
+                    type: integer
+                  page:
+                    type: integer
+                  limit:
+                    type: integer
+                  events:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        eventId:
+                          type: string
+                        queue:
+                          type: string
+                        jobName:
+                          type: string
+                        payloadHash:
+                          type: string
+                        failureReason:
+                          type: string
+                        errorClass:
+                          type: string
+                        retryCount:
+                          type: integer
+                        failedAt:
+                          type: string
+                          format: date-time
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+        "500":
+          $ref: "#/components/responses/InternalError"
   /api/admin/audit:
     get:
       tags: [Admin]

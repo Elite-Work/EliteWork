@@ -9,6 +9,7 @@ export interface CopyButtonProps {
   /** What is being copied, e.g. "Trade ID" or "transaction hash". */
   label: string;
   className?: string;
+  onCopied?: () => void;
 }
 
 type CopyState = "idle" | "copied" | "failed";
@@ -18,7 +19,7 @@ type CopyState = "idle" | "copied" | "failed";
  * the UI (trade IDs, transaction hashes). Renders the full `value`, never the
  * truncated display text.
  */
-export function CopyButton({ value, label, className }: CopyButtonProps) {
+export function CopyButton({ value, label, className, onCopied }: CopyButtonProps) {
   const [state, setState] = useState<CopyState>("idle");
   const resetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -33,15 +34,17 @@ export function CopyButton({ value, label, className }: CopyButtonProps) {
     // also navigate.
     event.stopPropagation();
 
+    let stateAfterCopy: CopyState = "copied";
     try {
       await navigator.clipboard.writeText(value);
-      setState("copied");
     } catch {
-      setState("failed");
+      stateAfterCopy = "failed";
     }
+    setState(stateAfterCopy);
 
     if (resetTimer.current) clearTimeout(resetTimer.current);
     resetTimer.current = setTimeout(() => setState("idle"), 2000);
+    if (stateAfterCopy === "copied") onCopied?.();
   };
 
   const title =

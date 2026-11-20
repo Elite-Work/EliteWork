@@ -6,6 +6,7 @@ import Link from "next/link";
 import { signTransaction } from "@stellar/freighter-api";
 import { useAuth } from "@/hooks/useAuth";
 import { useTradeDetail } from "@/hooks/useTradeDetail";
+import { useToast } from "@/hooks/useToast";
 import { useWallet } from "@/hooks/useWallet";
 import { api, ApiError } from "@/lib/api";
 import { apiConfig } from "@/lib/api";
@@ -81,6 +82,7 @@ export default function TradeDetailPage() {
   const { token, address, isAuthenticated } = useAuth();
   const { trade, loading, error, refetch } = useTradeDetail(tradeId);
   const { balance, asset } = useWallet();
+  const { addToast } = useToast();
 
   const [actionLoading, setActionLoading] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -199,7 +201,11 @@ export default function TradeDetailPage() {
                   <p className="text-xl font-semibold text-text-primary font-mono break-all">
                     {trade.tradeId}
                   </p>
-                  <CopyButton value={trade.tradeId} label="Trade ID" />
+                  <CopyButton
+                    value={trade.tradeId}
+                    label="Trade ID"
+                    onCopied={() => addToast({ type: "success", message: "Copied", duration: 2000 })}
+                  />
                 </div>
                 <p className="mt-2 text-xs text-text-muted">Created: {formatDate(trade.createdAt)}</p>
                 <p className="mt-1 text-xs text-text-muted">Updated: {formatDate(trade.updatedAt)}</p>

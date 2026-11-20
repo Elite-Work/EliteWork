@@ -8,6 +8,8 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import TradeDetailPage from "@/app/trades/[id]/page";
+import { ToastContainer } from "@/components/ui/ToastContainer";
+import { ToastProvider } from "@/hooks/useToast";
 import { useTradeDetail } from "@/hooks/useTradeDetail";
 import { useWallet } from "@/hooks/useWallet";
 import { useAuth } from "@/hooks/useAuth";
@@ -111,6 +113,32 @@ beforeEach(() => {
   mockSignTransaction.mockResolvedValue({ signedTxXdr: "signed-xdr", signerAddress: "GABC" } as unknown as Awaited<ReturnType<typeof signTransaction>>);
 });
 
+it("copies the trade ID and displays the Copied toast", async () => {
+  mockAuth(BUYER_ADDRESS);
+  mockUseTradeDetail.mockReturnValue({
+    trade: makeTrade("FUNDED"),
+    loading: false,
+    error: null,
+    refetch: jest.fn(),
+  });
+  const user = userEvent.setup();
+  const writeText = jest.spyOn(navigator.clipboard, "writeText");
+  try {
+    render(
+      <>
+        <TradeDetailPage />
+        <ToastContainer />
+      </>,
+      { wrapper: ToastProvider },
+    );
+    await user.click(screen.getByRole("button", { name: "Copy Trade ID" }));
+    expect(writeText).toHaveBeenCalledWith("trade-123");
+    expect(await screen.findByText("Copied")).toBeInTheDocument();
+  } finally {
+    writeText.mockRestore();
+  }
+});
+
 // ── Loading state ──────────────────────────────────────────────────────────────
 
 describe("Trade Detail — loading state", () => {
@@ -122,7 +150,7 @@ describe("Trade Detail — loading state", () => {
       error: null,
       refetch: jest.fn(),
     });
-    render(<TradeDetailPage />);
+    render(<TradeDetailPage />, { wrapper: ToastProvider });
     expect(document.querySelector("svg.animate-spin")).toBeInTheDocument();
   });
 });
@@ -139,7 +167,7 @@ describe("Trade Detail — error state", () => {
       error: "Trade not found",
       refetch,
     });
-    render(<TradeDetailPage />);
+    render(<TradeDetailPage />, { wrapper: ToastProvider });
     expect(screen.getByText("Trade not found")).toBeInTheDocument();
     expect(screen.getByText(/retry/i)).toBeInTheDocument();
   });
@@ -153,7 +181,7 @@ describe("Trade Detail — error state", () => {
       error: "Fetch failed",
       refetch,
     });
-    render(<TradeDetailPage />);
+    render(<TradeDetailPage />, { wrapper: ToastProvider });
     await userEvent.click(screen.getByText(/retry/i));
     expect(refetch).toHaveBeenCalledTimes(1);
   });
@@ -172,7 +200,7 @@ describe("Trade Detail — trade status display", () => {
         error: null,
         refetch: jest.fn(),
       });
-      render(<TradeDetailPage />);
+      render(<TradeDetailPage />, { wrapper: ToastProvider });
       expect(screen.getByText(status)).toBeInTheDocument();
     }
   );
@@ -189,7 +217,7 @@ describe("Trade Detail — role-based action buttons", () => {
       error: null,
       refetch: jest.fn(),
     });
-    render(<TradeDetailPage />);
+    render(<TradeDetailPage />, { wrapper: ToastProvider });
     expect(screen.getByTestId("action-deposit")).toBeInTheDocument();
   });
 
@@ -201,7 +229,7 @@ describe("Trade Detail — role-based action buttons", () => {
       error: null,
       refetch: jest.fn(),
     });
-    render(<TradeDetailPage />);
+    render(<TradeDetailPage />, { wrapper: ToastProvider });
     expect(screen.queryByTestId("action-deposit")).not.toBeInTheDocument();
   });
 
@@ -213,7 +241,7 @@ describe("Trade Detail — role-based action buttons", () => {
       error: null,
       refetch: jest.fn(),
     });
-    render(<TradeDetailPage />);
+    render(<TradeDetailPage />, { wrapper: ToastProvider });
     expect(screen.getByTestId("action-confirm-delivery")).toBeInTheDocument();
   });
 
@@ -225,7 +253,7 @@ describe("Trade Detail — role-based action buttons", () => {
       error: null,
       refetch: jest.fn(),
     });
-    render(<TradeDetailPage />);
+    render(<TradeDetailPage />, { wrapper: ToastProvider });
     expect(screen.getByTestId("action-release-funds")).toBeInTheDocument();
   });
 
@@ -237,7 +265,7 @@ describe("Trade Detail — role-based action buttons", () => {
       error: null,
       refetch: jest.fn(),
     });
-    render(<TradeDetailPage />);
+    render(<TradeDetailPage />, { wrapper: ToastProvider });
     expect(screen.getByTestId("action-dispute")).toBeInTheDocument();
   });
 
@@ -249,7 +277,7 @@ describe("Trade Detail — role-based action buttons", () => {
       error: null,
       refetch: jest.fn(),
     });
-    render(<TradeDetailPage />);
+    render(<TradeDetailPage />, { wrapper: ToastProvider });
     expect(screen.getByTestId("action-dispute")).toBeInTheDocument();
   });
 
@@ -261,7 +289,7 @@ describe("Trade Detail — role-based action buttons", () => {
       error: null,
       refetch: jest.fn(),
     });
-    render(<TradeDetailPage />);
+    render(<TradeDetailPage />, { wrapper: ToastProvider });
     expect(screen.queryByTestId("action-deposit")).not.toBeInTheDocument();
     expect(screen.queryByTestId("action-confirm-delivery")).not.toBeInTheDocument();
     expect(screen.queryByTestId("action-release-funds")).not.toBeInTheDocument();
@@ -276,7 +304,7 @@ describe("Trade Detail — role-based action buttons", () => {
       error: null,
       refetch: jest.fn(),
     });
-    render(<TradeDetailPage />);
+    render(<TradeDetailPage />, { wrapper: ToastProvider });
     expect(screen.getByText(/no further actions are available/i)).toBeInTheDocument();
   });
 });
@@ -294,7 +322,7 @@ describe("Trade Detail — Freighter signing flow", () => {
     });
     mockDeposit.mockResolvedValue({ unsignedXdr: "unsigned-xdr-payload" });
 
-    render(<TradeDetailPage />);
+    render(<TradeDetailPage />, { wrapper: ToastProvider });
     await userEvent.click(screen.getByTestId("action-deposit"));
 
     await waitFor(() => expect(mockDeposit).toHaveBeenCalledWith("jwt-token", "trade-123"));
@@ -314,7 +342,7 @@ describe("Trade Detail — Freighter signing flow", () => {
     });
     mockDeposit.mockResolvedValue({ unsignedXdr: "xdr-payload" });
 
-    render(<TradeDetailPage />);
+    render(<TradeDetailPage />, { wrapper: ToastProvider });
     await userEvent.click(screen.getByTestId("action-deposit"));
 
     await waitFor(() =>
@@ -335,7 +363,7 @@ describe("Trade Detail — Freighter signing flow", () => {
       error: { message: "User cancelled signing" },
     } as unknown as Awaited<ReturnType<typeof signTransaction>>);
 
-    render(<TradeDetailPage />);
+    render(<TradeDetailPage />, { wrapper: ToastProvider });
     await userEvent.click(screen.getByTestId("action-deposit"));
 
     await waitFor(() =>
@@ -353,7 +381,7 @@ describe("Trade Detail — Freighter signing flow", () => {
     });
     mockConfirmDelivery.mockResolvedValue({ unsignedXdr: "confirm-xdr" });
 
-    render(<TradeDetailPage />);
+    render(<TradeDetailPage />, { wrapper: ToastProvider });
     await userEvent.click(screen.getByTestId("action-confirm-delivery"));
 
     await waitFor(() => expect(mockConfirmDelivery).toHaveBeenCalledWith("jwt-token", "trade-123"));
@@ -369,7 +397,7 @@ describe("Trade Detail — Freighter signing flow", () => {
     });
     mockReleaseFunds.mockResolvedValue({ unsignedXdr: "release-xdr" });
 
-    render(<TradeDetailPage />);
+    render(<TradeDetailPage />, { wrapper: ToastProvider });
     await userEvent.click(screen.getByTestId("action-release-funds"));
 
     await waitFor(() => expect(mockReleaseFunds).toHaveBeenCalledWith("jwt-token", "trade-123"));

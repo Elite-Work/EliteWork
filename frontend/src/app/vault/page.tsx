@@ -12,6 +12,7 @@ import {
   VaultValueCard,
 } from "@/components/vault";
 import { DriverManifestForm, LoadingState, type DriverManifestData } from "@/components/ui";
+import { TradeActivityEmptyState } from "@/components/ui/TradeActivityEmptyState";
 import { useAuth } from "@/hooks/useAuth";
 import { useWallet } from "@/hooks/useWallet";
 import {
@@ -128,7 +129,7 @@ export default function VaultPage() {
     ];
 
   const isEmpty =
-    !loading && isAuthenticated && stats?.totalTrades === 0 && recentTrades?.items.length === 0;
+    !loading && !error && isAuthenticated && recentTrades?.items.length === 0;
 
   const manifestTrade =
     recentTrades?.items.find((trade) => ["FUNDED", "DELIVERED"].includes(trade.status)) ??
@@ -283,19 +284,6 @@ export default function VaultPage() {
           </div>
         )}
 
-        {/* Empty state */}
-        {isEmpty && (
-          <div className="rounded-2xl border border-border-default bg-card p-8 text-center">
-            <p className="text-text-muted text-sm">No trades yet. Create a trade to get started.</p>
-            <Link
-              href="/trades/create"
-              className="mt-4 inline-flex rounded-lg bg-gold px-4 py-2 text-sm font-semibold text-text-inverse hover:bg-gold-hover transition-colors"
-            >
-              Create Trade
-            </Link>
-          </div>
-        )}
-
         {/* Main content — hidden while loading */}
         {!loading && !error && (
           <>
@@ -406,7 +394,11 @@ export default function VaultPage() {
               </div>
 
               <div>
-                <AuditLogCard entries={auditEntries} isLiveSync={isAuthenticated} />
+                {isEmpty ? (
+                  <TradeActivityEmptyState variant="vault" />
+                ) : (
+                  <AuditLogCard entries={auditEntries} isLiveSync={isAuthenticated} />
+                )}
               </div>
 
               <div className="md:col-span-2 lg:col-span-3 rounded-2xl border border-border-default bg-card p-5">

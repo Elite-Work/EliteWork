@@ -237,7 +237,7 @@ describe("Vault Dashboard — empty state", () => {
     render(<VaultPage />);
 
     await waitFor(() =>
-      expect(screen.getByText(/no trades yet/i)).toBeInTheDocument()
+      expect(screen.getByRole("heading", { name: "No vault activity yet" })).toBeInTheDocument()
     );
   });
 
@@ -251,7 +251,7 @@ describe("Vault Dashboard — empty state", () => {
 
     render(<VaultPage />);
 
-    await waitFor(() => expect(screen.getByText(/create trade/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole("link", { name: "Create Trade" })).toHaveAttribute("href", "/trades/create"));
   });
 
   it("does not show empty state when not authenticated", async () => {
@@ -259,6 +259,6 @@ describe("Vault Dashboard — empty state", () => {
 
     render(<VaultPage />);
 
-    expect(screen.queryByText(/no trades yet/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "No vault activity yet" })).not.toBeInTheDocument();
   });
 });

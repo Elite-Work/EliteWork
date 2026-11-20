@@ -936,6 +936,12 @@ jobs:
         if: needs.changes.outputs.contracts == 'true'
         run: node ../../scripts/check-contract-test-coverage.mjs
 
+      # Fails if the contract drops a function the backend's frozen ABI
+      # snapshot depends on, or changes one of its return types.
+      - name: Verify backend/contract ABI parity
+        if: needs.changes.outputs.contracts == 'true'
+        run: node ../../scripts/check-abi-parity.mjs
+
       # Issue #302 — `cargo test` regenerates test_snapshots/ from scratch, so
       # the "Snapshots are current" step below sees stale (modified), orphaned
       # (deleted) and never-committed (untracked) snapshots alike.

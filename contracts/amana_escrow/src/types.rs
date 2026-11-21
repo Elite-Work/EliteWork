@@ -311,6 +311,8 @@ pub enum DataKey {
     /// existing behavior; an admin can explicitly disable/re-enable via
     /// `set_clawback_enabled()` to stage a rollout or freeze the feature.
     ClawbackEnabled,
+    /// Per-trade emergency freeze flag (Issue #498).
+    FrozenTrade(u64),
 }
 
 #[contracttype]

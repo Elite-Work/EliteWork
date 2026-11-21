@@ -369,3 +369,26 @@ pub struct ContractUpgradeQueued {
     pub queued_at: u64,
     pub execute_after: u64,
 }
+
+
+// ---------------------------------------------------------------------------
+// Per-trade emergency freeze events (Issue #498)
+// ---------------------------------------------------------------------------
+
+#[contractevent(topics = ["TRDFRZ"])]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TradeFrozenEvent {
+    pub trade_id: u64,
+    pub admin: Address,
+    pub timestamp: u64,
+    pub schema_version: u32,
+}
+
+#[contractevent(topics = ["TRDUFZ"])]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TradeUnfrozenEvent {
+    pub trade_id: u64,
+    pub admin: Address,
+    pub timestamp: u64,
+    pub schema_version: u32,
+}

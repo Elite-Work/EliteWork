@@ -51,6 +51,7 @@ tags:
   - name: Admin
   - name: Wallet
   - name: Users
+  - name: Notifications
   - name: Trades
   - name: Disputes
   - name: Dispute Categories
@@ -845,6 +846,60 @@ components:
       example:
         displayName: Amana Trader
         avatarUrl: https://cdn.example.com/avatar.png
+    UserReputationResponse:
+      type: object
+      required: [trustScore, totalTrades, completedTrades, disputedTrades, successRate, history]
+      properties:
+        trustScore:
+          type: number
+        totalTrades:
+          type: integer
+        completedTrades:
+          type: integer
+        disputedTrades:
+          type: integer
+        successRate:
+          type: number
+        history:
+          type: array
+          maxItems: 20
+          items:
+            type: object
+            additionalProperties: true
+    NotificationChannel:
+      type: string
+      enum: [email, push, in-app, sms]
+    NotificationPreferencesResponse:
+      type: object
+      required: [preferences, phoneNumber]
+      properties:
+        preferences:
+          type: object
+          additionalProperties:
+            type: array
+            maxItems: 4
+            items:
+              $ref: "#/components/schemas/NotificationChannel"
+        phoneNumber:
+          type: string
+          nullable: true
+    NotificationPreferencesUpdateRequest:
+      type: object
+      additionalProperties:
+        type: array
+        maxItems: 4
+        items:
+          $ref: "#/components/schemas/NotificationChannel"
+      example:
+        trade_funded: [email, in-app]
+    SmsSettingsRequest:
+      type: object
+      required: [phoneNumber]
+      properties:
+        phoneNumber:
+          type: string
+          pattern: "^\\+[1-9]\\d{7,14}$"
+          example: "+2348012345678"
     TradeMutationRequest:
       type: object
       properties:
@@ -2034,6 +2089,68 @@ paths:
           $ref: "#/components/responses/UnauthorizedError"
         "500":
           $ref: "#/components/responses/InternalError"
+    delete:
+      tags: [Users]
+      summary: Erase the authenticated user's data (irreversible)
+      description: "Deletes the caller's user record and related data in a single transaction. There is no confirmation step; the request itself is the confirmation. Error code references: `AUTH_ERROR`, `NOT_FOUND`, `INFRA_ERROR`, `INTERNAL_ERROR`."
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: User data erased. Body summarises what was removed.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "404":
+          description: No user record exists for the caller.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+              example:
+                error: User not found
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /users/me/export:
+    get:
+      tags: [Users]
+      summary: Export the authenticated user's stored data
+      description: "Returns the caller's stored user record, including trades where they are buyer or seller. Error code references: `AUTH_ERROR`, `INFRA_ERROR`, `INTERNAL_ERROR`."
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Export generated.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /users/me/reputation:
+    get:
+      tags: [Users]
+      summary: Fetch the authenticated user's reputation
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Reputation summary returned.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserReputationResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "500":
+          $ref: "#/components/responses/InternalError"
   /users/{address}:
     get:
       tags: [Users]
@@ -2056,6 +2173,89 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
               example:
                 error: User not found
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /users/{address}/reputation:
+    get:
+      tags: [Users]
+      summary: Fetch a public reputation summary by Stellar address
+      parameters:
+        - $ref: "#/components/parameters/UserAddressPath"
+      responses:
+        "200":
+          description: Reputation summary returned.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserReputationResponse"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /notifications/preferences:
+    get:
+      tags: [Notifications]
+      summary: Fetch the authenticated user's notification preferences
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Preferences and SMS number returned. Missing records return empty defaults.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationPreferencesResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    put:
+      tags: [Notifications]
+      summary: Update notification preferences per event
+      description: Keys present in the body replace the stored value for that event; other events are left unchanged.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NotificationPreferencesUpdateRequest"
+      responses:
+        "200":
+          description: Merged preferences returned.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationPreferencesResponse"
+        "400":
+          $ref: "#/components/responses/LegacyValidationError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /notifications/sms-settings:
+    put:
+      tags: [Notifications]
+      summary: Set the SMS number for trade notifications
+      description: The number is set explicitly by the user and is never inferred from profile or wallet data.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SmsSettingsRequest"
+      responses:
+        "200":
+          description: Saved SMS number and current preferences returned.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationPreferencesResponse"
+        "400":
+          $ref: "#/components/responses/LegacyValidationError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
         "500":
           $ref: "#/components/responses/InternalError"
   /dispute-categories:

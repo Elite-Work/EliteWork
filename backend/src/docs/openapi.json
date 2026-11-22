@@ -1138,6 +1138,89 @@
           "routes"
         ]
       },
+      "ReputationEvent": {
+        "type": "object",
+        "required": [
+          "id",
+          "event",
+          "impact",
+          "impactLabel",
+          "timestamp",
+          "type"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "event": {
+            "type": "string"
+          },
+          "impact": {
+            "type": "number"
+          },
+          "impactLabel": {
+            "type": "string",
+            "description": "Signed display form of `impact`, e.g. `+5` or `-10`."
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "trade_completed",
+              "trade_initiated",
+              "dispute_initiated",
+              "dispute_resolved",
+              "dispute_involved",
+              "account_created"
+            ]
+          }
+        }
+      },
+      "ReputationResponse": {
+        "type": "object",
+        "required": [
+          "trustScore",
+          "totalTrades",
+          "completedTrades",
+          "disputedTrades",
+          "successRate",
+          "history"
+        ],
+        "properties": {
+          "trustScore": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "totalTrades": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "completedTrades": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "disputedTrades": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "successRate": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "history": {
+            "type": "array",
+            "maxItems": 20,
+            "items": {
+              "$ref": "#/components/schemas/ReputationEvent"
+            }
+          }
+        }
+      },
       "UserProfile": {
         "type": "object",
         "additionalProperties": true,
@@ -3087,6 +3170,70 @@
                 }
               }
             }
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/users/me/reputation": {
+      "get": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Fetch the authenticated user's reputation",
+        "description": "Error code references: `AUTH_ERROR`, `INTERNAL_ERROR`.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Reputation summary returned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReputationResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/users/{address}/reputation": {
+      "get": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Fetch a public reputation summary by Stellar address",
+        "description": "Public endpoint, no authentication. Error code references: `VALIDATION_ERROR`, `INTERNAL_ERROR`.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/UserAddressPath"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Reputation summary returned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReputationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/LegacyValidationError"
           },
           "500": {
             "$ref": "#/components/responses/InternalError"

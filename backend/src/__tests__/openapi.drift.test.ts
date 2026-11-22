@@ -76,6 +76,8 @@ const IMPLEMENTED_ROUTES = [
   "/wallet/path-payment-quote",
   "/users/me",
   "/users/{address}",
+  "/users/me/reputation",
+  "/users/{address}/reputation",
   "/dispute-categories",
   "/dispute-categories/{id}",
   "/trades",

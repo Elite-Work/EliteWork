@@ -43,12 +43,16 @@ export function BentoCard({
         .join(" ")}
       {...props}
     >
-      <div className="flex items-center gap-2 mb-4">
-        {icon && <span className="text-gold dark:text-gold">{icon}</span>}
-        <h3 className="text-lg font-semibold text-text-primary dark:text-text-primary">
-          {title}
-        </h3>
-      </div>
+      {(icon || title) && (
+        <div className="flex items-center gap-2 mb-4">
+          {icon && <span className="text-gold dark:text-gold">{icon}</span>}
+          {title && (
+            <h3 className="text-lg font-semibold text-text-primary dark:text-text-primary">
+              {title}
+            </h3>
+          )}
+        </div>
+      )}
       <div className="flex-1">{children}</div>
     </div>
   );

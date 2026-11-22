@@ -262,7 +262,7 @@ export default function VaultPage() {
 
         {/* Loading skeleton */}
         {loading && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4" aria-busy="true" aria-label="Loading vault data">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4" role="status" aria-busy="true" aria-label="Loading vault data">
             <LoadingState variant="card" rows={3} />
             <LoadingState variant="card" rows={3} />
             <LoadingState variant="card" rows={2} />

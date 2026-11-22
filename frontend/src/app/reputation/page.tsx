@@ -210,7 +210,7 @@ export default function ReputationPage() {
           <RepScoreRing score={ringScore} size="xl" animated />
           <p className="text-sm text-text-secondary mt-2">Trust Score</p>
           <p className="text-3xl font-bold text-text-primary">{data.trustScore}</p>
-          <p className="text-xs text-text-muted">out of 100</p>
+          <p className="text-xs text-text-secondary">out of 100</p>
         </div>
 
         <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -221,7 +221,7 @@ export default function ReputationPage() {
             >
               <div className="flex items-center gap-2 mb-3">
                 {metric.icon}
-                <h3 className="text-sm font-medium text-text-secondary">{metric.title}</h3>
+                <h2 className="text-sm font-medium text-text-secondary">{metric.title}</h2>
               </div>
               <p className="text-2xl font-bold text-text-primary">{metric.value}</p>
             </div>

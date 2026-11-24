@@ -430,6 +430,10 @@ jobs:
         if: needs.changes.outputs.backend == 'true'
         run: pnpm install --frozen-lockfile
 
+      - name: Audit dependencies (advisory, non-blocking)
+        if: needs.changes.outputs.backend == 'true'
+        run: pnpm audit || true
+
       - name: Apply database migrations
         if: needs.changes.outputs.backend == 'true'
         env:

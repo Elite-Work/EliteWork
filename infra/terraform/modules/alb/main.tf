@@ -121,11 +121,21 @@ resource "aws_lb_listener" "https" {
 variable "project_name" {
   description = "Project name used in resource tags and security group naming."
   type        = string
+
+  validation {
+    condition     = can(regex("^[a-z][a-z0-9-]{1,29}$", var.project_name))
+    error_message = "project_name must be 2-30 characters of lowercase letters, digits, or hyphens, and start with a letter."
+  }
 }
 
 variable "environment" {
   description = "Environment name applied to resource tags."
   type        = string
+
+  validation {
+    condition     = contains(["dev", "staging", "production"], var.environment)
+    error_message = "environment must be one of: dev, staging, production."
+  }
 }
 
 variable "vpc_id" {
@@ -152,6 +162,11 @@ variable "allowed_cidr_blocks" {
   description = "IPv4 CIDRs allowed to connect to the HTTP and HTTPS listeners."
   type        = list(string)
   default     = ["0.0.0.0/0"]
+
+  validation {
+    condition     = length(var.allowed_cidr_blocks) > 0 && alltrue([for cidr in var.allowed_cidr_blocks : can(cidrhost(cidr, 0))])
+    error_message = "allowed_cidr_blocks must contain at least one valid CIDR block."
+  }
 }
 
 variable "internal" {
@@ -181,6 +196,11 @@ variable "target_port" {
   description = "Port used by the target group and its registered targets."
   type        = number
   default     = 4000
+
+  validation {
+    condition     = var.target_port >= 1 && var.target_port <= 65535
+    error_message = "target_port must be between 1 and 65535."
+  }
 }
 
 variable "target_protocol" {
@@ -198,6 +218,11 @@ variable "health_check_path" {
   description = "HTTP(S) path checked on each registered target."
   type        = string
   default     = "/health/ready"
+
+  validation {
+    condition     = can(regex("^/[A-Za-z0-9._~!$&'()*+,;=:@%/-]*$", var.health_check_path))
+    error_message = "health_check_path must start with / and contain only valid URL path characters."
+  }
 }
 
 variable "ssl_policy" {

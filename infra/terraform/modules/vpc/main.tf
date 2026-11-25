@@ -123,42 +123,82 @@ resource "aws_route_table_association" "private" {
 variable "project_name" {
   description = "Project name"
   type        = string
+
+  validation {
+    condition     = can(regex("^[a-z][a-z0-9-]{1,29}$", var.project_name))
+    error_message = "project_name must be 2-30 characters of lowercase letters, digits, or hyphens, and start with a letter."
+  }
 }
 
 variable "environment" {
-  description = "Environment name"
+  description = "Environment name (dev, staging, or production)"
   type        = string
+
+  validation {
+    condition     = contains(["dev", "staging", "production"], var.environment)
+    error_message = "environment must be one of: dev, staging, production."
+  }
 }
 
 variable "region" {
-  description = "AWS region"
+  description = "AWS region (for example us-east-1)"
   type        = string
+
+  validation {
+    condition     = can(regex("^[a-z]{2}(-gov)?-[a-z]+-[0-9]$", var.region))
+    error_message = "region must be a valid AWS region identifier such as us-east-1 or eu-west-2."
+  }
 }
 
 variable "vpc_cidr" {
   description = "VPC CIDR block"
   type        = string
+
+  validation {
+    condition     = can(cidrhost(var.vpc_cidr, 0))
+    error_message = "vpc_cidr must be a valid IPv4 or IPv6 CIDR block, for example 10.0.0.0/16."
+  }
 }
 
 variable "public_subnet_cidrs" {
   description = "List of public subnet CIDR blocks"
   type        = list(string)
+
+  validation {
+    condition     = length(var.public_subnet_cidrs) > 0 && alltrue([for cidr in var.public_subnet_cidrs : can(cidrhost(cidr, 0))])
+    error_message = "public_subnet_cidrs must contain at least one valid CIDR block."
+  }
 }
 
 variable "private_subnet_cidrs" {
   description = "List of private subnet CIDR blocks"
   type        = list(string)
+
+  validation {
+    condition     = length(var.private_subnet_cidrs) > 0 && alltrue([for cidr in var.private_subnet_cidrs : can(cidrhost(cidr, 0))])
+    error_message = "private_subnet_cidrs must contain at least one valid CIDR block."
+  }
 }
 
 variable "availability_zones" {
-  description = "List of availability zones"
+  description = "List of availability zones, one per subnet"
   type        = list(string)
+
+  validation {
+    condition     = length(var.availability_zones) >= max(length(var.public_subnet_cidrs), length(var.private_subnet_cidrs)) && alltrue([for az in var.availability_zones : can(regex("^[a-z]{2}(-gov)?-[a-z]+-[0-9][a-z]$", az))])
+    error_message = "availability_zones must name valid AZs and provide at least one entry per public and private subnet."
+  }
 }
 
 variable "nat_gateway_count" {
   description = "Number of NAT gateways"
   type        = number
   default     = 1
+
+  validation {
+    condition     = var.nat_gateway_count >= 1 && var.nat_gateway_count <= length(var.public_subnet_cidrs)
+    error_message = "nat_gateway_count must be between 1 and the number of public subnets."
+  }
 }
 
 output "vpc_id" {

@@ -26,6 +26,7 @@ import { csrfProtection } from "./middleware/csrf.middleware";
 import { createOutboxRoutes } from "./routes/outbox.routes";
 import { createJobHealthRoutes } from "./routes/job-health.routes";
 import { createPublicApiRouter } from "./routes/publicApi.router";
+import { createCooperativeRouter } from "./routes/cooperative.routes";
 import {
   apiVersionMiddleware,
   API_VERSION,
@@ -130,6 +131,9 @@ export function createApp(isShuttingDown?: () => boolean): express.Application {
   // legacy mount. The legacy lane is mounted at "/" to preserve every current
   // URL exactly.
   app.use("/", publicApi);
+
+  // Cooperative routes (pilot registration & trade viewing): POST /api/cooperatives/pilot-register (#494)
+  app.use("/api/cooperatives", createCooperativeRouter());
 
   // Feature flags (admin-managed) — gated by ADMIN_ROUTES_ENABLED
   app.use(adminFeatureGate, csrfProtection, createAdminFeaturesRouter());

@@ -40,6 +40,7 @@ describe("Trade export route", () => {
     buyerAddress: userAddress,
     sellerAddress,
     amountUsdc: "100",
+    commodity: null,
     buyerLossBps: 5000,
     sellerLossBps: 5000,
     version: 0,

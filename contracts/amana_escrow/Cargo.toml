@@ -112,3 +112,8 @@ path = "tests/admin_signer_fixture_tests.rs"
 [[test]]
 name = "parity_money_math"
 path = "tests/parity_money_math.rs"
+
+# Issue #498 — per-trade emergency freeze
+[[test]]
+name = "trade_freeze_tests"
+path = "tests/trade_freeze_tests.rs"

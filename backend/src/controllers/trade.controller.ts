@@ -33,6 +33,7 @@ interface CreateTradeBody {
   amountUsdc?: unknown;
   buyerLossBps?: unknown;
   sellerLossBps?: unknown;
+  commodity?: unknown;
 }
 
 function parseAdminPubkeys(): Set<string> {
@@ -76,7 +77,8 @@ export class TradeController {
         throw new AppError(ErrorCode.VALIDATION_ERROR, "Invalid buyer wallet address", 400);
       }
 
-      const { sellerAddress, amountUsdc, buyerLossBps, sellerLossBps } = req.body as CreateTradeBody;
+      const { sellerAddress, amountUsdc, buyerLossBps, sellerLossBps, commodity } = req.body as CreateTradeBody;
+      const normalizedCommodity = this.normalizeCommodity(commodity);
       if (!this.isValidPublicKey(sellerAddress)) {
         throw new AppError(ErrorCode.VALIDATION_ERROR, "Invalid sellerAddress", 400);
       }
@@ -125,6 +127,7 @@ export class TradeController {
         amountUsdc: normalizedAmountUsdc,
         buyerLossBps: buyerBps,
         sellerLossBps: sellerBps,
+        commodity: normalizedCommodity,
       });
 
       return res.status(201).json({ tradeId, unsignedXdr });
@@ -189,6 +192,7 @@ export class TradeController {
             amountUsdc: prepared.amountUsdc,
             buyerLossBps: prepared.buyerLossBps,
             sellerLossBps: prepared.sellerLossBps,
+            commodity: prepared.commodity,
           });
           created.push({ index, tradeId, unsignedXdr });
           createdAmounts.push(prepared.amountUsdc);
@@ -253,6 +257,7 @@ export class TradeController {
     amountUsdc: string;
     buyerLossBps: number;
     sellerLossBps: number;
+    commodity: string | null;
   } {
     if (!this.isValidPublicKey(row.sellerAddress)) {
       throw new AppError(ErrorCode.VALIDATION_ERROR, "Invalid sellerAddress", 400);
@@ -280,7 +285,20 @@ export class TradeController {
       amountUsdc: normalizedAmountUsdc,
       buyerLossBps: row.buyerLossBps,
       sellerLossBps: row.sellerLossBps,
+      commodity: this.normalizeCommodity(row.commodity),
     };
+  }
+
+  /**
+   * Commodity is optional off-chain metadata used for search (#504). The zod
+   * schema constrains shape on the route; this guards direct controller use
+   * and keeps an absent value as `null` rather than `undefined`.
+   */
+  private normalizeCommodity(value: unknown): string | null {
+    if (typeof value !== "string") return null;
+    const trimmed = value.trim();
+    if (trimmed.length === 0) return null;
+    return trimmed.slice(0, 100);
   }
 
   public buildDepositTx = async (

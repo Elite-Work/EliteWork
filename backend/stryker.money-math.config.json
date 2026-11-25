@@ -1,7 +1,9 @@
 {
   "mutate": [
     "src/lib/feeComputation.ts",
-    "src/lib/lossAllocation.ts"
+    "src/lib/lossAllocation.ts",
+    "src/services/mediatorQuorum.service.ts",
+    "src/services/feeEstimator.service.ts"
   ],
   "testRunner": "jest",
   "jest": {

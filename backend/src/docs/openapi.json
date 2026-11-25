@@ -57,6 +57,9 @@
     },
     {
       "name": "Stellar"
+    },
+    {
+      "name": "Cooperatives"
     }
   ],
   "components": {
@@ -201,10 +204,21 @@
           ]
         }
       },
+      "ListTradesCursorQuery": {
+        "in": "query",
+        "name": "cursor",
+        "required": false,
+        "description": "Opaque cursor from a previous response's `pageInfo.nextCursor`. Pass it back verbatim to load the next page. When `cursor` is sent (or `page` is omitted) the response uses the cursor envelope `{ items, pageInfo }`.",
+        "schema": {
+          "type": "string"
+        }
+      },
       "ListTradesPageQuery": {
         "in": "query",
         "name": "page",
         "required": false,
+        "deprecated": true,
+        "description": "Legacy offset pagination, kept only for un-migrated clients. Prefer `cursor`; offset requests receive a deprecation `Warning` header and a `pagination` object instead of `pageInfo`.",
         "schema": {
           "type": "integer",
           "minimum": 1,
@@ -230,6 +244,17 @@
           "type": "string"
         },
         "example": "createdAt:desc"
+      },
+      "ListTradesSearchQuery": {
+        "in": "query",
+        "name": "q",
+        "required": false,
+        "description": "Free-text search over the trade's commodity label and the counterparty display name, matched with the Supabase full-text index (websearch syntax). Blank values are treated as no filter.",
+        "schema": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "example": "maize"
       },
       "IncludeInactiveCategoriesQuery": {
         "in": "query",
@@ -278,6 +303,117 @@
       }
     },
     "schemas": {
+      "PilotRegisterRequest": {
+        "type": "object",
+        "required": [
+          "name",
+          "adminWallet",
+          "contactEmail",
+          "region"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "Northern Farmers Alliance"
+          },
+          "adminWallet": {
+            "type": "string",
+            "example": "GA7QYNF7SOWQ3GLR2BGMZEHXAVIRZA4KVWLTJJFC7MGXUA74P7UJVWGS"
+          },
+          "contactEmail": {
+            "type": "string",
+            "format": "email",
+            "example": "admin@northernfarmers.org"
+          },
+          "region": {
+            "type": "string",
+            "example": "Kaduna"
+          },
+          "description": {
+            "type": "string",
+            "example": "Regional grain producers cooperative"
+          },
+          "estimatedMembers": {
+            "type": "integer",
+            "example": 120
+          }
+        }
+      },
+      "PilotCooperativeRecord": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "adminWallet",
+          "contactEmail",
+          "region",
+          "trialPeriod",
+          "isTrialPeriod",
+          "trialDays",
+          "trialEndsAt",
+          "status",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "coop-pilot-12345"
+          },
+          "name": {
+            "type": "string",
+            "example": "Northern Farmers Alliance"
+          },
+          "adminWallet": {
+            "type": "string",
+            "example": "ga7qynf7sowq3glr2bgmzehxavirza4kvwltjjfc7mgxua74p7ujvwgs"
+          },
+          "contactEmail": {
+            "type": "string",
+            "example": "admin@northernfarmers.org"
+          },
+          "region": {
+            "type": "string",
+            "example": "Kaduna"
+          },
+          "description": {
+            "type": "string",
+            "example": "Regional grain producers cooperative"
+          },
+          "estimatedMembers": {
+            "type": "integer",
+            "example": 120
+          },
+          "trialPeriod": {
+            "type": "boolean",
+            "example": true
+          },
+          "isTrialPeriod": {
+            "type": "boolean",
+            "example": true
+          },
+          "trialDays": {
+            "type": "integer",
+            "example": 90
+          },
+          "trialEndsAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "status": {
+            "type": "string",
+            "example": "ACTIVE"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
       "ErrorEnvelope": {
         "type": "object",
         "properties": {
@@ -1087,6 +1223,11 @@
             "type": "integer",
             "minimum": 0,
             "maximum": 10000
+          },
+          "commodity": {
+            "type": "string",
+            "maxLength": 100,
+            "description": "Optional off-chain commodity label used for trade search."
           }
         },
         "required": [
@@ -1161,6 +1302,53 @@
             "items": {
               "$ref": "#/components/schemas/TradeSummary"
             }
+          },
+          "pageInfo": {
+            "type": "object",
+            "description": "Present in cursor mode (the default, and whenever `cursor` is sent).",
+            "properties": {
+              "nextCursor": {
+                "type": "string",
+                "nullable": true,
+                "description": "Pass as `cursor` to load the next page; null on the last page."
+              },
+              "hasNextPage": {
+                "type": "boolean"
+              },
+              "limit": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "nextCursor",
+              "hasNextPage",
+              "limit"
+            ]
+          },
+          "pagination": {
+            "type": "object",
+            "deprecated": true,
+            "description": "Legacy offset envelope returned only when `page` is supplied without a cursor.",
+            "properties": {
+              "page": {
+                "type": "integer"
+              },
+              "limit": {
+                "type": "integer"
+              },
+              "total": {
+                "type": "integer"
+              },
+              "totalPages": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "page",
+              "limit",
+              "total",
+              "totalPages"
+            ]
           }
         },
         "required": [
@@ -1744,6 +1932,43 @@
     }
   },
   "paths": {
+    "/api/cooperatives/pilot-register": {
+      "post": {
+        "tags": [
+          "Cooperatives"
+        ],
+        "summary": "Register a regional cooperative for the Phase 4 pilot program",
+        "description": "Creates a new pilot cooperative record with an active trial-period flag.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PilotRegisterRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Cooperative registered successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PilotCooperativeRecord"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/LegacyValidationError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
     "/api/admin/audit": {
       "get": {
         "tags": [
@@ -3382,7 +3607,7 @@
           "Trades"
         ],
         "summary": "List the authenticated user's trades",
-        "description": "Error code references: `AUTH_ERROR`, `VALIDATION_ERROR`, `INTERNAL_ERROR`.",
+        "description": "Cursor-paginated by default: send `cursor` (from the previous page's `pageInfo.nextCursor`) and read `pageInfo` for the next one. The caller's watchlisted trades are still returned first. The legacy `page` parameter is deprecated and switches the response to the old `pagination` envelope.\nError code references: `AUTH_ERROR`, `VALIDATION_ERROR`, `INTERNAL_ERROR`.",
         "security": [
           {
             "bearerAuth": []
@@ -3393,6 +3618,9 @@
             "$ref": "#/components/parameters/ListTradesStatusQuery"
           },
           {
+            "$ref": "#/components/parameters/ListTradesCursorQuery"
+          },
+          {
             "$ref": "#/components/parameters/ListTradesPageQuery"
           },
           {
@@ -3400,6 +3628,9 @@
           },
           {
             "$ref": "#/components/parameters/ListTradesSortQuery"
+          },
+          {
+            "$ref": "#/components/parameters/ListTradesSearchQuery"
           }
         ],
         "responses": {
@@ -3502,6 +3733,125 @@
           },
           "404": {
             "$ref": "#/components/responses/NotFoundError"
+          }
+        }
+      }
+    },
+    "/trades/{id}/receipt": {
+      "get": {
+        "tags": [
+          "Trades"
+        ],
+        "summary": "Download a trade receipt (PDF or JSON)",
+        "description": "Returns a receipt for a trade the caller is party to. The default PDF includes the trade id, parties, amount, status, and a QR code linking to the on-chain record (or a stellar.expert lookup when there is no settlement transaction yet). Pass `?format=json` for the same snapshot as a machine-readable document. Used by the web download button, the mobile share sheet, and integrations.\nError code references: `AUTH_ERROR`, `VALIDATION_ERROR`, `DOMAIN_ERROR`, `NOT_FOUND`, `INTERNAL_ERROR`.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/TradeIdPath"
+          },
+          {
+            "name": "format",
+            "in": "query",
+            "required": false,
+            "description": "Receipt encoding. Defaults to pdf.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "pdf",
+                "json"
+              ],
+              "default": "pdf"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Trade receipt returned as a PDF (default) or JSON document.",
+            "content": {
+              "application/pdf": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "tradeId",
+                    "buyerAddress",
+                    "sellerAddress",
+                    "amountUsdc",
+                    "status",
+                    "createdAt",
+                    "completedAt",
+                    "txHash",
+                    "onChainRecordUrl",
+                    "network"
+                  ],
+                  "properties": {
+                    "tradeId": {
+                      "type": "string"
+                    },
+                    "buyerAddress": {
+                      "type": "string"
+                    },
+                    "sellerAddress": {
+                      "type": "string"
+                    },
+                    "amountUsdc": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "completedAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "nullable": true
+                    },
+                    "txHash": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "onChainRecordUrl": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "network": {
+                      "type": "string",
+                      "enum": [
+                        "mainnet",
+                        "testnet"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/LegacyValidationError"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenError"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
           }
         }
       }

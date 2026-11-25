@@ -81,6 +81,7 @@ const IMPLEMENTED_ROUTES = [
   "/trades",
   "/trades/stats",
   "/trades/{id}",
+  "/trades/{id}/receipt",
   "/trades/{id}/deposit",
   "/trades/{id}/confirm",
   "/trades/{id}/release",
@@ -114,6 +115,7 @@ const IMPLEMENTED_ROUTES = [
   "/api/admin/streams/{id}/terminate",
   "/disputes",
   "/disputes/{id}/transition",
+  "/api/cooperatives/pilot-register",
 ];
 
 describe("OpenAPI drift detection", () => {
@@ -305,6 +307,15 @@ describe("OpenAPI drift detection", () => {
       expect(path?.post?.responses?.["201"]?.content?.["application/json"]?.schema?.$ref).toBe(
         "#/components/schemas/TradeMutationResponse",
       );
+    });
+
+    it("GET /trades documents cursor pagination alongside the legacy page param", () => {
+      const path = spec.paths["/trades"] as any;
+      const refs = (path?.get?.parameters ?? []).map((p: any) => p.$ref);
+      expect(refs).toContain("#/components/parameters/ListTradesCursorQuery");
+      expect(refs).toContain("#/components/parameters/ListTradesPageQuery");
+      const listSchema = (spec as OpenApiSpec).components.schemas["TradeListResponse"];
+      expect(listSchema.properties).toHaveProperty("pageInfo");
     });
 
     it("GET /trades response is documented with 200 status and TradeListResponse schema", () => {

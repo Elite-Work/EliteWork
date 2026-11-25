@@ -1,4 +1,8 @@
-import { buildOnChainRecordUrl, generateTradeReceiptPdf } from "../services/tradeReceipt.service";
+import {
+  buildOnChainRecordUrl,
+  buildTradeReceiptJson,
+  generateTradeReceiptPdf,
+} from "../services/tradeReceipt.service";
 
 describe("buildOnChainRecordUrl", () => {
   it("links to the transaction on stellar.expert when a txHash is known", () => {
@@ -14,6 +18,53 @@ describe("buildOnChainRecordUrl", () => {
   it("uses the public explorer path for mainnet", () => {
     const url = buildOnChainRecordUrl({ tradeId: "T-1", txHash: "abc123" }, "mainnet");
     expect(url).toBe("https://stellar.expert/explorer/public/tx/abc123");
+  });
+});
+
+describe("buildTradeReceiptJson (#499)", () => {
+  it("serialises the receipt snapshot with an on-chain link", () => {
+    const receipt = buildTradeReceiptJson(
+      {
+        tradeId: "T-1",
+        buyerAddress: "GBUYER",
+        sellerAddress: "GSELLER",
+        amountUsdc: "1000",
+        status: "COMPLETED",
+        createdAt: new Date("2026-01-01T00:00:00.000Z"),
+        completedAt: new Date("2026-01-05T00:00:00.000Z"),
+        txHash: "deadbeef",
+      },
+      "mainnet",
+    );
+
+    expect(receipt).toEqual({
+      tradeId: "T-1",
+      buyerAddress: "GBUYER",
+      sellerAddress: "GSELLER",
+      amountUsdc: "1000",
+      status: "COMPLETED",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      completedAt: "2026-01-05T00:00:00.000Z",
+      txHash: "deadbeef",
+      onChainRecordUrl: "https://stellar.expert/explorer/public/tx/deadbeef",
+      network: "mainnet",
+    });
+  });
+
+  it("uses null for optional timestamps and falls back to a search link", () => {
+    const receipt = buildTradeReceiptJson({
+      tradeId: "T-2",
+      buyerAddress: "GBUYER",
+      sellerAddress: "GSELLER",
+      amountUsdc: "250",
+      status: "FUNDED",
+      createdAt: new Date("2026-01-01T00:00:00.000Z"),
+      txHash: null,
+    });
+
+    expect(receipt.completedAt).toBeNull();
+    expect(receipt.txHash).toBeNull();
+    expect(receipt.onChainRecordUrl).toContain("/search?term=T-2");
   });
 });
 

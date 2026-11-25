@@ -10,7 +10,7 @@ pub const EVENT_SCHEMA_VERSION: u32 = 1;
 ///
 /// Tests assert emitted topics against these constants, so a rename in
 /// the contract that is not reflected in the schema fails the suite.
-pub const EVENT_TOPICS: [(&str, &[&str]); 33] = [
+pub const EVENT_TOPICS: [(&str, &[&str]); 35] = [
     ("InitializedEvent", &["amana", "initialized"]),
     ("TradeCreatedEvent", &["TRDCRT"]),
     ("TradeFundedEvent", &["TRDFND"]),
@@ -44,10 +44,12 @@ pub const EVENT_TOPICS: [(&str, &[&str]); 33] = [
     ("MediatorWeightUpdatedEvent", &["MEDWGT"]),
     ("DeadlineExtensionBudgetEvent", &["DEDBGT"]),
     ("ExtensionPolicyUpdatedEvent", &["EXTPOL"]),
+    ("TradeFrozenEvent", &["TRDFRZ"]),
+    ("TradeUnfrozenEvent", &["TRDUNF"]),
 ];
 
 /// Field names of every event, in declaration order.
-pub const EVENT_FIELDS: [(&str, &[&str]); 33] = [
+pub const EVENT_FIELDS: [(&str, &[&str]); 35] = [
     ("InitializedEvent", &["admin", "fee_bps", "timestamp"]),
     ("TradeCreatedEvent", &["trade_id", "buyer", "seller", "amount"]),
     ("TradeFundedEvent", &["trade_id", "amount"]),
@@ -81,4 +83,6 @@ pub const EVENT_FIELDS: [(&str, &[&str]); 33] = [
     ("MediatorWeightUpdatedEvent", &["mediator", "weight", "schema_version"]),
     ("DeadlineExtensionBudgetEvent", &["trade_id", "extensions_used", "extensions_remaining", "original_deadline", "extended_by_secs", "extension_secs_remaining", "schema_version"]),
     ("ExtensionPolicyUpdatedEvent", &["max_extensions", "max_total_extension_secs", "schema_version"]),
+    ("TradeFrozenEvent", &["trade_id", "admin", "timestamp"]),
+    ("TradeUnfrozenEvent", &["trade_id", "admin", "timestamp"]),
 ];

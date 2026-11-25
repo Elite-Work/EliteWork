@@ -1,7 +1,6 @@
 import { Prisma, Trade, TradeStatus } from "@prisma/client";
 import { ContractService } from "../services/contract.service";
 import { TradeAccessDeniedError, TradeService } from "../services/trade.service";
-import { ContractService } from "../services/contract.service";
 
 function makeTrade(overrides: Partial<Trade> = {}): Trade {
   return {
@@ -10,6 +9,7 @@ function makeTrade(overrides: Partial<Trade> = {}): Trade {
     buyerAddress: "buyer",
     sellerAddress: "seller",
     amountUsdc: "100",
+    commodity: null,
     buyerLossBps: 5000,
     sellerLossBps: 5000,
     version: 0,
@@ -44,6 +44,8 @@ type TradePrismaMock = {
       (args: Prisma.TradeFindFirstArgs) => Promise<Trade | null>
     >;
   };
+  dispute: Record<string, never>;
+  disputeCategory: Record<string, never>;
 };
 
 function createMockPrisma(): TradePrismaMock {
@@ -57,6 +59,8 @@ function createMockPrisma(): TradePrismaMock {
       count: jest.fn<Promise<number>, [args: Prisma.TradeCountArgs]>(),
       findFirst: jest.fn<Promise<Trade | null>, [args: Prisma.TradeFindFirstArgs]>(),
     },
+    dispute: {},
+    disputeCategory: {},
   };
 }
 
@@ -89,7 +93,10 @@ describe("TradeService", () => {
 
   beforeEach(() => {
     prisma = createMockPrisma();
-    service = new TradeService(prisma, {} as unknown as ContractService);
+    service = new TradeService(
+      asTradeDatabase(prisma),
+      {} as unknown as ContractService,
+    );
   });
 
   it("stores a pending trade with PENDING_SIGNATURE status", async () => {
@@ -144,7 +151,7 @@ describe("TradeService", () => {
       })
     );
     expect(result.items).toHaveLength(1);
-    expect(result.pagination.total).toBe(1);
+    expect((result as { pagination: { total: number } }).pagination.total).toBe(1);
   });
 
   it("GET /trades?status=FUNDED filters correctly", async () => {
@@ -219,6 +226,7 @@ describe("TradeService", () => {
     prisma.trade.count.mockResolvedValue(0);
 
     await service.listUserTrades("GA_CALLER", {
+      page: 1,
       sort: "randomField:asc",
     });
 

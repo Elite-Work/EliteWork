@@ -1,4 +1,4 @@
-import { createQueryString, request, withIdempotency } from "./client";
+import { ApiError, createQueryString, request, resolveApiUrl, withIdempotency } from "./client";
 import type {
   BulkCreateResponse,
   CreateTradeRequest,
@@ -14,15 +14,49 @@ import type {
 } from "./types";
 
 export const tradesApi = {
-  list: (token: string, params?: { status?: string; page?: number; limit?: number }) =>
+  /**
+   * `q` is the free-text search query (#504) matched against commodity and
+   * counterparty name by the backend's Supabase full-text index.
+   *
+   * `cursor` opts into cursor pagination (#502): pass the previous page's
+   * `pageInfo.nextCursor` and read `pageInfo.nextCursor` back for the next
+   * one. `page` remains only for legacy callers and is deprecated.
+   */
+  list: (
+    token: string,
+    params?: { status?: string; page?: number; limit?: number; q?: string; cursor?: string },
+  ) =>
     request<TradeListResponse>(
       `/trades${createQueryString({
         status: params?.status,
         page: params?.page,
         limit: params?.limit,
+        q: params?.q,
+        cursor: params?.cursor,
       })}`,
       { token },
     ),
+
+  /**
+   * Downloads the trade receipt PDF (#500). The regular `request` helper
+   * parses JSON, so this reads the response as a Blob for the browser to save.
+   */
+  downloadReceipt: async (token: string, id: string): Promise<Blob> => {
+    const response = await fetch(resolveApiUrl(`/trades/${id}/receipt`), {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    if (!response.ok) {
+      const data = await response.json().catch(() => null);
+      throw new ApiError(
+        response.status,
+        (data as { error?: string })?.error || response.statusText,
+        data,
+      );
+    }
+
+    return response.blob();
+  },
 
   get: (token: string, id: string) =>
     request<TradeResponse>(`/trades/${id}`, { token }),

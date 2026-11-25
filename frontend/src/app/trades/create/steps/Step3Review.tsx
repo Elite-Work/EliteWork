@@ -86,6 +86,8 @@ export default function Step3Review() {
       amountUsdc,
       buyerLossBps,
       sellerLossBps,
+      // Persisted off-chain so the trade is findable via /api/trades?q= (#504).
+      commodity: data.commodity,
     };
     const parsed = createTradeInputSchema.safeParse(payload);
     if (!parsed.success) {

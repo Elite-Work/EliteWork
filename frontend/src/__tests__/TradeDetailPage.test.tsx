@@ -31,6 +31,7 @@ jest.mock("@/lib/api", () => ({
       confirmDelivery: jest.fn(),
       releaseFunds: jest.fn(),
       initiateDispute: jest.fn(),
+      downloadReceipt: jest.fn(),
     },
   },
   ApiError: class ApiError extends Error {
@@ -59,6 +60,7 @@ const mockSignTransaction = signTransaction as jest.MockedFunction<typeof signTr
 const mockDeposit = api.trades.deposit as jest.MockedFunction<typeof api.trades.deposit>;
 const mockConfirmDelivery = api.trades.confirmDelivery as jest.MockedFunction<typeof api.trades.confirmDelivery>;
 const mockReleaseFunds = api.trades.releaseFunds as jest.MockedFunction<typeof api.trades.releaseFunds>;
+const mockDownloadReceipt = api.trades.downloadReceipt as jest.MockedFunction<typeof api.trades.downloadReceipt>;
 
 const BUYER_ADDRESS = "GBUYER123456789012345678901234567890123456789012345678";
 const SELLER_ADDRESS = "GSELLER12345678901234567890123456789012345678901234567";
@@ -278,6 +280,86 @@ describe("Trade Detail — role-based action buttons", () => {
     });
     render(<TradeDetailPage />);
     expect(screen.getByText(/no further actions are available/i)).toBeInTheDocument();
+  });
+});
+
+// ── Receipt download (#500) ─────────────────────────────────────────────────────
+
+describe("Trade Detail — receipt download", () => {
+  it.each(["COMPLETED", "DISPUTED"])(
+    "shows the download button for a %s trade",
+    (status) => {
+      mockAuth(BUYER_ADDRESS);
+      mockUseTradeDetail.mockReturnValue({
+        trade: makeTrade(status),
+        loading: false,
+        error: null,
+        refetch: jest.fn(),
+      });
+      render(<TradeDetailPage />);
+      expect(screen.getByTestId("action-download-receipt")).toBeInTheDocument();
+    }
+  );
+
+  it.each(["PENDING", "FUNDED", "SETTLED", "CANCELLED"])(
+    "hides the download button for a %s trade",
+    (status) => {
+      mockAuth(BUYER_ADDRESS);
+      mockUseTradeDetail.mockReturnValue({
+        trade: makeTrade(status),
+        loading: false,
+        error: null,
+        refetch: jest.fn(),
+      });
+      render(<TradeDetailPage />);
+      expect(screen.queryByTestId("action-download-receipt")).not.toBeInTheDocument();
+    }
+  );
+
+  it("downloads the receipt PDF and triggers a save", async () => {
+    mockAuth(BUYER_ADDRESS);
+    mockUseTradeDetail.mockReturnValue({
+      trade: makeTrade("COMPLETED"),
+      loading: false,
+      error: null,
+      refetch: jest.fn(),
+    });
+    const blob = new Blob(["%PDF-1.4"], { type: "application/pdf" });
+    mockDownloadReceipt.mockResolvedValue(blob);
+    const createObjectURL = jest.fn().mockReturnValue("blob:receipt");
+    const revokeObjectURL = jest.fn();
+    Object.defineProperty(window.URL, "createObjectURL", { value: createObjectURL, configurable: true });
+    Object.defineProperty(window.URL, "revokeObjectURL", { value: revokeObjectURL, configurable: true });
+    const clickSpy = jest
+      .spyOn(HTMLAnchorElement.prototype, "click")
+      .mockImplementation(() => undefined);
+
+    render(<TradeDetailPage />);
+    await userEvent.click(screen.getByTestId("action-download-receipt"));
+
+    await waitFor(() =>
+      expect(mockDownloadReceipt).toHaveBeenCalledWith("jwt-token", "trade-123")
+    );
+    expect(clickSpy).toHaveBeenCalledTimes(1);
+    expect(createObjectURL).toHaveBeenCalledWith(blob);
+    expect(revokeObjectURL).toHaveBeenCalledWith("blob:receipt");
+    clickSpy.mockRestore();
+  });
+
+  it("surfaces a download failure", async () => {
+    mockAuth(BUYER_ADDRESS);
+    mockUseTradeDetail.mockReturnValue({
+      trade: makeTrade("DISPUTED"),
+      loading: false,
+      error: null,
+      refetch: jest.fn(),
+    });
+    mockDownloadReceipt.mockRejectedValue(new Error("Receipt unavailable"));
+
+    render(<TradeDetailPage />);
+    await userEvent.click(screen.getByTestId("action-download-receipt"));
+
+    expect(await screen.findByText("Receipt unavailable")).toBeInTheDocument();
   });
 });
 

@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
   Alert,
   Linking,
+  Share,
   StyleSheet,
   TextInput,
   Modal,
@@ -19,6 +20,7 @@ import { useTradeStore } from '../stores/tradeStore';
 import { useAuthStore } from '../stores/authStore';
 import { AdminErrorBanner } from '../components/AdminErrorBanner';
 import { buildSupportMailto } from '../constants/support';
+import { buildTradeReceiptUrl } from '../api/trade';
 import type { AdminErrorView } from '../api/errors';
 
 type Props = StackScreenProps<RootStackParamList, 'TradeDetail'>;
@@ -204,6 +206,21 @@ export default function TradeDetailScreen({ route, navigation }: Props) {
     );
   }, [tradeId, releaseFunds]);
 
+  // #501: hand the receipt link to the native iOS/Android share sheet so it
+  // can go out over any messaging app the device has installed.
+  const handleShareReceipt = useCallback(async () => {
+    const url = buildTradeReceiptUrl(tradeId);
+    try {
+      await Share.share({
+        title: 'Trade receipt',
+        message: `Trade receipt for #${tradeId}: ${url}`,
+        url,
+      });
+    } catch {
+      Alert.alert('Unable to share', 'The share sheet could not be opened.');
+    }
+  }, [tradeId]);
+
   const handleDisputeSubmit = useCallback(async () => {
     if (!disputeReason.trim()) {
       Alert.alert('Reason required', 'Please describe the issue before submitting a dispute.');
@@ -225,6 +242,8 @@ export default function TradeDetailScreen({ route, navigation }: Props) {
     status === 'FUNDED' ||
     status === 'DELIVERED';
   const canUploadEvidence = status === 'DISPUTED';
+  // Receipts are only meaningful once a trade is completed or disputed.
+  const canShareReceipt = status === 'COMPLETED' || status === 'DISPUTED';
 
   if (isLoading && !currentTrade) {
     return (
@@ -416,7 +435,17 @@ export default function TradeDetailScreen({ route, navigation }: Props) {
             </TouchableOpacity>
           )}
 
-          {!canDeposit && !canConfirm && !canRelease && !canDispute && !canUploadEvidence && (
+          {canShareReceipt && (
+            <TouchableOpacity
+              testID="trade-share-receipt"
+              style={[styles.actionBtn, styles.shareBtn]}
+              onPress={() => void handleShareReceipt()}
+            >
+              <Text style={styles.actionBtnText}>🧾 Share Receipt</Text>
+            </TouchableOpacity>
+          )}
+
+          {!canDeposit && !canConfirm && !canRelease && !canDispute && !canUploadEvidence && !canShareReceipt && (
             <Text style={styles.noActionsText}>No actions available for this trade status.</Text>
           )}
         </View>
@@ -548,6 +577,7 @@ const styles = StyleSheet.create({
   releaseBtn: { backgroundColor: '#14B8A6' },
   disputeBtn: { backgroundColor: '#DC2626' },
   evidenceBtn: { backgroundColor: '#2563EB' },
+  shareBtn: { backgroundColor: '#7C3AED' },
   btnDisabled: { opacity: 0.6 },
   actionBtnText: { color: '#fff', fontSize: 15, fontWeight: '600' },
   noActionsText: { fontSize: 14, color: '#888', textAlign: 'center', paddingVertical: 8 },

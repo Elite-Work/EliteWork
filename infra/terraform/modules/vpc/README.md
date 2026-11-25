@@ -11,6 +11,7 @@ in `infra/terraform/modules/` consumes its outputs:
 
 | Consumer | Uses |
 |---|---|
+| [`alb`](../alb/README.md) | `vpc_id`, `public_subnet_ids` — application ingress and TLS termination |
 | [`rds`](../rds/README.md) | `vpc_id`, `private_subnet_ids` — Aurora cluster placement and its security group |
 | [`redis`](../redis/README.md) | `vpc_id`, `private_subnet_ids` — ElastiCache replication group placement and its security group |
 | [`eks`](../eks/README.md) | `vpc_id`, `private_subnet_ids` — control plane VPC config and node group subnets |

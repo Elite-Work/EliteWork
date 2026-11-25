@@ -134,6 +134,7 @@ export function createMockTrade(overrides: Partial<Trade> = {}): Trade {
     buyerAddress: "GBUQWP3BOUZX34ULNQG23RQ6F4OXTBIQF7XNVFQY2VQWT5FJA7RJIUU",
     sellerAddress: "GCFVBVQZZW4IXX3LRFIPWWVKXNX3SBR6VS5KW4YGRCL4ADF6XNKFMJM",
     amountUsdc: "1000",
+    commodity: null,
     buyerLossBps: 100,
     sellerLossBps: 100,
     status: "PENDING_SIGNATURE" as Trade["status"],

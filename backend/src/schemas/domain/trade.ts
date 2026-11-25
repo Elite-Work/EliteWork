@@ -35,6 +35,8 @@ export const createTradeInputSchema = z
     amountUsdc: usdcAmount,
     buyerLossBps: lossBps.optional(),
     sellerLossBps: lossBps.optional(),
+    /** Off-chain commodity label, indexed for trade search (#504). */
+    commodity: z.string().trim().min(1, "Commodity is required").max(100, "Commodity must be 100 characters or fewer").optional(),
     description: z.string().optional(),
   })
   .superRefine((data, ctx) => {

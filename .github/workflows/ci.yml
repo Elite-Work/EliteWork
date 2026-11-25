@@ -98,6 +98,9 @@ jobs:
               - 'mobile/pnpm-lock.yaml'
             contracts:
               - 'contracts/**'
+              - 'schemas/events/**'
+              - 'scripts/check-contract-abi-drift.mjs'
+              - 'scripts/codegen-events.mjs'
               - 'scripts/check-contract-deployment-safety.sh'
               - 'scripts/check-storage-layout-gate.sh'
 
@@ -928,6 +931,12 @@ jobs:
       - name: Deployment safety checks
         if: needs.changes.outputs.contracts == 'true'
         run: ../../scripts/check-contract-deployment-safety.sh
+
+      # Issue #469 — compare contract event definitions and generated clients
+      # with the canonical event schema without rewriting generated files.
+      - name: Check contract event ABI drift
+        if: needs.changes.outputs.contracts == 'true'
+        run: node ../../scripts/check-contract-abi-drift.mjs
 
       # Fails if an integration suite under contracts/amana_escrow/tests/ is not
       # a cargo test target (it would never run) or if the library target that

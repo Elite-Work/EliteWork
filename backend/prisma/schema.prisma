@@ -112,6 +112,8 @@ model Trade {
   buyerAddress  String      @db.VarChar(255)
   sellerAddress String      @db.VarChar(255)
   amountUsdc    String      @default("0") @db.VarChar(100)
+  /// Off-chain commodity label (e.g. "Maize") used only for trade search. Not part of the on-chain escrow terms.
+  commodity     String?     @db.VarChar(100)
   buyerLossBps  Int         @default(5000)
   sellerLossBps Int         @default(5000)
   /// Monotonic optimistic concurrency counter for status transitions.

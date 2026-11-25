@@ -1,5 +1,6 @@
 import { TradeExpiryService } from '../tradeExpiry.service';
 import { TradeStatus } from '@prisma/client';
+import { notificationQueue } from '../../jobs/queue';
 
 jest.mock('../../jobs/queue', () => ({
   notificationQueue: { add: jest.fn().mockResolvedValue({}) },
@@ -19,6 +20,39 @@ function makePrisma(overrides: Partial<{
 
 describe('TradeExpiryService.sweepExpiredTrades', () => {
   beforeEach(() => jest.clearAllMocks());
+
+  it('does not enqueue SMS notifications for a user who opted out', async () => {
+    const fakeTrade = {
+      id: 3,
+      tradeId: 'trade-opt-out',
+      buyerAddress: 'GBUYER',
+      sellerAddress: 'GSELLER',
+      amountUsdc: '50',
+      status: TradeStatus.CREATED,
+      version: 0,
+    };
+    const db = {
+      ...makePrisma({ findMany: jest.fn().mockResolvedValue([fakeTrade]) }),
+      notificationPreference: {
+        findUnique: jest.fn().mockResolvedValue({
+          preferences: { 'trade-expired': [] },
+        }),
+      },
+    };
+    const service = new TradeExpiryService(db as never);
+
+    await service.sweepExpiredTrades();
+
+    expect(notificationQueue.add).toHaveBeenCalledTimes(2);
+    expect(notificationQueue.add).toHaveBeenCalledWith(
+      'trade-expired',
+      expect.objectContaining({ type: 'in_app' }),
+    );
+    expect(notificationQueue.add).not.toHaveBeenCalledWith(
+      'trade-expired-sms',
+      expect.anything(),
+    );
+  });
 
   it('returns zero counts when no stale trades exist', async () => {
     const db = makePrisma();

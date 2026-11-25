@@ -84,6 +84,7 @@ Amana enforces stack-level CI gates on pull requests through `.github/workflows/
 - **Backend Required Gate**: `pnpm install --frozen-lockfile`, `pnpm build`, `pnpm test` in `backend/`
 - **Mobile Required Gate**: `pnpm install --frozen-lockfile`, `pnpm type-check`, `pnpm lint` in `mobile/`
 - **Contracts Required Gate**: `cargo audit`, deployment safety checks, a test-coverage guard and `cargo test --locked` in `contracts/amana_escrow/` — the gate runs every integration suite in `contracts/amana_escrow/tests/` **and** the inline `#[cfg(test)]` modules in `contracts/amana_escrow/src/tests/`. `node scripts/check-contract-test-coverage.mjs` fails the gate if a test file is not wired into a cargo test target (it would never run) or if an inline test module is missing from the module tree. `node scripts/check-abi-parity.mjs` fails the gate if the contract removes a function from the backend's frozen ABI snapshot or changes its return type.
+- **Contracts Required Gate**: `cargo audit`, deployment safety and event-schema drift checks, a test-coverage guard and `cargo test --locked` in `contracts/amana_escrow/` — the gate runs every integration suite in `contracts/amana_escrow/tests/` **and** the inline `#[cfg(test)]` modules in `contracts/amana_escrow/src/tests/`. `node scripts/check-contract-test-coverage.mjs` fails the gate if a test file is not wired into a cargo test target (it would never run) or if an inline test module is missing from the module tree.
 
 Path-aware execution is enabled to avoid unnecessary runtime. If a stack has no changed files, the gate reports a skip-note and passes.
 
@@ -183,12 +184,19 @@ Key architectural decisions are documented as ADRs in [`docs/adr/`](./docs/adr):
 
 EziAgric is an open-source project aimed at improving food security and trade efficiency. We welcome developers, designers, and agricultural experts!
 
-Please read and follow our [Code of Conduct](./CODE_OF_CONDUCT.md). By participating in this project you agree to abide by its terms.
+Please read and follow our [Code of Conduct](./CODE_OF_CONDUCT.md). By
+participating in this project you agree to abide by its terms. New contributors
+can follow the [onboarding guide](./docs/onboarding.md) for the complete
+issue-to-merge workflow.
 
 1. Fork the Project.
-2. Create your Feature Branch (`git checkout -b feature/NewFeature`).
-3. Commit your Changes (`git commit -m 'Add NewFeature'`).
-4. Push to the Branch (`git push origin feature/NewFeature`).
+2. Create a feature branch using the naming convention in
+   [CONTRIBUTING.md](./CONTRIBUTING.md) (for example,
+   `git checkout -b feat/short-description`).
+3. Commit your changes using a Conventional Commit message (see
+   [CONTRIBUTING.md](./CONTRIBUTING.md)).
+4. Push your branch to your fork (for example,
+   `git push origin feat/short-description`).
 5. Open a Pull Request (see [Code Ownership Policy](./docs/codeowners-policy.md) for automated review routing).
 
 ### Admin route development

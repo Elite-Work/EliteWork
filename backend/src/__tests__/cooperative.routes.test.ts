@@ -112,3 +112,43 @@ describe("GET /cooperatives/:id/trades (issue #44)", () => {
     expect(res.status).toBe(401);
   });
 });
+
+describe("POST /cooperatives/pilot-register (issue #494)", () => {
+  it("registers a pilot cooperative and returns 201 with trial period flag", async () => {
+    const payload = {
+      name: "Plateau Grain Growers",
+      adminWallet: adminAddress,
+      contactEmail: "contact@plateaugrain.coop",
+      region: "Jos",
+      description: "Cooperative for northern farmers",
+      estimatedMembers: 50,
+    };
+
+    const res = await request(app)
+      .post("/cooperatives/pilot-register")
+      .send(payload);
+
+    expect(res.status).toBe(201);
+    expect(res.body.name).toBe(payload.name);
+    expect(res.body.adminWallet).toBe(adminAddress.toLowerCase());
+    expect(res.body.contactEmail).toBe(payload.contactEmail.toLowerCase());
+    expect(res.body.trialPeriod).toBe(true);
+    expect(res.body.isTrialPeriod).toBe(true);
+    expect(res.body.status).toBe("ACTIVE");
+    expect(res.body.id).toBeDefined();
+  });
+
+  it("validates required fields with 400", async () => {
+    const res = await request(app)
+      .post("/cooperatives/pilot-register")
+      .send({
+        name: "",
+        adminWallet: "invalid",
+        contactEmail: "not-an-email",
+        region: "",
+      });
+
+    expect(res.status).toBe(400);
+  });
+});
+

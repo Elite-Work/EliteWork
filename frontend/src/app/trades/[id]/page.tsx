@@ -85,6 +85,8 @@ export default function TradeDetailPage() {
   const [actionLoading, setActionLoading] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
+  const [receiptLoading, setReceiptLoading] = useState(false);
+  const [receiptError, setReceiptError] = useState<string | null>(null);
 
   const role: UserRole = trade
     ? deriveRole(address, trade.buyerAddress, trade.sellerAddress)
@@ -140,6 +142,40 @@ export default function TradeDetailPage() {
 
   function handleReleaseFunds() {
     void runAction("Release Funds", () => api.trades.releaseFunds(token!, tradeId));
+  }
+
+  // #500: receipts only make sense once a trade has reached a terminal,
+  // documentable state.
+  const canDownloadReceipt =
+    (status === "COMPLETED" || status === "DISPUTED") && role !== "observer";
+
+  async function handleDownloadReceipt() {
+    if (!token) return;
+
+    setReceiptLoading(true);
+    setReceiptError(null);
+
+    try {
+      const blob = await api.trades.downloadReceipt(token, tradeId);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `trade-${tradeId}-receipt.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setReceiptError(
+        err instanceof ApiError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : "Failed to download receipt",
+      );
+    } finally {
+      setReceiptLoading(false);
+    }
   }
 
   function handleInitiateDispute() {
@@ -269,12 +305,28 @@ export default function TradeDetailPage() {
               {actionSuccess}
             </div>
           )}
+          {receiptError && (
+            <div className="rounded-lg border border-status-danger/20 bg-red-500/10 px-4 py-3 text-sm text-status-danger">
+              {receiptError}
+            </div>
+          )}
 
           {/* Role-based action buttons */}
           {isAuthenticated && (
             <div className="rounded-lg border border-border-default bg-bg-card p-5">
               <p className="text-xs uppercase tracking-wide text-text-muted mb-4">Actions</p>
               <div className="flex flex-wrap gap-3">
+                {canDownloadReceipt && (
+                  <button
+                    onClick={() => void handleDownloadReceipt()}
+                    disabled={receiptLoading}
+                    data-testid="action-download-receipt"
+                    className="rounded-lg border border-border-default px-4 py-2 text-sm font-semibold text-text-primary transition-colors hover:border-border-hover disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {receiptLoading ? "Preparing receipt…" : "Download Receipt"}
+                  </button>
+                )}
+
                 {role === "buyer" && status === "PENDING" && (
                   <button
                     onClick={handleDeposit}

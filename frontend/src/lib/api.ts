@@ -9,6 +9,7 @@ import { searchApi } from "./api/search";
 import { streamsApi } from "./api/streams";
 import { tradesApi } from "./api/trades";
 import { walletApi } from "./api/wallet";
+import { cooperativesApi } from "./api/cooperatives";
 
 export type {
   AdminAuditEntry,
@@ -61,6 +62,7 @@ export const api = {
   streams: streamsApi,
   trades: tradesApi,
   wallet: walletApi,
+  cooperatives: cooperativesApi,
 };
 
 export const apiConfig = {

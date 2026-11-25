@@ -34,6 +34,9 @@ To provide a programmable safety net for regional commodity trading. Amana ensur
 
 ## 🧪 Local Environments (Folder-Based)
 
+
+
+
 - `frontend/` → Next.js app environment (UI + wallet + Supabase/Pinata client integration)
 - `backend/` → Node.js/TypeScript API environment (Supabase + Pinata + integration endpoints)
 - `mobile/` → React Native Expo environment (mobile wallet, notification, and trade UX)
@@ -48,6 +51,7 @@ To provide a programmable safety net for regional commodity trading. Amana ensur
 
 ### Backend setup
 
+
 1. `cd backend`
 2. `cp .env.example .env`
 3. `cp .env.tracing.example .env.tracing` (for distributed tracing configuration)
@@ -55,6 +59,7 @@ To provide a programmable safety net for regional commodity trading. Amana ensur
 5. `pnpm dev`
 
 ### Mobile setup
+
 
 1. `cd mobile`
 2. `cp .env.example .env.local`

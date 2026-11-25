@@ -300,4 +300,137 @@ describe('VaultDashboard', () => {
       expect(url).toContain('Request id: req-987');
     });
   });
+
+  describe('balance refresh', () => {
+    it('keeps the balance visible instead of the skeleton while a refresh is in flight', async () => {
+      mockStores({ trades: [makeTrade(1, 'FUNDED', '100.00')] });
+      const { UNSAFE_getByType, getByText, rerender } = render(<VaultDashboard />);
+
+      let resolveRefresh: () => void = () => undefined;
+      fetchTrades.mockReturnValueOnce(
+        new Promise<void>((resolve) => {
+          resolveRefresh = resolve;
+        }),
+      );
+
+      let refreshDone: Promise<void> = Promise.resolve();
+      act(() => {
+        refreshDone = UNSAFE_getByType(RefreshControl).props.onRefresh();
+      });
+      expect(UNSAFE_getByType(RefreshControl).props.refreshing).toBe(true);
+
+      // The store flips isLoading during the refetch; the screen must not
+      // swap the list for the first-load skeleton.
+      mockStores({ isLoading: true, trades: [makeTrade(1, 'FUNDED', '100.00')] });
+      rerender(<VaultDashboard />);
+      expect(getByText('Total Locked')).toBeTruthy();
+      expect(getByText('$100.00')).toBeTruthy();
+
+      await act(async () => {
+        resolveRefresh();
+        await refreshDone;
+      });
+      expect(UNSAFE_getByType(RefreshControl).props.refreshing).toBe(false);
+    });
+
+    it('updates the locked balance and active count after a refresh brings new trades', async () => {
+      mockStores({ trades: [makeTrade(1, 'FUNDED', '100.00')] });
+      const { UNSAFE_getByType, getByText, rerender } = render(<VaultDashboard />);
+      expect(getByText('$100.00')).toBeTruthy();
+      expect(getByText('1')).toBeTruthy();
+
+      await act(async () => {
+        await UNSAFE_getByType(RefreshControl).props.onRefresh();
+      });
+      mockStores({
+        trades: [makeTrade(1, 'FUNDED', '100.00'), makeTrade(2, 'IN_TRANSIT', '50.25')],
+      });
+      rerender(<VaultDashboard />);
+
+      expect(getByText('$150.25')).toBeTruthy();
+      expect(getByText('2')).toBeTruthy();
+    });
+
+    it('drops a trade from the balance once a refresh shows it completed', async () => {
+      mockStores({ trades: [makeTrade(1, 'FUNDED', '80.00')] });
+      const { UNSAFE_getByType, getByText, rerender } = render(<VaultDashboard />);
+
+      await act(async () => {
+        await UNSAFE_getByType(RefreshControl).props.onRefresh();
+      });
+      mockStores({ trades: [makeTrade(1, 'COMPLETED', '80.00')] });
+      rerender(<VaultDashboard />);
+
+      expect(getByText('$0.00')).toBeTruthy();
+      expect(getByText('0')).toBeTruthy();
+      // The row stays in the recent list even though it no longer counts.
+      expect(getByText('80.00 USDC')).toBeTruthy();
+    });
+  });
+
+  describe('error state recovery', () => {
+    it('keeps the last known balance under the banner when a refresh fails', async () => {
+      mockStores({ trades: [makeTrade(1, 'FUNDED', '42.00')] });
+      const { UNSAFE_getByType, getByTestId, getByText, rerender } = render(
+        <VaultDashboard />,
+      );
+
+      await act(async () => {
+        await UNSAFE_getByType(RefreshControl).props.onRefresh();
+      });
+      mockStores({
+        trades: [makeTrade(1, 'FUNDED', '42.00')],
+        errorView: makeView({ title: 'Refresh failed' }),
+      });
+      rerender(<VaultDashboard />);
+
+      expect(getByTestId('admin-error-banner')).toBeTruthy();
+      expect(getByText('Refresh failed')).toBeTruthy();
+      expect(getByText('$42.00')).toBeTruthy();
+    });
+
+    it('shows an action error above the populated list', () => {
+      mockStores({
+        trades: [makeTrade(1, 'FUNDED', '10.00')],
+        lastActionErrorView: makeView({ title: 'Release failed' }),
+      });
+      const { getByText, getByTestId } = render(<VaultDashboard />);
+
+      expect(getByTestId('admin-error-banner')).toBeTruthy();
+      expect(getByText('Release failed')).toBeTruthy();
+      expect(getByText('Total Locked')).toBeTruthy();
+    });
+
+    it('recovers from the full-screen error to the dashboard after a successful retry', () => {
+      mockStores({ errorView: makeView() });
+      const { getByTestId, queryByTestId, getByText, rerender } = render(
+        <VaultDashboard />,
+      );
+
+      fireEvent.press(getByTestId('admin-error-banner-primary-retry'));
+      expect(fetchTrades).toHaveBeenCalledTimes(2);
+
+      mockStores({ trades: [makeTrade(1, 'FUNDED', '25.00')] });
+      rerender(<VaultDashboard />);
+
+      expect(queryByTestId('admin-error-banner')).toBeNull();
+      expect(getByText('$25.00')).toBeTruthy();
+      expect(getByText('GDNM7W…SXMU')).toBeTruthy();
+    });
+
+    it('removes the inline banner once the error is cleared', () => {
+      mockStores({
+        trades: [makeTrade(1, 'FUNDED', '25.00')],
+        errorView: makeView({ action: 'go_back' }),
+      });
+      const { getByTestId, queryByTestId, rerender } = render(<VaultDashboard />);
+
+      fireEvent.press(getByTestId('admin-error-banner-primary-go_back'));
+      expect(clearErrorView).toHaveBeenCalledTimes(1);
+
+      mockStores({ trades: [makeTrade(1, 'FUNDED', '25.00')] });
+      rerender(<VaultDashboard />);
+      expect(queryByTestId('admin-error-banner')).toBeNull();
+    });
+  });
 });

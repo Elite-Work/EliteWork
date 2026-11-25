@@ -8,6 +8,7 @@
 
 This is the main repository containing the smart contracts and orchestration logic. Backend, frontend, and mobile applications are maintained in this monorepo for simpler development and unified deployment.
 
+
 ---
 
 ## 🚀 The Mission

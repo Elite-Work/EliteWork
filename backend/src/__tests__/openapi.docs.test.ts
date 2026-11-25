@@ -67,6 +67,12 @@ describe("OpenAPI documentation coverage", () => {
     "/trades/{id}/history": ["get"],
     "/trades/{id}/history/verify": ["get"],
     "/goals": ["get"],
+    "/stellar/account/{address}/balance": ["get"],
+    "/stellar/account/create": ["post"],
+    "/stellar/assets": ["get"],
+    "/stellar/assets/{code}": ["get"],
+    "/stellar/fees": ["get"],
+    "/stellar/tx/{hash}/status": ["get"],
   };
 
   const protectedOperations = [
@@ -118,6 +124,57 @@ describe("OpenAPI documentation coverage", () => {
         expect(spec.paths[route]?.[method]).toBeDefined();
       }
     }
+  });
+
+  it("documents request and response schemas for every Stellar endpoint", () => {
+    const stellarResponses = [
+      ["/stellar/account/{address}/balance", "get", "200"],
+      ["/stellar/account/create", "post", "201"],
+      ["/stellar/assets", "get", "200"],
+      ["/stellar/assets/{code}", "get", "200"],
+      ["/stellar/fees", "get", "200"],
+      ["/stellar/tx/{hash}/status", "get", "200"],
+    ] as const;
+
+    for (const [route, method, status] of stellarResponses) {
+      const operation = spec.paths[route]?.[method] as any;
+      expect(operation.summary).toBeTruthy();
+      expect(operation.responses[status].content["application/json"].schema).toBeDefined();
+    }
+
+    const paths = spec.paths as any;
+    const accountBalance = paths["/stellar/account/{address}/balance"].get;
+    expect(accountBalance.parameters).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ in: "path", name: "address", required: true }),
+      ]),
+    );
+    expect(
+      accountBalance.responses["200"].content["application/json"].schema.properties
+        .balances.items.properties.issuer.nullable,
+    ).toBe(true);
+
+    const accountCreate = paths["/stellar/account/create"].post;
+    expect(
+      accountCreate.requestBody.content["application/json"].schema.properties.fund.type,
+    ).toBe("boolean");
+    expect(
+      accountCreate.responses["201"].content["application/json"].schema.required,
+    ).toEqual(expect.arrayContaining(["publicKey", "encryptedSecretKey", "funded"]));
+
+    const assets = paths["/stellar/assets"].get;
+    expect(assets.parameters).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ in: "query", name: "issuer", required: false }),
+      ]),
+    );
+    expect(
+      assets.responses["200"].content["application/json"].schema.properties.cached.type,
+    ).toBe("boolean");
+
+    const transactionStatus = paths["/stellar/tx/{hash}/status"].get;
+    expect(transactionStatus.responses["404"].content["application/json"].schema.properties.status.enum)
+      .toEqual(["pending"]);
   });
 
   it("marks every protected endpoint with bearer authentication", () => {

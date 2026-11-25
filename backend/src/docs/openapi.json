@@ -1844,6 +1844,55 @@
           "goals",
           "timestamp"
         ]
+      },
+      "StellarAsset": {
+        "type": "object",
+        "required": [
+          "code",
+          "issuer",
+          "supply",
+          "authRequired",
+          "authRevocable",
+          "authClawbackEnabled",
+          "numAccounts"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Asset code, defaulting to XLM when Horizon omits it."
+          },
+          "issuer": {
+            "type": "string",
+            "description": "Asset issuer account, or an empty string when Horizon omits it."
+          },
+          "supply": {
+            "type": "string",
+            "description": "Asset amount or the authorized-balance total."
+          },
+          "authRequired": {
+            "type": "boolean"
+          },
+          "authRevocable": {
+            "type": "boolean"
+          },
+          "authClawbackEnabled": {
+            "type": "boolean"
+          },
+          "numAccounts": {
+            "type": "integer"
+          }
+        }
+      },
+      "StellarError": {
+        "type": "object",
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "type": "string"
+          }
+        }
       }
     },
     "responses": {
@@ -2551,6 +2600,291 @@
         }
       }
     },
+    "/stellar/account/{address}/balance": {
+      "get": {
+        "tags": [
+          "Stellar"
+        ],
+        "summary": "Get the balances for a Stellar account",
+        "description": "Returns an empty balance list when the account is not funded.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "address",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 56,
+              "maxLength": 56,
+              "pattern": "^G"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Account balances, or an empty list for an unfunded account.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "address",
+                    "balances"
+                  ],
+                  "properties": {
+                    "address": {
+                      "type": "string"
+                    },
+                    "balances": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "assetType",
+                          "assetCode",
+                          "issuer",
+                          "balance",
+                          "limit"
+                        ],
+                        "properties": {
+                          "assetType": {
+                            "type": "string",
+                            "description": "Horizon asset type, including native and liquidity-pool shares."
+                          },
+                          "assetCode": {
+                            "type": "string",
+                            "description": "Asset code, or an empty string for liquidity-pool shares."
+                          },
+                          "issuer": {
+                            "type": "string",
+                            "nullable": true,
+                            "description": "Asset issuer, liquidity pool ID, or null for native XLM."
+                          },
+                          "balance": {
+                            "type": "string"
+                          },
+                          "limit": {
+                            "type": "string",
+                            "nullable": true
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The address is missing or has an invalid shape.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StellarError"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Horizon could not provide account data.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StellarError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/stellar/account/create": {
+      "post": {
+        "tags": [
+          "Stellar"
+        ],
+        "summary": "Create a Stellar keypair",
+        "description": "Creates a keypair and returns its secret encrypted by the backend. On testnet, `fund: true` requests a Friendbot airdrop; funding failure does not prevent account creation.",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "fund": {
+                    "type": "boolean",
+                    "description": "Request testnet funding through Friendbot."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The account was created. `funded` indicates whether a testnet airdrop succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "publicKey",
+                    "encryptedSecretKey",
+                    "funded"
+                  ],
+                  "properties": {
+                    "publicKey": {
+                      "type": "string"
+                    },
+                    "encryptedSecretKey": {
+                      "type": "string",
+                      "description": "Encrypted Stellar secret key; decrypt using the backend's configured key."
+                    },
+                    "funded": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/stellar/assets": {
+      "get": {
+        "tags": [
+          "Stellar"
+        ],
+        "summary": "List Stellar assets",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "issuer",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Limit results to assets issued by this Stellar account."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Up to 200 matching assets and whether the response came from cache.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "assets",
+                    "cached"
+                  ],
+                  "properties": {
+                    "assets": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/StellarAsset"
+                      }
+                    },
+                    "cached": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Horizon could not provide asset data.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StellarError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/stellar/assets/{code}": {
+      "get": {
+        "tags": [
+          "Stellar"
+        ],
+        "summary": "Find Stellar assets by asset code",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "code",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "issuer",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Limit results to assets issued by this Stellar account."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Matching assets and whether the response came from cache.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "assets",
+                    "cached"
+                  ],
+                  "properties": {
+                    "assets": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/StellarAsset"
+                      }
+                    },
+                    "cached": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No assets were found for the requested code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StellarError"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Horizon could not provide asset data.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StellarError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/stellar/fees": {
       "get": {
         "tags": [
@@ -2579,6 +2913,14 @@
               "application/json": {
                 "schema": {
                   "type": "object",
+                  "required": [
+                    "feeCharged",
+                    "maxFee",
+                    "ledger",
+                    "lastLedgerBaseFee",
+                    "ledgerCapacityUsage",
+                    "recommended"
+                  ],
                   "properties": {
                     "feeCharged": {
                       "type": "object",
@@ -2604,6 +2946,18 @@
                     },
                     "recommended": {
                       "type": "object",
+                      "required": [
+                        "perOperationFee",
+                        "transactionFee",
+                        "operations",
+                        "percentile",
+                        "percentileFee",
+                        "multiplier",
+                        "congested",
+                        "cappedAtMax",
+                        "minStroops",
+                        "maxStroops"
+                      ],
                       "properties": {
                         "perOperationFee": {
                           "type": "integer",
@@ -2650,12 +3004,134 @@
             "content": {
               "application/json": {
                 "schema": {
+                  "$ref": "#/components/schemas/StellarError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/stellar/tx/{hash}/status": {
+      "get": {
+        "tags": [
+          "Stellar"
+        ],
+        "summary": "Get the status of a Stellar transaction",
+        "description": "Returns success or failure details for a known transaction, or pending when Horizon does not yet know the hash.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "hash",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 64,
+              "maxLength": 64
+            },
+            "description": "Stellar transaction hash."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The transaction is confirmed.",
+            "content": {
+              "application/json": {
+                "schema": {
                   "type": "object",
+                  "required": [
+                    "status",
+                    "resultCodes",
+                    "ledger",
+                    "hash",
+                    "createdAt"
+                  ],
                   "properties": {
-                    "error": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "success",
+                        "failed"
+                      ]
+                    },
+                    "resultCodes": {
+                      "type": "object",
+                      "required": [
+                        "transaction",
+                        "operations"
+                      ],
+                      "properties": {
+                        "transaction": {
+                          "type": "string"
+                        },
+                        "operations": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    },
+                    "ledger": {
+                      "type": "integer"
+                    },
+                    "hash": {
+                      "type": "string"
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The transaction hash is missing or has an invalid length.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StellarError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The transaction is not yet known to Horizon and may still be pending.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "hash",
+                    "message"
+                  ],
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "pending"
+                      ]
+                    },
+                    "hash": {
+                      "type": "string"
+                    },
+                    "message": {
                       "type": "string"
                     }
                   }
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Horizon could not provide transaction status.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StellarError"
                 }
               }
             }

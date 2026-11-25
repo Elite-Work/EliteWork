@@ -94,6 +94,7 @@ export function ThemePreviewSwatch({ theme }: { theme: PreviewTheme }) {
         aria-hidden="true"
         className="flex h-full w-full overflow-hidden"
         data-testid="theme-preview-system"
+        data-theme="system"
       >
         <div className="w-1/2 overflow-hidden">
           <MiniScreen palette={LIGHT} />
@@ -110,6 +111,7 @@ export function ThemePreviewSwatch({ theme }: { theme: PreviewTheme }) {
       aria-hidden="true"
       className="h-full w-full overflow-hidden"
       data-testid={`theme-preview-${theme}`}
+      data-theme={theme}
     >
       <MiniScreen palette={theme === "dark" ? DARK : LIGHT} />
     </div>

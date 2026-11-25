@@ -79,6 +79,7 @@ const IMPLEMENTED_ROUTES = [
   "/dispute-categories",
   "/dispute-categories/{id}",
   "/trades",
+  "/trades/export",
   "/trades/stats",
   "/trades/{id}",
   "/trades/{id}/receipt",

@@ -3659,6 +3659,222 @@
         }
       }
     },
+    "/trades/export": {
+      "get": {
+        "tags": [
+          "Trades"
+        ],
+        "summary": "Export the authenticated user's trades as JSON, CSV, or a single-trade PDF receipt",
+        "description": "Returns trades where the authenticated caller is either buyer or seller. Supports `format=json` (default, paginated), `format=csv` (UTF-8 CSV with BOM), or `format=pdf` (single-trade PDF receipt, requires `tradeId`).\nError code references: `AUTH_ERROR`, `VALIDATION_ERROR`, `NOT_FOUND`, `INTERNAL_ERROR`.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "format",
+            "in": "query",
+            "required": false,
+            "description": "Export format. Defaults to json.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "csv",
+                "json",
+                "pdf"
+              ],
+              "default": "json"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "description": "Optional trade status filter.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "PENDING_SIGNATURE",
+                "CREATED",
+                "FUNDED",
+                "DELIVERED",
+                "COMPLETED",
+                "DISPUTED",
+                "CANCELLED",
+                "EXPIRED"
+              ]
+            }
+          },
+          {
+            "name": "dateFrom",
+            "in": "query",
+            "required": false,
+            "description": "Filter trades created at or after this ISO 8601 timestamp.",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "dateTo",
+            "in": "query",
+            "required": false,
+            "description": "Filter trades created at or before this ISO 8601 timestamp.",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "Page number when format=json.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Page size when format=json (max 100).",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          },
+          {
+            "name": "tradeId",
+            "in": "query",
+            "required": false,
+            "description": "Trade identifier. Required when format=pdf.",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Exported trades returned as JSON (default), CSV (`text/csv`), or PDF (`application/pdf`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "items",
+                    "pagination"
+                  ],
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "tradeId": {
+                            "type": "string"
+                          },
+                          "buyerAddress": {
+                            "type": "string"
+                          },
+                          "sellerAddress": {
+                            "type": "string"
+                          },
+                          "amountUsdc": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string"
+                          },
+                          "fundedAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "nullable": true
+                          },
+                          "deliveredAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "nullable": true
+                          },
+                          "completedAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "nullable": true
+                          },
+                          "createdAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "updatedAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          }
+                        }
+                      }
+                    },
+                    "pagination": {
+                      "type": "object",
+                      "required": [
+                        "page",
+                        "limit",
+                        "total",
+                        "totalPages"
+                      ],
+                      "properties": {
+                        "page": {
+                          "type": "integer"
+                        },
+                        "limit": {
+                          "type": "integer"
+                        },
+                        "total": {
+                          "type": "integer"
+                        },
+                        "totalPages": {
+                          "type": "integer"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "text/csv": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "application/pdf": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/LegacyValidationError"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundError"
+          },
+          "429": {
+            "description": "Rate limit exceeded."
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
     "/trades/stats": {
       "get": {
         "tags": [

@@ -35,7 +35,7 @@ export function VaultValueCard({
         lossRatio={{ buyer: 5000, seller: 5000 }}
         tradeValueCngn={String(value)}
       />
-      <div className="flex flex-col w-76 h-[335.13px]">
+      <div className="flex flex-col w-76 h-[335.13px]" data-testid="vault-value-card">
         <div className="flex items-center justify-between mb-2">
           <p className="text-xs font-semibold tracking-widest text-text-secondary uppercase">
             Total Vault Value
@@ -47,7 +47,7 @@ export function VaultValueCard({
           </div>
         </div>
 
-        <p className="text-4xl font-bold text-text-primary mb-4">
+        <p className="text-4xl font-bold text-text-primary mb-4" data-testid="vault-balance">
           {formattedValue}
           <span className="text-text-muted">.00</span>
         </p>

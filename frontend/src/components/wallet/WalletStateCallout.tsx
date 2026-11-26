@@ -37,8 +37,6 @@ export function WalletStateCallout({
       <div
         role="status"
         aria-live="polite"
-        data-testid="wallet-state-callout"
-        data-wallet-state={state}
         className={`flex items-center gap-3 rounded-lg border border-border-default bg-card px-4 py-3 ${className ?? ""}`}
       >
         <Spinner size="sm" />
@@ -50,7 +48,6 @@ export function WalletStateCallout({
   return (
     <div
       role="alert"
-      data-testid="wallet-state-callout"
       className={`flex flex-col gap-2 rounded-lg border border-border-raised bg-card p-4 ${className ?? ""}`}
       data-wallet-state={state}
     >
@@ -60,8 +57,6 @@ export function WalletStateCallout({
         <div className="mt-1 flex items-center gap-3">
           <button
             type="button"
-            data-testid="wallet-state-cta"
-            data-busy={busy || undefined}
             disabled={busy}
             onClick={() => onAction(view.action as WalletAction)}
             className="inline-flex h-9 items-center rounded-full bg-gradient-gold-cta px-4 text-sm font-semibold text-text-inverse transition-opacity disabled:opacity-40"

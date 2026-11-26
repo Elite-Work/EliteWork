@@ -16,7 +16,7 @@ export function VaultHero({
   isSecured,
 }: VaultHeroProps) {
   return (
-    <header className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6 mb-10">
+    <header className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6 mb-10" data-testid="vault-hero">
       <div>
         <p className="text-xs font-semibold tracking-widest text-gold uppercase mb-2">
           Vault System Active
@@ -37,7 +37,7 @@ export function VaultHero({
           <p className="text-xs font-medium tracking-widest text-text-secondary uppercase">
             Vault Status
           </p>
-          <p className="text-xl font-bold text-emerald">{status}</p>
+          <p className="text-xl font-bold text-emerald" data-testid="vault-status">{status}</p>
           {isSecured && (
             <div className="flex items-center gap-1.5 mt-1">
               <Check className="w-4 h-4 text-emerald" />

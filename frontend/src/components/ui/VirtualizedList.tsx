@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef } from "react";
+import type { UIEvent } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 
 interface VirtualizedListProps<T> {
@@ -20,6 +21,17 @@ interface VirtualizedListProps<T> {
   isEmpty?: boolean;
   /** Empty state render. */
   emptyState?: React.ReactNode;
+  /**
+   * Called when the scroll position comes within `endReachedOffset` px of the
+   * bottom. Used by the trades list to fetch the next cursor page (#503).
+   * Fires on every scroll tick past the threshold, so callers must guard
+   * against duplicate requests (e.g. `isFetchingNextPage`).
+   */
+  onEndReached?: () => void;
+  /** Distance from the bottom (px) that counts as "reached the end". */
+  endReachedOffset?: number;
+  /** Rendered inside the scroll container, after the virtual rows. */
+  footer?: React.ReactNode;
 }
 
 /**
@@ -49,8 +61,21 @@ export function VirtualizedList<T>({
   className,
   isEmpty = false,
   emptyState,
+  onEndReached,
+  endReachedOffset = 120,
+  footer,
 }: VirtualizedListProps<T>) {
   const parentRef = useRef<HTMLDivElement>(null);
+
+  function handleScroll(event: UIEvent<HTMLDivElement>) {
+    if (!onEndReached) return;
+    const element = event.currentTarget;
+    const distanceFromBottom =
+      element.scrollHeight - element.scrollTop - element.clientHeight;
+    if (distanceFromBottom <= endReachedOffset) {
+      onEndReached();
+    }
+  }
 
   // useVirtualizer() returns functions that cannot be memoized, which causes
   // react-hooks/incompatible-library warnings with React Compiler. This is
@@ -87,6 +112,7 @@ export function VirtualizedList<T>({
       role="list"
       aria-label="Virtualized list"
       tabIndex={0}
+      onScroll={handleScroll}
     >
       <div
         style={{
@@ -117,6 +143,7 @@ export function VirtualizedList<T>({
           );
         })}
       </div>
+      {footer}
     </div>
   );
 }

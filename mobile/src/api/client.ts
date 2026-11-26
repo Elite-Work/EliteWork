@@ -27,6 +27,24 @@ const apiClient = axios.create({
 
 let authToken: string | null = null;
 
+function isUnversionedPath(url: string): boolean {
+  return UNVERSIONED_PREFIXES.some(
+    (p) => url === p || url.startsWith(`${p}/`),
+  ) || /^https?:\/\//.test(url);
+}
+
+/**
+ * Absolute URL for a consumer-facing API path, including the version prefix.
+ * Used when the URL leaves the app — e.g. the trade-receipt link handed to the
+ * OS share sheet (#501) — so it matches exactly what `apiClient` would call.
+ */
+export function buildApiUrl(path: string): string {
+  const suffix = !isUnversionedPath(path) && !path.startsWith('/api/v')
+    ? `${API_VERSION_PREFIX}${path}`
+    : path;
+  return `${apiClient.defaults.baseURL ?? ''}${suffix}`;
+}
+
 /**
  * Set or clear the bearer token attached to subsequent API requests.
  * `authStore` keeps this in sync with the token persisted in SecureStore.
@@ -47,12 +65,8 @@ apiClient.interceptors.request.use((config) => {
 // and health routes are excluded so they keep hitting the legacy paths.
 apiClient.interceptors.request.use((config) => {
   const url = config.url ?? '';
-  const isUnversioned =
-    UNVERSIONED_PREFIXES.some(
-      (p) => url === p || url.startsWith(`${p}/`),
-    ) || /^https?:\/\//.test(url);
 
-  if (!isUnversioned && !url.startsWith('/api/v')) {
+  if (!isUnversionedPath(url) && !url.startsWith('/api/v')) {
     config.url = `${API_VERSION_PREFIX}${url}`;
   }
   return config;

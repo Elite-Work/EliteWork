@@ -20,11 +20,13 @@ describe("CopyButton", () => {
     const writeText = jest.fn().mockResolvedValue(undefined);
     Object.assign(navigator, { clipboard: { writeText } });
 
-    render(<CopyButton value={tradeId} label="Trade ID" />);
+    const onCopied = jest.fn();
+    render(<CopyButton value={tradeId} label="Trade ID" onCopied={onCopied} />);
     fireEvent.click(screen.getByLabelText("Copy Trade ID"));
 
     await waitFor(() => {
       expect(writeText).toHaveBeenCalledWith(tradeId);
+      expect(onCopied).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -54,7 +56,8 @@ describe("CopyButton", () => {
     const writeText = jest.fn().mockRejectedValue(new Error("denied"));
     Object.assign(navigator, { clipboard: { writeText } });
 
-    render(<CopyButton value={tradeId} label="transaction hash" />);
+    const onCopied = jest.fn();
+    render(<CopyButton value={tradeId} label="transaction hash" onCopied={onCopied} />);
     const button = screen.getByLabelText("Copy transaction hash");
     fireEvent.click(button);
 
@@ -62,6 +65,7 @@ describe("CopyButton", () => {
       expect(button).toHaveAttribute("data-state", "failed");
     });
     expect(button).toHaveAttribute("title", "Could not copy transaction hash");
+    expect(onCopied).not.toHaveBeenCalled();
   });
 
   it("does not let the click bubble into a clickable row", async () => {

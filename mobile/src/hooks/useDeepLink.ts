@@ -72,7 +72,11 @@ export function useDeepLink(): UseDeepLinkReturn {
 
   const routeOrPark = useCallback(
     (target: DeepLinkTarget, navigation?: NavigationContainerRef<RootStackParamList> | null) => {
-      if (requiresAuth(target) && !token) {
+      // Park when signed out (login-then-continue) or when the navigator is not
+      // mounted yet. A push notification that cold-starts the app routinely
+      // arrives before `onReady`, so treating a null ref as "drop the link"
+      // would silently lose the tap.
+      if (!navigation || (requiresAuth(target) && !token)) {
         setPending(target);
         return;
       }

@@ -2,6 +2,7 @@ import { DisputeStatus, Prisma, TradeStatus } from "@prisma/client";
 import { EventType, ParsedEvent, EVENT_TO_STATUS } from "../types/events";
 import { appLogger } from "../middleware/logger";
 import { webhookService } from "./webhook.service";
+import { TradeWatchlistService, WatchedTradeNotification } from "./trade.watchlist.service";
 import { logEscrowEvent } from "../lib/escrowAudit";
 import {
   recordTradeFunnelEvent,
@@ -18,6 +19,36 @@ type TradeCreatePayload = {
   status: (typeof EVENT_TO_STATUS)[EventType];
   version: number;
 };
+
+/**
+ * Fan a watched-trade event out to every user watching the trade (#497).
+ *
+ * Called from inside the chain-sync transaction so in-app notification rows
+ * commit atomically with the status transition. Failures are logged rather
+ * than rethrown: notification delivery must not stop escrow reconciliation,
+ * and the originating event is already recorded as processed.
+ */
+async function dispatchWatchlistUpdate(
+  tx: Prisma.TransactionClient,
+  event: ParsedEvent,
+  update: WatchedTradeNotification,
+): Promise<void> {
+  try {
+    const service = new TradeWatchlistService(
+      tx as unknown as ConstructorParameters<typeof TradeWatchlistService>[0],
+    );
+    await service.dispatchTradeNotification(event.tradeId, {
+      ...update,
+      eventId: event.eventId,
+      metadata: { eventType: event.eventType, ledger: event.ledgerSequence, ...update.metadata },
+    });
+  } catch (error) {
+    appLogger.warn(
+      { error, tradeId: event.tradeId, eventType: event.eventType },
+      "[EventHandler] Watchlist notification dispatch failed",
+    );
+  }
+}
 
 const VALID_PREDECESSORS: Partial<Record<EventType, TradeStatus[]>> = {
   [EventType.TradeFunded]: [TradeStatus.CREATED],
@@ -181,6 +212,12 @@ export async function handleTradeFunded(
   webhookService.dispatch(event.tradeId, TradeStatus.FUNDED, {
     ledger: event.ledgerSequence,
   });
+  await dispatchWatchlistUpdate(tx, event, {
+    eventKey: "trade-funded",
+    title: "Trade funded",
+    message: `Watched trade ${event.tradeId} has been funded and the seller can now deliver.`,
+    metadata: { status: TradeStatus.FUNDED },
+  });
 }
 
 export async function handleDeliveryConfirmed(
@@ -210,6 +247,12 @@ export async function handleDeliveryConfirmed(
   recordTradeFunnelEvent("delivered");
   webhookService.dispatch(event.tradeId, TradeStatus.DELIVERED, {
     ledger: event.ledgerSequence,
+  });
+  await dispatchWatchlistUpdate(tx, event, {
+    eventKey: "trade-delivered",
+    title: "Delivery confirmed",
+    message: `Delivery for watched trade ${event.tradeId} has been confirmed.`,
+    metadata: { status: TradeStatus.DELIVERED },
   });
 }
 
@@ -247,6 +290,12 @@ export async function handleFundsReleased(
   recordTradeGmv(amountStr, "released");
   webhookService.dispatch(event.tradeId, TradeStatus.COMPLETED, {
     ledger: event.ledgerSequence,
+  });
+  await dispatchWatchlistUpdate(tx, event, {
+    eventKey: "trade-released",
+    title: "Trade completed",
+    message: `Funds for watched trade ${event.tradeId} have been released and the trade is complete.`,
+    metadata: { status: TradeStatus.COMPLETED },
   });
 }
 
@@ -317,6 +366,12 @@ export async function handleDisputeInitiated(
   webhookService.dispatch(event.tradeId, TradeStatus.DISPUTED, {
     ledger: event.ledgerSequence,
   });
+  await dispatchWatchlistUpdate(tx, event, {
+    eventKey: "trade-disputed",
+    title: "Dispute opened",
+    message: `A dispute has been opened on watched trade ${event.tradeId}.`,
+    metadata: { status: TradeStatus.DISPUTED },
+  });
 }
 
 export async function handleDisputeResolved(
@@ -347,6 +402,12 @@ export async function handleDisputeResolved(
   );
   webhookService.dispatch(event.tradeId, TradeStatus.COMPLETED, {
     ledger: event.ledgerSequence,
+  });
+  await dispatchWatchlistUpdate(tx, event, {
+    eventKey: "trade-dispute-resolved",
+    title: "Dispute resolved",
+    message: `The dispute on watched trade ${event.tradeId} has been resolved.`,
+    metadata: { status: TradeStatus.COMPLETED },
   });
 }
 

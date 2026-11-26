@@ -115,6 +115,35 @@ describe("ThemeToggle live preview", () => {
     );
   });
 
+  it("swaps the class on <html> when a theme is committed", async () => {
+    const user = userEvent.setup();
+    renderToggle("dark");
+    expect(document.documentElement).toHaveClass("dark");
+
+    await user.click(screen.getByRole("radio", { name: /light/i }));
+
+    expect(document.documentElement).toHaveClass("light");
+    expect(document.documentElement).not.toHaveClass("dark");
+    expect(document.documentElement).toHaveClass("theme-transition");
+
+    await user.click(screen.getByRole("radio", { name: /dark/i }));
+
+    expect(document.documentElement).toHaveClass("dark");
+    expect(document.documentElement).not.toHaveClass("light");
+  });
+
+  it("resolves System through the OS preference on <html>", async () => {
+    const user = userEvent.setup();
+    renderToggle("dark");
+
+    await user.click(screen.getByRole("radio", { name: /system/i }));
+
+    // matchMedia is mocked to a light OS.
+    expect(document.documentElement).toHaveClass("light");
+    expect(document.documentElement).not.toHaveClass("dark");
+    expect(localStorage.getItem(STORAGE_KEY)).toBe("system");
+  });
+
   it("moves between options with the arrow keys and previews without committing", async () => {
     const user = userEvent.setup();
     renderToggle("dark");

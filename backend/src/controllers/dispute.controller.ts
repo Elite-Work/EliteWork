@@ -2,6 +2,7 @@ import { NextFunction, Response } from "express";
 import { DisputeService, DisputeStatus } from "../services/dispute.service";
 import { prisma as defaultPrisma } from "../lib/db";
 import { authMiddleware, AuthRequest } from "../middleware/auth.middleware";
+import { idempotencyMiddleware } from "../middleware/idempotency";
 import { validateRequest } from "../middleware/validateRequest";
 import { Router } from "express";
 import { z } from "zod";
@@ -96,6 +97,7 @@ export function createDisputeRouter(prisma = defaultPrisma) {
   router.post(
     "/:id/transition",
     authMiddleware,
+    idempotencyMiddleware,
     validateRequest({ body: transitionDisputeSchema }),
     disputeController.transitionDisputeStatus,
   );

@@ -1,5 +1,6 @@
 import { PactV3, MatchersV3 } from '@pact-foundation/pact';
 import { disputesApi } from '@/lib/api/disputes';
+import { tradesApi } from '@/lib/api/trades';
 
 const { like, eachLike, datetime, term } = MatchersV3;
 
@@ -166,6 +167,99 @@ describe('Disputes API Pact Consumer Tests', () => {
         const result = await disputesApi.list(mockToken, { page: 1, limit: 10 });
         expect(result.items).toHaveLength(0);
         expect(result.pagination.total).toBe(0);
+
+        if (originalBaseUrl) {
+          process.env.NEXT_PUBLIC_API_BASE_URL = originalBaseUrl;
+        } else {
+          delete process.env.NEXT_PUBLIC_API_BASE_URL;
+        }
+      });
+    });
+  });
+
+  describe('POST /trades/:id/dispute - Create Dispute', () => {
+    it('returns an unsigned XDR for the dispute transaction', async () => {
+      provider
+        .given('a funded trade exists and the user is a trade participant')
+        .uponReceiving('a request to initiate a dispute')
+        .withRequest({
+          method: 'POST',
+          path: '/trades/TRD-FIXTURE-0001/dispute',
+          headers: {
+            Authorization: `Bearer ${mockToken}`,
+            'Content-Type': 'application/json',
+            'Idempotency-Key': 'dispute-key-1',
+          },
+          body: { reason: 'Goods not delivered as agreed', category: 'non_delivery' },
+        })
+        .willRespondWith({
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+          body: { unsignedXdr: like('AAAAAgAAAAA=') },
+        });
+
+      await provider.executeTest(async (mockServer) => {
+        const originalBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
+        process.env.NEXT_PUBLIC_API_BASE_URL = mockServer.url;
+
+        const result = await tradesApi.initiateDispute(
+          mockToken,
+          'TRD-FIXTURE-0001',
+          'Goods not delivered as agreed',
+          'non_delivery',
+          { idempotencyKey: 'dispute-key-1' },
+        );
+        expect(result.unsignedXdr).toEqual(expect.any(String));
+
+        if (originalBaseUrl) {
+          process.env.NEXT_PUBLIC_API_BASE_URL = originalBaseUrl;
+        } else {
+          delete process.env.NEXT_PUBLIC_API_BASE_URL;
+        }
+      });
+    });
+  });
+
+  describe('POST /disputes/:tradeId/transition - Status transition', () => {
+    it('returns the dispute with its updated status', async () => {
+      provider
+        .given('an open dispute exists for the trade')
+        .uponReceiving('a request to move a dispute to UNDER_REVIEW')
+        .withRequest({
+          method: 'POST',
+          path: '/disputes/TRD-FIXTURE-0001/transition',
+          headers: {
+            Authorization: `Bearer ${mockToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: { status: 'UNDER_REVIEW' },
+        })
+        .willRespondWith({
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+          body: {
+            id: like(1),
+            tradeId: like('TRD-FIXTURE-0001'),
+            initiator: like('GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA001'),
+            reason: like('Goods not delivered as agreed'),
+            status: 'UNDER_REVIEW',
+            createdAt: datetime("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", '2026-01-15T10:00:00.000Z'),
+            updatedAt: datetime("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", '2026-01-15T11:00:00.000Z'),
+            resolvedAt: null,
+            trade: {
+              buyerAddress: like('GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA001'),
+              sellerAddress: like('GBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB002'),
+              amountUsdc: like('5000'),
+            },
+          },
+        });
+
+      await provider.executeTest(async (mockServer) => {
+        const originalBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
+        process.env.NEXT_PUBLIC_API_BASE_URL = mockServer.url;
+
+        const result = await disputesApi.transition(mockToken, 'TRD-FIXTURE-0001', 'UNDER_REVIEW');
+        expect(result.status).toBe('UNDER_REVIEW');
 
         if (originalBaseUrl) {
           process.env.NEXT_PUBLIC_API_BASE_URL = originalBaseUrl;

@@ -128,7 +128,8 @@ export default function DashboardPage() {
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <BentoCard 
+        <BentoCard
+          headingLevel={2}
           title="Total Volume" 
           icon={<CreditCard className="w-5 h-5" />}
           glowVariant="gold"
@@ -141,7 +142,8 @@ export default function DashboardPage() {
           </div>
         </BentoCard>
 
-        <BentoCard 
+        <BentoCard
+          headingLevel={2}
           title="Active Trades" 
           icon={<Activity className="w-5 h-5" />}
           glowVariant="emerald"
@@ -154,7 +156,8 @@ export default function DashboardPage() {
           </div>
         </BentoCard>
 
-        <BentoCard 
+        <BentoCard
+          headingLevel={2}
           title="Completed Trades" 
           icon={<CheckCircle2 className="w-5 h-5" />}
         >
@@ -166,7 +169,8 @@ export default function DashboardPage() {
           </div>
         </BentoCard>
 
-        <BentoCard 
+        <BentoCard
+          headingLevel={2}
           title="Total Trades" 
           icon={<AlertCircle className="w-5 h-5" />}
         >
@@ -208,7 +212,7 @@ export default function DashboardPage() {
           <div className="bg-bg-card border border-border-default rounded-xl overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm text-left">
-                <thead className="text-xs text-text-muted uppercase bg-bg-elevated/50 border-b border-border-default">
+                <thead className="text-xs text-text-secondary uppercase bg-bg-elevated/50 border-b border-border-default">
                   <tr>
                     <th scope="col" className="px-6 py-4 font-medium">Trade ID</th>
                     <th scope="col" className="px-6 py-4 font-medium">Counterparty</th>

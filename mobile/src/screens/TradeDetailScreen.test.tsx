@@ -7,7 +7,7 @@
  * the dispute modal, evidence upload and navigation).
  */
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
-import { ActivityIndicator, Alert, Linking } from 'react-native';
+import { ActivityIndicator, Alert, Linking, Share } from 'react-native';
 import type { AlertButton } from 'react-native';
 
 import TradeDetailScreen from './TradeDetailScreen';
@@ -69,6 +69,7 @@ describe('TradeDetailScreen', () => {
   };
   let alertSpy: jest.SpyInstance;
   let openURL: jest.SpyInstance;
+  let shareSpy: jest.SpyInstance;
 
   function mockStore(overrides: Record<string, unknown> = {}) {
     (useTradeStore as unknown as jest.Mock).mockReturnValue({
@@ -111,6 +112,7 @@ describe('TradeDetailScreen', () => {
     clearAuth.mockResolvedValue(undefined);
     alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
     openURL = jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
+    shareSpy = jest.spyOn(Share, 'share').mockResolvedValue({ action: 'sharedAction' });
     (useAuthStore as unknown as jest.Mock).mockReturnValue({ clearAuth });
     mockStore();
   });
@@ -118,6 +120,7 @@ describe('TradeDetailScreen', () => {
   afterEach(() => {
     alertSpy.mockRestore();
     openURL.mockRestore();
+    shareSpy.mockRestore();
   });
 
   describe('loading and not-found states', () => {
@@ -282,16 +285,17 @@ describe('TradeDetailScreen', () => {
     const RELEASE = '💸 Release Funds';
     const DISPUTE = '⚠️ Initiate Dispute';
     const EVIDENCE = '📹 Upload Evidence';
+    const SHARE = '🧾 Share Receipt';
     const NONE = 'No actions available for this trade status.';
-    const ALL = [DEPOSIT, CONFIRM, RELEASE, DISPUTE, EVIDENCE, NONE];
+    const ALL = [DEPOSIT, CONFIRM, RELEASE, DISPUTE, EVIDENCE, SHARE, NONE];
 
     it.each<[TradeStatus, string[]]>([
       ['PENDING', [DEPOSIT]],
       ['FUNDED', [CONFIRM, DISPUTE]],
       ['IN_TRANSIT', [CONFIRM, DISPUTE]],
       ['DELIVERED', [RELEASE, DISPUTE]],
-      ['DISPUTED', [EVIDENCE]],
-      ['COMPLETED', [NONE]],
+      ['DISPUTED', [EVIDENCE, SHARE]],
+      ['COMPLETED', [SHARE]],
       ['REFUNDED', [NONE]],
     ])('%s shows exactly the right actions', (status, visible) => {
       mockStore({ currentTrade: makeTrade({ status }) });
@@ -409,6 +413,33 @@ describe('TradeDetailScreen', () => {
       expect(navigation.navigate).toHaveBeenCalledWith('EvidenceCapture', {
         tradeId: TRADE_ID,
       });
+    });
+
+    it('opens the share sheet with the trade receipt link', async () => {
+      mockStore({ currentTrade: makeTrade({ status: 'COMPLETED' }) });
+      const { getByTestId } = renderScreen();
+
+      await act(async () => {
+        fireEvent.press(getByTestId('trade-share-receipt'));
+      });
+
+      expect(shareSpy).toHaveBeenCalledTimes(1);
+      const payload = shareSpy.mock.calls[0][0] as {
+        url: string;
+        message: string;
+        title: string;
+      };
+      expect(payload.url).toContain(`/trades/${TRADE_ID}/receipt`);
+      expect(payload.message).toContain(payload.url);
+    });
+
+    it('offers the receipt share on a disputed trade too', () => {
+      mockStore({ currentTrade: makeTrade({ status: 'DISPUTED' }) });
+      const { getByTestId } = renderScreen();
+
+      fireEvent.press(getByTestId('trade-share-receipt'));
+
+      expect(shareSpy).toHaveBeenCalledTimes(1);
     });
 
     it('navigates back from the header', () => {

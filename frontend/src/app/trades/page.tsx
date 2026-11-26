@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useAuth } from "@/hooks/useAuth";
 import { useAnalytics } from "@/components/AnalyticsProvider";
 import { useToast } from "@/hooks/useToast";
-import { api, ApiError, TradeResponse } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { Button } from "@/components/ui/Button";
 import { NavButton } from "@/components/ui/Navigation";
@@ -33,7 +34,8 @@ const STATUS_STYLES: Record<string, string> = {
   draft:     "text-status-draft   bg-surface-1         border border-border-default",
 };
 
-const PAGE_SIZE = 100;
+// Cursor page size (#503). Each scroll to the bottom appends the next page.
+const PAGE_SIZE = 20;
 const ROW_HEIGHT = 52;
 
 function TradesTableSkeleton() {
@@ -67,79 +69,69 @@ function TradesTableSkeleton() {
 
 export default function TradesPage() {
   const { token, isAuthenticated } = useAuth();
-  const { trackApiFailure, trackFunnelStep } = useAnalytics();
+  const { trackFunnelStep } = useAnalytics();
   const { addToast } = useToast();
   const [activeFilter, setActiveFilter] = useState<TradeStatus>("all");
   const [searchInput, setSearchInput] = useState("");
   // #505: debounce at 300 ms so results update live without one request per
   // keystroke. The backend matches commodity and counterparty name.
   const debouncedSearch = useDebouncedValue(searchInput, 300);
-  const [page, setPage] = useState(1);
-  const [trades, setTrades] = useState<TradeResponse[]>([]);
-  const [totalPages, setTotalPages] = useState(1);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const statusParam = activeFilter === "all" ? undefined : activeFilter;
+  const searchQuery = debouncedSearch.trim();
 
   useEffect(() => {
     trackFunnelStep("trade_page_view", {
       filter: activeFilter,
-      hasSearch: debouncedSearch.trim().length > 0,
+      hasSearch: searchQuery.length > 0,
     });
+  }, [activeFilter, searchQuery, trackFunnelStep]);
 
-    async function fetchTrades() {
-      if (!isAuthenticated || !token) {
-        setLoading(false);
-        return;
-      }
+  // #503: cursor-paginated infinite list. A new filter/search changes the
+  // query key, which resets the loaded pages; scrolling to the bottom calls
+  // fetchNextPage with the previous page's `pageInfo.nextCursor`.
+  const tradesQuery = useInfiniteQuery({
+    queryKey: ["trades", statusParam ?? "all", searchQuery],
+    enabled: isAuthenticated && !!token,
+    initialPageParam: undefined as string | undefined,
+    queryFn: ({ pageParam }) =>
+      api.trades.list(token!, {
+        status: statusParam,
+        limit: PAGE_SIZE,
+        q: searchQuery || undefined,
+        cursor: pageParam,
+      }),
+    getNextPageParam: (lastPage) =>
+      lastPage.pageInfo?.hasNextPage
+        ? lastPage.pageInfo.nextCursor ?? undefined
+        : undefined,
+  });
 
-      setLoading(true);
-      setError(null);
+  const trades = useMemo(
+    () => tradesQuery.data?.pages.flatMap((page) => page.items) ?? [],
+    [tradesQuery.data],
+  );
 
-      try {
-        const statusParam = activeFilter === "all" ? undefined : activeFilter;
-        const response = await api.trades.list(token, {
-          status: statusParam,
-          page,
-          limit: PAGE_SIZE,
-          q: debouncedSearch.trim() || undefined,
-        });
+  const loading = tradesQuery.isLoading;
+  const error = tradesQuery.isError
+    ? tradesQuery.error instanceof ApiError
+      ? tradesQuery.error.message
+      : tradesQuery.error instanceof Error
+        ? tradesQuery.error.message
+        : "Failed to load trades"
+    : null;
 
-        setTrades(response.items);
-        setTotalPages(response.pagination.totalPages);
-      } catch (err) {
-        let errorMessage = "Failed to load trades";
-        let status = 0;
-
-        if (err instanceof ApiError) {
-          errorMessage = err.message;
-          status = err.status ?? 0;
-        } else if (err instanceof Error) {
-          errorMessage = err.message;
-        }
-
-        trackApiFailure("/trades", status, {
-          message: errorMessage,
-          filter: activeFilter,
-          hasSearch: debouncedSearch.trim().length > 0,
-        });
-        setError(errorMessage);
-      } finally {
-        setLoading(false);
-      }
+  function loadMore() {
+    if (tradesQuery.hasNextPage && !tradesQuery.isFetchingNextPage) {
+      void tradesQuery.fetchNextPage();
     }
-
-    fetchTrades();
-  }, [token, isAuthenticated, activeFilter, page, debouncedSearch, trackApiFailure, trackFunnelStep]);
+  }
 
   function handleFilter(value: TradeStatus) {
     setActiveFilter(value);
-    setPage(1);
   }
 
   function handleSearchChange(value: string) {
     setSearchInput(value);
-    // Reset pagination immediately; the request itself waits for the debounce.
-    setPage(1);
   }
 
   function formatDate(dateString: string) {
@@ -324,6 +316,24 @@ export default function TradesPage() {
                 rowHeight={ROW_HEIGHT}
                 maxHeight={Math.min(trades.length * ROW_HEIGHT, 600)}
                 keyExtractor={(trade) => trade.tradeId}
+                onEndReached={loadMore}
+                footer={
+                  <div className="flex items-center justify-center py-4 text-sm text-text-secondary">
+                    {tradesQuery.isFetchingNextPage ? (
+                      <span>Loading more trades…</span>
+                    ) : tradesQuery.hasNextPage ? (
+                      <button
+                        type="button"
+                        onClick={loadMore}
+                        className="px-3 py-1.5 rounded-md border border-border-default hover:border-border-hover transition-colors"
+                      >
+                        Load more trades
+                      </button>
+                    ) : trades.length > 0 ? (
+                      <span>End of trades</span>
+                    ) : null}
+                  </div>
+                }
                 renderItem={(trade, i) => (
                   <div
                     className={`grid grid-cols-5 gap-4 px-4 py-3 border-b border-border-default last:border-0 hover:bg-surface-2 transition-colors ${
@@ -362,30 +372,6 @@ export default function TradesPage() {
             </div>
           )}
 
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between mt-6 text-sm text-text-secondary">
-              <span>
-                Page {page} of {totalPages}
-              </span>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  disabled={page === 1}
-                  className="px-3 py-1.5 rounded-md border border-border-default hover:border-border-hover disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                >
-                  Previous
-                </button>
-                <button
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  disabled={page === totalPages}
-                  className="px-3 py-1.5 rounded-md border border-border-default hover:border-border-hover disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                >
-                  Next
-                </button>
-              </div>
-            </div>
-          )}
         </>
       )}
     </div>

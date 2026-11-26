@@ -311,6 +311,10 @@ pub enum DataKey {
     /// existing behavior; an admin can explicitly disable/re-enable via
     /// `set_clawback_enabled()` to stage a rollout or freeze the feature.
     ClawbackEnabled,
+    /// Per-trade emergency freeze flag (#498). When true, `deposit`,
+    /// `release_funds`, dispute settlement and clawback are blocked for this
+    /// trade only; every other trade keeps operating normally.
+    TradeFrozen(u64),
 }
 
 #[contracttype]

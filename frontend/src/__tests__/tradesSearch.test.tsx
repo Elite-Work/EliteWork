@@ -6,6 +6,7 @@
  */
 
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import TradesPage from "@/app/trades/page";
 import { api } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
@@ -52,8 +53,17 @@ const AUTH = {
 
 const SEARCH_LABEL = "Search trades by commodity or counterparty";
 
+function renderWithQueryClient(ui: React.ReactElement) {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  return render(
+    <QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>,
+  );
+}
+
 async function renderPage() {
-  const utils = render(<TradesPage />);
+  const utils = renderWithQueryClient(<TradesPage />);
   const input = await screen.findByLabelText(SEARCH_LABEL);
   return { ...utils, input };
 }
@@ -108,9 +118,9 @@ describe("Trades page search (#505)", () => {
 
     fireEvent.change(input, { target: { value: "   " } });
 
-    await waitFor(() => expect(mockList).toHaveBeenCalledTimes(2), {
-      timeout: 2000,
-    });
-    expect(mockList.mock.calls[1][1]?.q).toBeUndefined();
+    // Trimmed to the same empty query key, so no refetch is issued at all.
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    expect(mockList).toHaveBeenCalledTimes(1);
+    expect(mockList.mock.calls[0][1]?.q).toBeUndefined();
   });
 });

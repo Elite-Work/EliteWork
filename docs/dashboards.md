@@ -6,6 +6,11 @@ instead of everyone hand-building their own queries. Complements
 [METRICS.md](./METRICS.md) (frontend analytics event schema) — this covers
 backend/infra signals instead.
 
+To add or change a panel, follow
+[dashboards-contributing.md](./dashboards-contributing.md) — it covers the
+provisioning rules (stable `uid`, datasource variable), the local Grafana +
+Prometheus test setup, and the review checklist.
+
 ## Files
 
 - [`infra/grafana/dashboards/golden-signals.json`](../infra/grafana/dashboards/golden-signals.json)

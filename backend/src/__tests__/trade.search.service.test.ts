@@ -91,7 +91,7 @@ describe("TradeService.listUserTrades — full-text search (#504)", () => {
 
     expect(result).toEqual({
       items: [],
-      pagination: { page: 1, limit: 20, total: 0, totalPages: 1 },
+      pageInfo: { nextCursor: null, hasNextPage: false, limit: 20 },
     });
     expect(prisma.trade.findMany).not.toHaveBeenCalled();
     expect(prisma.trade.count).not.toHaveBeenCalled();

@@ -59,6 +59,31 @@ describe('useDeepLink (auth-aware routing)', () => {
     expect(result.current.pendingDeepLink).toBeNull();
   });
 
+  it('parks a notification link until the navigator is ready, then routes it (#496)', () => {
+    setAuth('tok');
+    const { result } = renderHook(() => useDeepLink());
+
+    // Cold-start notification taps resolve before NavigationContainer.onReady.
+    act(() => {
+      result.current.handleUrl('/trades/T-cold', null);
+    });
+
+    expect(result.current.pendingDeepLink).toEqual({
+      screen: 'TradeDetail',
+      params: { tradeId: 'T-cold' },
+    });
+
+    const nav = { navigate: jest.fn() } as never;
+    act(() => {
+      result.current.resumePendingDeepLink(nav);
+    });
+
+    expect((nav as unknown as { navigate: jest.Mock }).navigate).toHaveBeenCalledWith('TradeDetail', {
+      tradeId: 'T-cold',
+    });
+    expect(result.current.pendingDeepLink).toBeNull();
+  });
+
   it('ignores malformed links without parking anything', () => {
     setAuth(null);
     const { result } = renderHook(() => useDeepLink());

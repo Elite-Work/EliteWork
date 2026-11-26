@@ -26,9 +26,19 @@ export interface TradeResponse {
   deliveryDays?: number;
 }
 
+/** Cursor pagination metadata for `GET /trades` (#502). */
+export interface TradeListPageInfo {
+  nextCursor: string | null;
+  hasNextPage: boolean;
+  limit: number;
+}
+
 export interface TradeListResponse {
   items: TradeResponse[];
-  pagination: {
+  /** Present in cursor mode — the default, and whenever a `cursor` is sent. */
+  pageInfo?: TradeListPageInfo;
+  /** @deprecated legacy offset envelope returned only when `page` is sent. */
+  pagination?: {
     page: number;
     limit: number;
     total: number;
@@ -211,6 +221,27 @@ export interface DisputeListResponse {
     total: number;
     totalPages: number;
   };
+}
+
+export interface InAppNotificationResponse {
+  id: number;
+  title: string;
+  message: string;
+  type: string;
+  isRead: boolean;
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
+}
+
+export interface NotificationListResponse {
+  notifications: InAppNotificationResponse[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+  unreadCount: number;
 }
 
 export interface ReputationEvent {

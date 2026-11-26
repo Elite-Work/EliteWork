@@ -16,7 +16,65 @@ export interface NotificationData {
   type?: "trade" | "dispute" | "general";
   tradeId?: string;
   disputeId?: string;
+  /** Explicit route name fallback for older payloads. */
   screen?: string;
+  /** Universal/custom-scheme URL carried by the push payload (#496). */
+  url?: string;
+  /** App-relative path, e.g. `/trades/123` (#496). */
+  path?: string;
+}
+
+/**
+ * Map a push payload to an app URL understood by `parseDeepLink` (#496).
+ *
+ * Backends vary in what they put on the notification: some send a full
+ * universal link, some a path, some only IDs. Supporting all three keeps the
+ * tap handler independent of whichever sender queued the message.
+ */
+export function notificationDataToUrl(
+  data: NotificationData | null | undefined,
+): string | null {
+  if (!data) return null;
+
+  if (typeof data.url === "string" && data.url.trim()) return data.url.trim();
+  if (typeof data.path === "string" && data.path.trim()) return data.path.trim();
+  if (typeof data.tradeId === "string" && data.tradeId.trim()) {
+    return `/trades/${encodeURIComponent(data.tradeId.trim())}`;
+  }
+  if (typeof data.disputeId === "string" && data.disputeId.trim()) {
+    return `/disputes/${encodeURIComponent(data.disputeId.trim())}`;
+  }
+  return null;
+}
+
+const handledInitialResponseIds = new Set<string>();
+
+/**
+ * Data for the notification that cold-started the app, if any (#496).
+ *
+ * `addNotificationResponseReceivedListener` only fires for taps while the app
+ * is running; a tap that launches a killed app must be read from the last
+ * response. Responses already consumed are skipped so a token refresh or
+ * remount does not replay the navigation.
+ */
+export async function getInitialNotificationData(): Promise<NotificationData | null> {
+  try {
+    const response = await Notifications.getLastNotificationResponseAsync();
+    if (!response) return null;
+
+    const identifier = response.notification.request.identifier;
+    if (identifier && handledInitialResponseIds.has(identifier)) return null;
+    if (identifier) handledInitialResponseIds.add(identifier);
+
+    return (response.notification.request.content.data as NotificationData) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Test helper: clear the cold-start dedupe set. */
+export function __resetInitialNotificationDedupe(): void {
+  handledInitialResponseIds.clear();
 }
 
 export async function registerForPushNotifications(): Promise<string | null> {

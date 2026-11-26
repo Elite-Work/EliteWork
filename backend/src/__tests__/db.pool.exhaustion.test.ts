@@ -105,10 +105,87 @@ describe("isPrismaPoolExhaustionError", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Burst load — fail fast, no queueing, no auto-retry
+// Burst load — bounded queue, fail fast, no auto-retry
 // ---------------------------------------------------------------------------
 
 describe("Trade creation under a connection-pool-exhausting burst", () => {
+  it("queues concurrent inserts behind the checked-out connection and fails them at pool_timeout", async () => {
+    const createdTrade = { ...TRADE_INPUT, status: TradeStatus.PENDING_SIGNATURE };
+    let releaseConnection!: (trade: typeof createdTrade) => void;
+    const activeQuery = new Promise<typeof createdTrade>((resolve) => {
+      releaseConnection = resolve;
+    });
+    const POOL_TIMEOUT_MS = 1_500;
+    const poolQueue: Array<{ timeout: ReturnType<typeof setTimeout> }> = [];
+    let attempts = 0;
+    const prisma = makePrismaStub(() => {
+      attempts += 1;
+      if (attempts === 1) {
+        return activeQuery;
+      }
+
+      // Model Prisma's one-connection pool queue: while the first query holds
+      // the only connection, excess requests wait until pool_timeout elapses.
+      return new Promise((_, reject) => {
+        let queuedRequest: (typeof poolQueue)[number];
+        const timeout = setTimeout(() => {
+          poolQueue.splice(poolQueue.indexOf(queuedRequest), 1);
+          reject(makeRealPoolExhaustionError());
+        }, POOL_TIMEOUT_MS);
+        queuedRequest = { timeout };
+        poolQueue.push(queuedRequest);
+      });
+    });
+    const service = new TradeService(prisma, {} as never);
+    let activeRequest: ReturnType<TradeService["createPendingTrade"]> | undefined;
+
+    try {
+      activeRequest = service.createPendingTrade({
+        ...TRADE_INPUT,
+        tradeId: "trade-pool-active",
+      });
+      const queuedRequests = Array.from({ length: 5 }, (_, i) =>
+        service.createPendingTrade({
+          ...TRADE_INPUT,
+          tradeId: `trade-pool-queued-${i}`,
+        }),
+      );
+      let queuedRequestsSettled = false;
+      const queuedResults = Promise.allSettled(queuedRequests).then((results) => {
+        queuedRequestsSettled = true;
+        return results;
+      });
+      expect(attempts).toBe(6);
+      expect(poolQueue).toHaveLength(5);
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      expect(queuedRequestsSettled).toBe(false);
+
+      const results = await queuedResults;
+      expect(poolQueue).toHaveLength(0);
+      expect(results).toHaveLength(5);
+      expect(results.every((result) => result.status === "rejected")).toBe(true);
+      for (const result of results) {
+        if (result.status === "rejected") {
+          expectPoolExhaustedAppError(result.reason);
+        }
+      }
+
+      releaseConnection(createdTrade);
+      await expect(activeRequest).resolves.toMatchObject({
+        tradeId: TRADE_INPUT.tradeId,
+      });
+      expect((prisma.trade.create as jest.Mock)).toHaveBeenCalledTimes(6);
+    } finally {
+      for (const queuedRequest of poolQueue) {
+        clearTimeout(queuedRequest.timeout);
+      }
+      releaseConnection(createdTrade);
+      if (activeRequest) {
+        await activeRequest.catch(() => undefined);
+      }
+    }
+  }, 15_000);
+
   it("rejects every request with a clear retryable 503 and inserts exactly once per request", async () => {
     const prisma = makePrismaStub(() => Promise.reject(makeRealPoolExhaustionError()));
     const service = new TradeService(prisma, {} as never);

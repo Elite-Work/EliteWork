@@ -20,6 +20,13 @@ export interface CursorKey {
   id: number;
   /** ISO-8601 string of the sort field (e.g. createdAt/timestamp), when the sort field isn't `id`. */
   sortValue?: string;
+  /**
+   * Optional logical list segment for endpoints that merge more than one
+   * source into a single ordered list (e.g. watchlisted trades before the
+   * rest of the caller's trades). Opaque to the client and ignored by
+   * `paginateWithCursor`, which only ever reads `id`.
+   */
+  segment?: string;
 }
 
 /**
@@ -51,7 +58,7 @@ export function decodeCursor(cursor: string | undefined | null): CursorKey | nul
     ) {
       throw new Error("malformed cursor payload");
     }
-    return { id: parsed.id, sortValue: parsed.sortValue };
+    return { id: parsed.id, sortValue: parsed.sortValue, segment: parsed.segment };
   } catch {
     throw new InvalidCursorError();
   }

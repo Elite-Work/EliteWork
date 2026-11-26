@@ -368,7 +368,7 @@ export default function VaultPage() {
                 />
               </div>
 
-              <div>
+              <div data-testid="vault-balance-panel">
                 <VaultValueCard
                   value={vaultValue}
                   currency="USD"
@@ -405,7 +405,7 @@ export default function VaultPage() {
                 />
               </div>
 
-              <div>
+              <div data-testid="vault-activity-feed">
                 <AuditLogCard entries={auditEntries} isLiveSync={isAuthenticated} />
               </div>
 

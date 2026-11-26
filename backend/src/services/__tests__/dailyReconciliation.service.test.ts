@@ -258,14 +258,25 @@ describe("DailyReconciliationService", () => {
       expect(alertService.dispatch).not.toHaveBeenCalled();
     });
 
-    // TODO: Fix mock isolation issue - test currently flaky due to state leakage between tests
-it.skip("continues checking other accounts when one fails", async () => {
-      mockPrisma.trade.findMany.mockResolvedValue([
+    it("continues checking other accounts when one fails", async () => {
+      const activeTrades = [
         makeTrade({ buyerAddress: "GA1", sellerAddress: "GB1", amountUsdc: "5000" }),
         makeTrade({ buyerAddress: "GA2", sellerAddress: "GB2", amountUsdc: "5000" }),
-      ]);
+      ];
+
+      // The sweep first collects every active address, then re-queries trades
+      // per address. Return only the rows relevant to each query so an
+      // account's expected balance is not inflated by unrelated trades.
+      mockPrisma.trade.findMany.mockImplementation(async (args: any) => {
+        if (!args?.select?.amountUsdc) return activeTrades;
+        const address = args.where.OR[0].buyerAddress;
+        return activeTrades.filter(
+          (trade) =>
+            trade.buyerAddress === address || trade.sellerAddress === address,
+        );
+      });
       mockPrisma.stream.findMany.mockResolvedValue([]);
-      
+
       mockStellarService.getAccountBalance
         .mockResolvedValueOnce("5000") // GA1 OK
         .mockRejectedValueOnce(new Error("Horizon timeout")) // GB1 fails

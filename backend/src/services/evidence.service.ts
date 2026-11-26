@@ -61,6 +61,48 @@ function isEvidenceMetadataExpired(createdAt: Date): boolean {
     return Date.now() - createdAt.getTime() > retentionMs;
 }
 
+/**
+ * Sanitize an uploaded filename before persisting metadata or passing it to logging/IPFS.
+ * Strips directory components, control characters, and HTML tag sequences, then constrains
+ * the result to inert filename characters [A-Za-z0-9._-].
+ */
+export function sanitizeEvidenceFilename(rawFilename: string, mimeType?: string): string {
+    const fallback = mimeType === "video/webm" ? "evidence.webm" : "evidence.mp4";
+    if (typeof rawFilename !== "string") {
+        return fallback;
+    }
+
+    const withoutControl = Array.from(rawFilename)
+        .filter((ch) => {
+            const code = ch.charCodeAt(0);
+            return code >= 0x20 && code !== 0x7f;
+        })
+        .join("");
+
+    // Strip HTML tag sequences before basename extraction so closing tags like </script>
+    // or attributes like <svg/onload=...> cannot get split on "/" before removal.
+    let withoutTags = withoutControl;
+    let previous = "";
+    while (withoutTags !== previous) {
+        previous = withoutTags;
+        withoutTags = withoutTags.replace(/<[^>]*>/g, "");
+    }
+
+    const basename = withoutTags.split(/[\\/]/).pop() ?? "";
+    const sanitized = basename
+        .replace(/[^A-Za-z0-9._-]/g, "_")
+        .replace(/\.{2,}/g, ".")
+        .replace(/_+/g, "_")
+        .replace(/^[._-]+|[._-]+$/g, "")
+        .slice(0, 255);
+
+    if (!sanitized || sanitized === "mp4" || sanitized === "webm") {
+        return fallback;
+    }
+
+    return sanitized;
+}
+
 type EvidenceDatabase = {
     trade: Pick<PrismaClient["trade"], "findUnique">;
     tradeEvidence: Pick<PrismaClient["tradeEvidence"], "findMany" | "create">;
@@ -165,13 +207,14 @@ export class EvidenceService {
             throw new EvidenceValidationError(scan.reason || "Evidence blocked by malware scanner");
         }
 
-        const cid = await this.ipfs.uploadFile(file.buffer, file.originalname);
+        const safeFilename = sanitizeEvidenceFilename(file.originalname, file.mimetype);
+        const cid = await this.ipfs.uploadFile(file.buffer, safeFilename);
 
         const record = await this.prisma.tradeEvidence.create({
             data: {
                 tradeId,
                 cid,
-                filename: file.originalname,
+                filename: safeFilename,
                 mimeType: file.mimetype,
                 uploadedBy: caller,
             },
@@ -272,6 +315,10 @@ export class EvidenceService {
     }
 
     private resolveGatewayUrls(cid: string): string[] {
+        if (!/^[a-zA-Z0-9._-]+$/.test(cid) || cid.includes("..")) {
+            throw new ServiceUnavailableError("Invalid IPFS CID");
+        }
+
         const gatewayUrls = process.env.IPFS_GATEWAY_URLS ?? env.IPFS_GATEWAY_URLS;
         const allowlist = this.parseGatewayAllowlist();
         const configured: string[] = [];
@@ -290,6 +337,13 @@ export class EvidenceService {
 
         if (configured.length > 0) {
             return configured;
+        }
+
+        // If IPFS_GATEWAY_URLS was explicitly set (non-empty) and every entry was
+        // rejected (e.g., private/internal IP or not allowlisted), fail closed
+        // instead of silently falling back to IPFS_GATEWAY_URL.
+        if (gatewayUrls && gatewayUrls.trim().length > 0) {
+            throw new ServiceUnavailableError("No allowed IPFS gateway configured");
         }
 
         const fallback = this.resolveGatewayUrl(cid);
@@ -311,13 +365,91 @@ export class EvidenceService {
     }
 
     private isGatewayAllowed(gatewayBase: string, allowlist: Set<string>): boolean {
-        if (allowlist.size === 0) return true;
         try {
-            const host = new URL(gatewayBase).hostname.toLowerCase();
+            const parsed = new URL(gatewayBase);
+            if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+                return false;
+            }
+            if (parsed.username || parsed.password) {
+                return false;
+            }
+            const host = parsed.hostname.toLowerCase();
+            if (!host || this.isPrivateOrInternalHost(host)) {
+                return false;
+            }
+            if (allowlist.size === 0) return true;
             return allowlist.has(host);
         } catch {
             return false;
         }
+    }
+
+    private isPrivateOrInternalHost(hostname: string): boolean {
+        const bare = hostname.startsWith("[") && hostname.endsWith("]")
+            ? hostname.slice(1, -1)
+            : hostname;
+        const lower = bare.toLowerCase();
+
+        if (
+            lower === "localhost" ||
+            lower.endsWith(".localhost") ||
+            lower.endsWith(".local") ||
+            lower.endsWith(".internal")
+        ) {
+            return true;
+        }
+
+        // Handle IPv4-mapped IPv6 addresses (dotted or WHATWG-normalized hex, e.g. ::ffff:7f00:1)
+        if (lower.startsWith("::ffff:")) {
+            const mapped = lower.slice("::ffff:".length);
+            if (this.isPrivateOrInternalIpv4(mapped)) {
+                return true;
+            }
+            const hexMatch = /^([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i.exec(mapped);
+            if (hexMatch) {
+                const hi = parseInt(hexMatch[1], 16);
+                const lo = parseInt(hexMatch[2], 16);
+                const ipv4 = `${(hi >> 8) & 0xff}.${hi & 0xff}.${(lo >> 8) & 0xff}.${lo & 0xff}`;
+                if (this.isPrivateOrInternalIpv4(ipv4)) {
+                    return true;
+                }
+            }
+        }
+
+        // Loopback, unspecified, link-local (fe80::/10), unique local (fc00::/7)
+        if (
+            lower === "::1" ||
+            lower === "::" ||
+            lower === "0:0:0:0:0:0:0:1" ||
+            lower === "0:0:0:0:0:0:0:0" ||
+            /^fe[89ab][0-9a-f]:/i.test(lower) ||
+            /^f[cd][0-9a-f]{2}:/i.test(lower)
+        ) {
+            return true;
+        }
+
+        return this.isPrivateOrInternalIpv4(lower);
+    }
+
+    private isPrivateOrInternalIpv4(host: string): boolean {
+        const parts = host.split(".");
+        if (parts.length !== 4 || parts.some((p) => !/^\d{1,3}$/.test(p))) {
+            return false;
+        }
+        const octets = parts.map((p) => Number(p));
+        if (octets.some((o) => o < 0 || o > 255)) {
+            return false;
+        }
+        const [o1, o2] = octets;
+        if (o1 === 0) return true; // 0.0.0.0/8 ("this" network)
+        if (o1 === 10) return true; // 10.0.0.0/8 (RFC1918)
+        if (o1 === 100 && o2 >= 64 && o2 <= 127) return true; // 100.64.0.0/10 (CGNAT)
+        if (o1 === 127) return true; // 127.0.0.0/8 (loopback)
+        if (o1 === 169 && o2 === 254) return true; // 169.254.0.0/16 (link-local / cloud metadata)
+        if (o1 === 172 && o2 >= 16 && o2 <= 31) return true; // 172.16.0.0/12 (RFC1918)
+        if (o1 === 192 && o2 === 168) return true; // 192.168.0.0/16 (RFC1918)
+        if (o1 >= 224) return true; // multicast / reserved / broadcast
+        return false;
     }
 
     private isGatewayCircuitOpen(url: string): boolean {

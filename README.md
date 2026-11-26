@@ -8,6 +8,7 @@
 
 This is the main repository containing the smart contracts and orchestration logic. Backend, frontend, and mobile applications are maintained in this monorepo for simpler development and unified deployment.
 
+
 ---
 
 ## 🚀 The Mission
@@ -32,12 +33,85 @@ To provide a programmable safety net for regional commodity trading. Amana ensur
 - **Database:** Supabase (Off-chain metadata, driver logs, and user profiles).
 - **Observability:** OpenTelemetry distributed tracing with correlation IDs for end-to-end request tracking.
 
+## 🧭 System Context
+
+The diagram below is a [C4 model](https://c4model.com/) **system-context** view of
+the platform: who uses it, what we run, and which external systems we depend on.
+It deliberately stops at the system boundary - package-level detail lives in the
+stack READMEs and the [ADRs](./docs/adr).
+
+```mermaid
+C4Context
+    title System context - EliteWork / Amana escrow platform
+
+    Person(buyer, "Buyer", "Creates a trade - deposits funds - confirms delivery")
+    Person(seller, "Seller", "Lists produce - submits the driver manifest - dispatches goods")
+    Person(mediator, "Mediator / Admin", "Reviews evidence - resolves disputes - administers the contract")
+
+    Enterprise_Boundary(platform, "EliteWork monorepo") {
+        System(web, "Web app", "Next.js App Router client in frontend/")
+        System(mobile, "Mobile app", "React Native Expo client in mobile/")
+        System(api, "Backend API", "Node.js and TypeScript Express API in backend/")
+    }
+
+    System_Ext(wallet, "Stellar wallet", "Freighter or Albedo - holds keys - signs transactions")
+    System_Ext(stellar, "Stellar network", "Horizon and Soroban RPC - ledger and transaction submission")
+    System_Ext(escrow, "Amana escrow contract", "Soroban contract that holds escrowed funds and enforces trade rules")
+    System_Ext(token, "USDC token contract", "Stellar asset contract moved by the escrow at settlement")
+    System_Ext(ipfs, "IPFS via Pinata", "Pins proof-of-delivery video and dispute evidence")
+    SystemDb_Ext(db, "Supabase Postgres", "Off-chain trades - manifests - evidence metadata - users")
+    System_Ext(redis, "Redis", "Caches - rate limits - token denylist - stream state")
+
+    Rel(buyer, web, "Creates trades - uploads evidence - releases funds")
+    Rel(buyer, mobile, "Same flows on mobile")
+    Rel(seller, web, "Lists produce - submits manifest - tracks trades")
+    Rel(seller, mobile, "Same flows on mobile")
+    Rel(mediator, web, "Reviews disputes - resolves trades")
+
+    Rel(web, api, "Calls REST API", "HTTPS JSON")
+    Rel(mobile, api, "Calls REST API", "HTTPS JSON")
+    Rel(web, wallet, "Requests transaction signatures")
+    Rel(mobile, wallet, "Requests transaction signatures")
+    Rel(wallet, stellar, "Submits signed transactions")
+
+    Rel(api, stellar, "Builds unsigned transactions - polls contract events - reads balances")
+    Rel(stellar, escrow, "Executes invocations and emits events")
+    Rel(escrow, token, "Transfers escrowed funds and platform fees")
+    Rel(api, ipfs, "Pins evidence and resolves content identifiers")
+    Rel(api, db, "Reads and writes trade state")
+    Rel(api, redis, "Caches - rate limits - revocation denylist")
+
+    UpdateLayoutConfig($c4ShapeInRow="3", $c4BoundaryInRow="1")
+```
+
+| Component | Responsibility |
+|---|---|
+| `frontend/` (Next.js) | Trade creation, wallet connection and signing, evidence capture, mediator and admin dashboards |
+| `mobile/` (Expo) | Field-first trade, manifest and evidence flows for buyers, sellers and drivers |
+| `backend/` (Node/TypeScript) | REST API, unsigned-transaction building, Soroban event ingestion and mirroring, IPFS pinning, webhooks |
+| `contracts/` (Soroban) | Escrow custody, trade state machine, loss-ratio settlement, mediator quorum and admin clawback |
+| Stellar network | Ledger, Soroban RPC for simulation/submission and event polling, Horizon for balances, fees and path-payment quotes |
+| Supabase Postgres | Prisma-managed off-chain state: trades, disputes, manifests, evidence metadata, users |
+| IPFS via Pinata | Decentralized storage for proof-of-delivery video and dispute evidence; only CIDs go on-chain |
+| Redis | Caching, rate limiting, JWT revocation denylist and stream state |
+
+Full end-to-end trade flow, including contract calls and events: see
+[docs/escrow-lifecycle.md](./docs/escrow-lifecycle.md). Off-chain event
+processing is documented in [docs/event-flow.md](./docs/event-flow.md).
+
 ## 🧪 Local Environments (Folder-Based)
 
+
+
+
 - `frontend/` → Next.js app environment (UI + wallet + Supabase/Pinata client integration)
+
 - `backend/` → Node.js/TypeScript API environment (Supabase + Pinata + integration endpoints)
+
 - `mobile/` → React Native Expo environment (mobile wallet, notification, and trade UX)
+
 - `contracts/` → Rust/Soroban smart contract environment
+
 
 ### Frontend setup
 
@@ -48,6 +122,7 @@ To provide a programmable safety net for regional commodity trading. Amana ensur
 
 ### Backend setup
 
+
 1. `cd backend`
 2. `cp .env.example .env`
 3. `cp .env.tracing.example .env.tracing` (for distributed tracing configuration)
@@ -55,6 +130,7 @@ To provide a programmable safety net for regional commodity trading. Amana ensur
 5. `pnpm dev`
 
 ### Mobile setup
+
 
 1. `cd mobile`
 2. `cp .env.example .env.local`
@@ -83,7 +159,8 @@ Amana enforces stack-level CI gates on pull requests through `.github/workflows/
 - **Frontend Required Gate**: `pnpm install --frozen-lockfile`, `pnpm lint`, `pnpm build`, `pnpm test` in `frontend/`
 - **Backend Required Gate**: `pnpm install --frozen-lockfile`, `pnpm build`, `pnpm test` in `backend/`
 - **Mobile Required Gate**: `pnpm install --frozen-lockfile`, `pnpm type-check`, `pnpm lint` in `mobile/`
-- **Contracts Required Gate**: `cargo audit`, deployment safety checks, a test-coverage guard and `cargo test --locked` in `contracts/amana_escrow/` — the gate runs every integration suite in `contracts/amana_escrow/tests/` **and** the inline `#[cfg(test)]` modules in `contracts/amana_escrow/src/tests/`. `node scripts/check-contract-test-coverage.mjs` fails the gate if a test file is not wired into a cargo test target (it would never run) or if an inline test module is missing from the module tree.
+- **Contracts Required Gate**: `cargo audit`, deployment safety checks, a test-coverage guard and `cargo test --locked` in `contracts/amana_escrow/` — the gate runs every integration suite in `contracts/amana_escrow/tests/` **and** the inline `#[cfg(test)]` modules in `contracts/amana_escrow/src/tests/`. `node scripts/check-contract-test-coverage.mjs` fails the gate if a test file is not wired into a cargo test target (it would never run) or if an inline test module is missing from the module tree. `node scripts/check-abi-parity.mjs` fails the gate if the contract removes a function from the backend's frozen ABI snapshot or changes its return type.
+- **Contracts Required Gate**: `cargo audit`, deployment safety and event-schema drift checks, a test-coverage guard and `cargo test --locked` in `contracts/amana_escrow/` — the gate runs every integration suite in `contracts/amana_escrow/tests/` **and** the inline `#[cfg(test)]` modules in `contracts/amana_escrow/src/tests/`. `node scripts/check-contract-test-coverage.mjs` fails the gate if a test file is not wired into a cargo test target (it would never run) or if an inline test module is missing from the module tree.
 
 Path-aware execution is enabled to avoid unnecessary runtime. If a stack has no changed files, the gate reports a skip-note and passes.
 
@@ -107,6 +184,10 @@ For the protected branch (`main`), set these required status checks:
 4. **Verification:** - **Success:** Buyer receives goods and uploads a confirmation video. Funds release to Seller.
    - **Dispute:** Buyer uploads a video of loss/damage with driver affirmation. A mediator reviews the evidence.
 5. **Settlement:** Based on the outcome, funds are distributed (either 100% to one party or split via the `Loss_Ratio`).
+
+For the full sequence - API endpoints, contract functions, emitted events and
+off-chain mirrors at each step - see
+[docs/escrow-lifecycle.md](./docs/escrow-lifecycle.md).
 
 ---
 
@@ -183,12 +264,19 @@ Key architectural decisions are documented as ADRs in [`docs/adr/`](./docs/adr):
 
 EziAgric is an open-source project aimed at improving food security and trade efficiency. We welcome developers, designers, and agricultural experts!
 
-Please read and follow our [Code of Conduct](./CODE_OF_CONDUCT.md). By participating in this project you agree to abide by its terms.
+Please read and follow our [Code of Conduct](./CODE_OF_CONDUCT.md). By
+participating in this project you agree to abide by its terms. New contributors
+can follow the [onboarding guide](./docs/onboarding.md) for the complete
+issue-to-merge workflow.
 
 1. Fork the Project.
-2. Create your Feature Branch (`git checkout -b feature/NewFeature`).
-3. Commit your Changes (`git commit -m 'Add NewFeature'`).
-4. Push to the Branch (`git push origin feature/NewFeature`).
+2. Create a feature branch using the naming convention in
+   [CONTRIBUTING.md](./CONTRIBUTING.md) (for example,
+   `git checkout -b feat/short-description`).
+3. Commit your changes using a Conventional Commit message (see
+   [CONTRIBUTING.md](./CONTRIBUTING.md)).
+4. Push your branch to your fork (for example,
+   `git push origin feat/short-description`).
 5. Open a Pull Request (see [Code Ownership Policy](./docs/codeowners-policy.md) for automated review routing).
 
 ### Admin route development

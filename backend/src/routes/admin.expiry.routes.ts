@@ -12,6 +12,40 @@ const sweepBodySchema = z.object({
   batchSize: z.number().int().min(1).max(500).default(100),
 });
 
+/**
+ * OpenAPI documentation metadata for the admin expiry route group.
+ * Consumed by the OpenAPI coverage test to verify every exported endpoint
+ * is documented in backend/src/docs/openapi.yaml.
+ */
+export const adminExpiryRouteDocs = [
+  {
+    method: 'post',
+    path: '/api/admin/trades/sweep-expired',
+    requestBody: sweepBodySchema,
+    responseSchema: z.object({
+      swept: z.number().int(),
+      refunded: z.number().int(),
+    }),
+  },
+  {
+    method: 'post',
+    path: '/api/admin/trades/sweep-expired/enqueue',
+    requestBody: sweepBodySchema,
+    responseSchema: z.object({
+      jobId: z.union([z.string(), z.number()]).nullable(),
+      batchSize: z.number().int(),
+    }),
+  },
+  {
+    method: 'get',
+    path: '/api/admin/trades/pending-refunds',
+    responseSchema: z.object({
+      count: z.number().int(),
+      trades: z.array(z.unknown()),
+    }),
+  },
+] as const;
+
 export function createAdminExpiryRouter(): Router {
   const router = Router();
 

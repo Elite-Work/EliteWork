@@ -1,5 +1,13 @@
-import apiClient from './client';
+import apiClient, { buildApiUrl } from './client';
 import type { Trade, TradeListResult, TradeStatus } from '../types/trade';
+
+/**
+ * Absolute URL of a trade's receipt PDF (#501). Shown in the OS share sheet;
+ * the backend requires the caller's bearer token to actually download it.
+ */
+export function buildTradeReceiptUrl(tradeId: string): string {
+  return buildApiUrl(`/trades/${encodeURIComponent(tradeId)}/receipt`);
+}
 
 export const tradeApi = {
   async listTrades(params?: {

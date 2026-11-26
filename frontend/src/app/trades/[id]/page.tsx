@@ -6,6 +6,7 @@ import Link from "next/link";
 import { signTransaction } from "@stellar/freighter-api";
 import { useAuth } from "@/hooks/useAuth";
 import { useTradeDetail } from "@/hooks/useTradeDetail";
+import { useToast } from "@/hooks/useToast";
 import { useWallet } from "@/hooks/useWallet";
 import { api, ApiError } from "@/lib/api";
 import { apiConfig } from "@/lib/api";
@@ -37,7 +38,7 @@ function InfoCard({
 }) {
   return (
     <div className="rounded-lg border border-border-default bg-bg-card p-4">
-      <p className="text-xs uppercase tracking-wide text-text-muted">{title}</p>
+      <p className="text-xs uppercase tracking-wide text-text-secondary">{title}</p>
       <p className="mt-3 text-lg font-semibold text-text-primary font-mono">{value}</p>
       <p className="mt-2 text-xs text-text-secondary">{helper}</p>
     </div>
@@ -46,13 +47,14 @@ function InfoCard({
 
 function StatusBadge({ status }: { status: string }) {
   const colors: Record<string, string> = {
-    FUNDED: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
-    PENDING: "bg-amber-500/15 text-amber-400 border-amber-500/30",
-    SETTLED: "bg-blue-500/15 text-blue-400 border-blue-500/30",
-    DISPUTED: "bg-red-500/15 text-red-400 border-red-500/30",
-    CANCELLED: "bg-zinc-500/15 text-zinc-400 border-zinc-500/30",
+    // Light-theme text uses the -700/-800 shades; the -400 shades fail AA on white.
+    FUNDED: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30",
+    PENDING: "bg-amber-500/15 text-amber-800 dark:text-amber-400 border-amber-500/30",
+    SETTLED: "bg-blue-500/15 text-blue-700 dark:text-blue-400 border-blue-500/30",
+    DISPUTED: "bg-red-500/15 text-red-700 dark:text-red-400 border-red-500/30",
+    CANCELLED: "bg-zinc-500/15 text-zinc-600 dark:text-zinc-400 border-zinc-500/30",
   };
-  const cls = colors[status.toUpperCase()] ?? "bg-zinc-500/15 text-zinc-400 border-zinc-500/30";
+  const cls = colors[status.toUpperCase()] ?? "bg-zinc-500/15 text-zinc-600 dark:text-zinc-400 border-zinc-500/30";
   return (
     <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${cls}`}>
       {status}
@@ -81,10 +83,13 @@ export default function TradeDetailPage() {
   const { token, address, isAuthenticated } = useAuth();
   const { trade, loading, error, refetch } = useTradeDetail(tradeId);
   const { balance, asset } = useWallet();
+  const { addToast } = useToast();
 
   const [actionLoading, setActionLoading] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
+  const [receiptLoading, setReceiptLoading] = useState(false);
+  const [receiptError, setReceiptError] = useState<string | null>(null);
 
   const role: UserRole = trade
     ? deriveRole(address, trade.buyerAddress, trade.sellerAddress)
@@ -142,6 +147,40 @@ export default function TradeDetailPage() {
     void runAction("Release Funds", () => api.trades.releaseFunds(token!, tradeId));
   }
 
+  // #500: receipts only make sense once a trade has reached a terminal,
+  // documentable state.
+  const canDownloadReceipt =
+    (status === "COMPLETED" || status === "DISPUTED") && role !== "observer";
+
+  async function handleDownloadReceipt() {
+    if (!token) return;
+
+    setReceiptLoading(true);
+    setReceiptError(null);
+
+    try {
+      const blob = await api.trades.downloadReceipt(token, tradeId);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `trade-${tradeId}-receipt.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setReceiptError(
+        err instanceof ApiError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : "Failed to download receipt",
+      );
+    } finally {
+      setReceiptLoading(false);
+    }
+  }
+
   function handleInitiateDispute() {
     const reason = window.prompt("Enter dispute reason (min 10 characters):");
     if (!reason || reason.length < 10) {
@@ -167,17 +206,18 @@ export default function TradeDetailPage() {
 
       {/* Loading state */}
       {loading && (
-        <div className="flex items-center justify-center py-12">
-          <svg className="animate-spin w-8 h-8 text-gold" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <div role="status" className="flex items-center justify-center py-12">
+          <svg aria-hidden="true" className="animate-spin w-8 h-8 text-gold" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <circle cx="12" cy="12" r="10" strokeOpacity="0.25" />
             <path d="M12 2a10 10 0 0 1 10 10" />
           </svg>
+          <span className="sr-only">Loading trade…</span>
         </div>
       )}
 
       {error && !loading && (
-        <div className="rounded-lg border border-status-danger/20 bg-red-500/10 px-4 py-3 text-center">
-          <p className="text-status-danger text-sm">{error}</p>
+        <div role="alert" className="rounded-lg border border-status-danger/20 bg-red-500/10 px-4 py-3 text-center">
+          <p className="text-red-700 dark:text-red-400 text-sm">{error}</p>
           <button
             onClick={() => void refetch()}
             className="mt-2 text-xs underline text-text-secondary hover:text-text-primary"
@@ -194,20 +234,24 @@ export default function TradeDetailPage() {
           <div className="rounded-lg border border-border-default bg-bg-card p-5">
             <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
               <div>
-                <p className="text-xs uppercase tracking-wide text-text-muted">Trade ID</p>
+                <p className="text-xs uppercase tracking-wide text-text-secondary">Trade ID</p>
                 <div className="mt-2 flex items-center gap-2">
                   <p className="text-xl font-semibold text-text-primary font-mono break-all">
                     {trade.tradeId}
                   </p>
-                  <CopyButton value={trade.tradeId} label="Trade ID" />
+                  <CopyButton
+                    value={trade.tradeId}
+                    label="Trade ID"
+                    onCopied={() => addToast({ type: "success", message: "Copied", duration: 2000 })}
+                  />
                 </div>
-                <p className="mt-2 text-xs text-text-muted">Created: {formatDate(trade.createdAt)}</p>
-                <p className="mt-1 text-xs text-text-muted">Updated: {formatDate(trade.updatedAt)}</p>
+                <p className="mt-2 text-xs text-text-secondary">Created: {formatDate(trade.createdAt)}</p>
+                <p className="mt-1 text-xs text-text-secondary">Updated: {formatDate(trade.updatedAt)}</p>
               </div>
               <div className="flex flex-col items-start sm:items-end gap-2">
                 <StatusBadge status={trade.status} />
                 {role !== "observer" && (
-                  <span className="text-xs text-text-muted capitalize">Your role: {role}</span>
+                  <span className="text-xs text-text-secondary capitalize">Your role: {role}</span>
                 )}
               </div>
             </div>
@@ -216,7 +260,7 @@ export default function TradeDetailPage() {
           {/* Wallet balance */}
           {isAuthenticated && balance !== null && (
             <div className="rounded-lg border border-border-default bg-bg-card p-4 flex items-center justify-between">
-              <p className="text-xs uppercase tracking-wide text-text-muted">Wallet Balance</p>
+              <p className="text-xs uppercase tracking-wide text-text-secondary">Wallet Balance</p>
               <p className="text-sm font-semibold text-text-primary">
                 {balance} {asset}
               </p>
@@ -225,14 +269,14 @@ export default function TradeDetailPage() {
 
           {/* On-chain + off-chain status panel */}
           <div className="rounded-lg border border-border-default bg-bg-card p-5 space-y-3">
-            <p className="text-xs uppercase tracking-wide text-text-muted mb-3">Contract State</p>
+            <p className="text-xs uppercase tracking-wide text-text-secondary mb-3">Contract State</p>
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div>
-                <span className="text-text-muted">Off-chain (Prisma):</span>{" "}
+                <span className="text-text-secondary">Off-chain (Prisma):</span>{" "}
                 <span className="font-medium text-text-primary capitalize">{trade.status.toLowerCase()}</span>
               </div>
               <div>
-                <span className="text-text-muted">On-chain (Soroban):</span>{" "}
+                <span className="text-text-secondary">On-chain (Soroban):</span>{" "}
                 <span className="font-medium text-text-primary capitalize">{trade.status.toLowerCase()}</span>
               </div>
             </div>
@@ -260,27 +304,43 @@ export default function TradeDetailPage() {
 
           {/* Action feedback */}
           {actionError && (
-            <div className="rounded-lg border border-status-danger/20 bg-red-500/10 px-4 py-3 text-sm text-status-danger">
+            <div role="alert" className="rounded-lg border border-status-danger/20 bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:text-red-400">
               {actionError}
             </div>
           )}
           {actionSuccess && (
-            <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-400">
+            <div role="status" className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-700 dark:text-emerald-400">
               {actionSuccess}
+            </div>
+          )}
+          {receiptError && (
+            <div className="rounded-lg border border-status-danger/20 bg-red-500/10 px-4 py-3 text-sm text-status-danger">
+              {receiptError}
             </div>
           )}
 
           {/* Role-based action buttons */}
           {isAuthenticated && (
             <div className="rounded-lg border border-border-default bg-bg-card p-5">
-              <p className="text-xs uppercase tracking-wide text-text-muted mb-4">Actions</p>
+              <p className="text-xs uppercase tracking-wide text-text-secondary mb-4">Actions</p>
               <div className="flex flex-wrap gap-3">
+                {canDownloadReceipt && (
+                  <button
+                    onClick={() => void handleDownloadReceipt()}
+                    disabled={receiptLoading}
+                    data-testid="action-download-receipt"
+                    className="rounded-lg border border-border-default px-4 py-2 text-sm font-semibold text-text-primary transition-colors hover:border-border-hover disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {receiptLoading ? "Preparing receipt…" : "Download Receipt"}
+                  </button>
+                )}
+
                 {role === "buyer" && status === "PENDING" && (
                   <button
                     onClick={handleDeposit}
                     disabled={actionLoading}
                     data-testid="action-deposit"
-                    className="rounded-lg bg-gold px-4 py-2 text-sm font-semibold text-text-inverse transition-colors hover:bg-gold-hover disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="rounded-lg bg-gold-hover px-4 py-2 text-sm font-semibold text-text-inverse transition-colors hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {actionLoading ? "Processing…" : "Deposit Funds"}
                   </button>
@@ -291,7 +351,7 @@ export default function TradeDetailPage() {
                     onClick={handleConfirmDelivery}
                     disabled={actionLoading}
                     data-testid="action-confirm-delivery"
-                    className="rounded-lg bg-gold px-4 py-2 text-sm font-semibold text-text-inverse transition-colors hover:bg-gold-hover disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="rounded-lg bg-gold-hover px-4 py-2 text-sm font-semibold text-text-inverse transition-colors hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {actionLoading ? "Processing…" : "Confirm Delivery"}
                   </button>
@@ -302,7 +362,7 @@ export default function TradeDetailPage() {
                     onClick={handleReleaseFunds}
                     disabled={actionLoading}
                     data-testid="action-release-funds"
-                    className="rounded-lg bg-gold px-4 py-2 text-sm font-semibold text-text-inverse transition-colors hover:bg-gold-hover disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="rounded-lg bg-gold-hover px-4 py-2 text-sm font-semibold text-text-inverse transition-colors hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {actionLoading ? "Processing…" : "Release Funds"}
                   </button>
@@ -313,7 +373,7 @@ export default function TradeDetailPage() {
                     onClick={handleInitiateDispute}
                     disabled={actionLoading}
                     data-testid="action-dispute"
-                    className="rounded-lg border border-red-500/50 px-4 py-2 text-sm font-semibold text-red-400 transition-colors hover:bg-red-500/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="rounded-lg border border-red-500/50 px-4 py-2 text-sm font-semibold text-red-700 dark:text-red-400 transition-colors hover:bg-red-500/10 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Initiate Dispute
                   </button>
@@ -322,7 +382,7 @@ export default function TradeDetailPage() {
                 {role === "mediator" && status === "DISPUTED" && (
                   <p className="text-sm text-text-secondary">
                     Mediation controls are available in the{" "}
-                    <Link href="/mediator/disputes" className="underline text-gold hover:text-gold-hover">
+                    <Link href="/mediator/disputes" className="underline text-gold-hover">
                       Mediator Panel
                     </Link>
                     .
@@ -330,11 +390,11 @@ export default function TradeDetailPage() {
                 )}
 
                 {role === "observer" && (
-                  <p className="text-sm text-text-muted">No actions available — you are not a party to this trade.</p>
+                  <p className="text-sm text-text-secondary">No actions available — you are not a party to this trade.</p>
                 )}
 
                 {(status === "SETTLED" || status === "CANCELLED") && (
-                  <p className="text-sm text-text-muted">This trade is {status.toLowerCase()} and no further actions are available.</p>
+                  <p className="text-sm text-text-secondary">This trade is {status.toLowerCase()} and no further actions are available.</p>
                 )}
               </div>
             </div>
@@ -345,7 +405,7 @@ export default function TradeDetailPage() {
       {/* Not found */}
       {!loading && !error && !trade && (
         <div className="rounded-lg border border-border-default bg-bg-card dark:bg-surface-1 p-8 text-center">
-          <p className="text-text-muted">Trade not found</p>
+          <p className="text-text-secondary">Trade not found</p>
         </div>
       )}
     </div>

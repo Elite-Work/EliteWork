@@ -83,8 +83,7 @@ test.describe('Reputation Page — authenticated', () => {
     await page.goto('/reputation');
     await waitForStable(page);
 
-    const main = page.locator('main, section').first();
-    await expect(main).toHaveScreenshot('reputation-auth-main.png');
+    await expect(page.getByTestId('reputation-trust-score')).toHaveScreenshot('reputation-auth-main.png');
   });
 
   test('full authenticated page matches snapshot', async ({ authenticatedPage: page }) => {
@@ -97,12 +96,6 @@ test.describe('Reputation Page — authenticated', () => {
   test('reputation history section matches snapshot', async ({ authenticatedPage: page }) => {
     await page.goto('/reputation');
     await waitForStable(page);
-    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-    await page.waitForTimeout(100);
-
-    const historySection = page.locator('[data-testid="reputation-history"], text=History').locator('..').locator('..');
-    if (await historySection.isVisible()) {
-      await expect(historySection).toHaveScreenshot('reputation-history.png');
-    }
+    await expect(page.getByTestId('reputation-history')).toHaveScreenshot('reputation-history.png');
   });
 });

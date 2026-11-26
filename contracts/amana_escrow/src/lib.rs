@@ -173,6 +173,18 @@ impl EscrowContract {
         assert!(!paused, "contract is paused");
     }
 
+    /// Panics with "trade is frozen" when the per-trade freeze flag is set
+    /// (#498). Unlike the global pause this only affects one trade, so an
+    /// incident can be contained without halting the whole marketplace.
+    fn assert_trade_not_frozen(env: &Env, trade_id: u64) {
+        let frozen: bool = env
+            .storage()
+            .persistent()
+            .get(&DataKey::TradeFrozen(trade_id))
+            .unwrap_or(false);
+        assert!(!frozen, "trade is frozen");
+    }
+
     // -----------------------------------------------------------------------
     // Admin / Setup
     // -----------------------------------------------------------------------
@@ -399,6 +411,93 @@ impl EscrowContract {
     }
 
     // -----------------------------------------------------------------------
+    // Per-trade emergency freeze (#498)
+    // -----------------------------------------------------------------------
+
+    /// Freezes a single trade. Admin only.
+    ///
+    /// While frozen, `deposit`, `deposit_with_path`, `finalize_path_payment`,
+    /// `release_funds`, dispute settlement and both clawback paths reject the
+    /// trade with `"trade is frozen"`. Cancellation and refunds remain
+    /// available so a freeze cannot permanently trap user funds.
+    ///
+    /// # Panics
+    /// - Panics if the contract is not initialized or the caller is not the admin.
+    /// - Panics with `"Trade not found"` if `trade_id` has no trade record.
+    ///
+    /// # State Effects
+    /// - Sets `TradeFrozen(trade_id)` in persistent storage.
+    /// - Emits `TradeFrozenEvent`.
+    pub fn freeze_trade(env: Env, trade_id: u64) {
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .expect("Not initialized");
+        admin.require_auth();
+        let _ = Self::load_trade(&env, &DataKey::Trade(trade_id));
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::TradeFrozen(trade_id), &true);
+        Self::record_trade_event(
+            &env,
+            trade_id,
+            "frozen",
+            admin.clone(),
+            "trade frozen by admin",
+        );
+
+        TradeFrozenEvent {
+            trade_id,
+            admin,
+            timestamp: env.ledger().timestamp(),
+        }
+        .publish(&env);
+        Self::bump_instance_ttl(&env);
+    }
+
+    /// Lifts a per-trade freeze. Admin only. Idempotent: unfreezing an already
+    /// unfrozen trade succeeds and still emits the recovery event so the audit
+    /// trail records the operator action.
+    pub fn unfreeze_trade(env: Env, trade_id: u64) {
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .expect("Not initialized");
+        admin.require_auth();
+        let _ = Self::load_trade(&env, &DataKey::Trade(trade_id));
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::TradeFrozen(trade_id), &false);
+        Self::record_trade_event(
+            &env,
+            trade_id,
+            "unfrozen",
+            admin.clone(),
+            "trade unfrozen by admin",
+        );
+
+        TradeUnfrozenEvent {
+            trade_id,
+            admin,
+            timestamp: env.ledger().timestamp(),
+        }
+        .publish(&env);
+        Self::bump_instance_ttl(&env);
+    }
+
+    /// Returns true when the given trade is currently frozen (#498).
+    pub fn is_trade_frozen(env: Env, trade_id: u64) -> bool {
+        env.storage()
+            .persistent()
+            .get(&DataKey::TradeFrozen(trade_id))
+            .unwrap_or(false)
+    }
+
+    // -----------------------------------------------------------------------
     // Multi-asset allowlist (#187)
     // -----------------------------------------------------------------------
 
@@ -564,6 +663,7 @@ impl EscrowContract {
             .get(&DataKey::Admin)
             .expect("Not initialized");
         admin.require_auth();
+        Self::assert_trade_not_frozen(&env, trade_id);
 
         assert!(
             clawback_amount > 0,
@@ -659,6 +759,7 @@ impl EscrowContract {
         assert!(!queued_op.cancelled, "operation has been cancelled");
 
         if let TimelockOpPayload::Clawback(clawback_op) = queued_op.payload.clone() {
+            Self::assert_trade_not_frozen(&env, clawback_op.trade_id);
             assert!(
                 clawback_op.clawback_amount > 0,
                 "{}",
@@ -817,6 +918,7 @@ impl EscrowContract {
             .get(&DataKey::Admin)
             .expect("Not initialized");
         admin.require_auth();
+        Self::assert_trade_not_frozen(&env, trade_id);
 
         assert!(
             Self::is_clawback_enabled(env.clone()),
@@ -1313,6 +1415,7 @@ impl EscrowContract {
     /// - Emits `Deposited` event.
     pub fn deposit(env: Env, trade_id: u64) {
         Self::assert_not_paused(&env);
+        Self::assert_trade_not_frozen(&env, trade_id);
         let key = DataKey::Trade(trade_id);
         let mut trade: Trade = Self::load_trade(&env, &key);
         assert!(
@@ -1371,6 +1474,8 @@ impl EscrowContract {
         dest_min: i128,
         path: Vec<Address>,
     ) {
+        Self::assert_not_paused(&env);
+        Self::assert_trade_not_frozen(&env, trade_id);
         assert!(source_amount > 0, "source_amount must be greater than zero");
         assert!(dest_min > 0, "dest_min must be greater than zero");
 
@@ -1479,6 +1584,8 @@ impl EscrowContract {
 
     /// Finalize a previously initiated path payment once cNGN has been received.
     pub fn finalize_path_payment(env: Env, trade_id: u64, caller: Address) {
+        Self::assert_not_paused(&env);
+        Self::assert_trade_not_frozen(&env, trade_id);
         caller.require_auth();
 
         let intent_key = DataKey::PathPaymentIntent(trade_id);
@@ -2029,6 +2136,7 @@ impl EscrowContract {
     /// - Emits `FundsReleased` event.
     pub fn release_funds(env: Env, trade_id: u64, caller: Address) {
         Self::assert_not_paused(&env);
+        Self::assert_trade_not_frozen(&env, trade_id);
         let key = DataKey::Trade(trade_id);
         let mut trade: Trade = Self::load_trade(&env, &key);
         assert!(
@@ -2251,6 +2359,7 @@ impl EscrowContract {
     /// settle identically — the only difference between them is who is allowed
     /// to decide `seller_gets_bps`, never how the money is split (#195).
     fn settle_dispute(env: &Env, trade_id: u64, seller_gets_bps: u32, mediator: Address) {
+        Self::assert_trade_not_frozen(env, trade_id);
         let env = env.clone();
         // 2. Load and validate trade
         let key = DataKey::Trade(trade_id);

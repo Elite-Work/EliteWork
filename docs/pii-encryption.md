@@ -8,17 +8,18 @@
 
 ## 1. Classified PII Inventory
 
-**Last audited against `backend/prisma/schema.prisma`: 2026-10-19.**
+**Last audited against `backend/prisma/schema.prisma`: 2026-11-24** (manifest route inputs re-checked; see §1b).
 
 | Column | Table | Classification | Encrypted? | Search need |
 |---|---|---|---|---|
-| `driverName` | `DeliveryManifest` | Direct identifier (name) | ✅ App-layer AES-256-GCM | No — mediator/seller view only |
-| `driverIdNumber` | `DeliveryManifest` | Direct identifier (gov't ID) | ✅ App-layer AES-256-GCM | No |
-| `vehicleRegistration` | `DeliveryManifest` | Indirect identifier | ✅ App-layer AES-256-GCM | No |
-| `routeDescription` | `DeliveryManifest` | Free-text, may contain address fragments | ✅ App-layer AES-256-GCM | No |
-| `driverNameHash` / `driverIdHash` | `DeliveryManifest` | SHA-256 blind index of the above | N/A (already a one-way hash) | Yes — equality match, see §3 |
+| `driverName` | `DeliveryManifest` | Direct identifier (name) — input via `POST /trades/:id/manifest` | ✅ App-layer AES-256-GCM (`ManifestService.submitManifest`, recordId = trade ID) | No — mediator/seller view only; masked for buyer |
+| `driverIdNumber` | `DeliveryManifest` | Direct identifier (gov't ID) — input via `POST /trades/:id/manifest` | ✅ App-layer AES-256-GCM (`ManifestService.submitManifest`, recordId = trade ID) | No |
+| `vehicleRegistration` | `DeliveryManifest` | Indirect identifier — input via `POST /trades/:id/manifest` | ✅ App-layer AES-256-GCM (`ManifestService.submitManifest`, recordId = trade ID) | No |
+| `routeDescription` | `DeliveryManifest` | Free-text, may contain address fragments — input via `POST /trades/:id/manifest` | ✅ App-layer AES-256-GCM (`ManifestService.submitManifest`, recordId = trade ID) | No |
+| `driverNameHash` / `driverIdHash` | `DeliveryManifest` | SHA-256 blind index of `driverName` / `driverIdNumber`; also sent on-chain via `buildSubmitManifestTx` | N/A (already a one-way hash) | Yes — equality match, see §3 |
 | `content` | `TradeNote` | Private free-text note (may contain names/addresses/contact details) | ✅ App-layer AES-256-GCM (`TradeNotesService`) | No — decrypt only for author/admin |
 | `displayName` | `User` | Direct identifier (name) | ❌ **Not encrypted — gap F2** | No |
+| _driver phone number_ | `DeliveryManifest` | Direct identifier (phone) | N/A — **not collected**: no column exists and `manifestBodySchema` drops it (see §1b) | No |
 | `phoneNumber` | `NotificationPreference` | Direct identifier (E.164 phone number) | ❌ **Not encrypted — gap F1** | No today; add blind index only if lookup is ever required |
 | `reason` | `Dispute` | Free-text, may contain direct identifiers or contact details | ❌ **Not encrypted — gap F3** | No |
 | `filename` | `TradeEvidence` | Free-text metadata, may contain names/addresses | ❌ **Not encrypted — gap F3** | No |
@@ -40,6 +41,37 @@
 written. It is currently persisted and returned in plaintext by
 `backend/src/routes/notifications.preferences.routes.ts`; treat this as the
 highest-priority gap below.
+
+## 1b. Manifest route PII flow (`backend/src/routes/manifest.routes.ts`)
+
+Audited 2026-11-24. `POST /trades/:id/manifest` validates its body with
+`manifestBodySchema` (zod, default strip mode), which accepts exactly:
+
+| Body field | PII? | Path to storage | Stored as |
+|---|---|---|---|
+| `driverName` | Yes — direct identifier | route → `ManifestService.submitManifest` → `EncryptionService.encrypt(value, tradeId)` | `DeliveryManifest.driverName` ciphertext envelope + `driverNameHash` |
+| `driverIdNumber` | Yes — direct identifier | same | `DeliveryManifest.driverIdNumber` ciphertext envelope + `driverIdHash` |
+| `vehicleRegistration` | Yes — indirect identifier | same | `DeliveryManifest.vehicleRegistration` ciphertext envelope |
+| `routeDescription` | Yes — free text | same | `DeliveryManifest.routeDescription` ciphertext envelope |
+| `expectedDeliveryAt` | No | stored as-is | `DeliveryManifest.expectedDeliveryAt` |
+
+**Driver phone number is not accepted.** The schema has no phone field, so a
+`driverPhone`/`driverPhoneNumber` key sent by a client is stripped at validation
+and never reaches the service, the database, logs, or the contract call. If a
+driver phone field is ever added, it must be (1) added to the inventory in §1,
+(2) encrypted in `submitManifest` alongside the fields above, (3) decrypted and
+covered by `logPiiAccess()` in `getManifestByTradeId`, (4) masked for buyers, and
+(5) added to `PII_COLUMNS` in `scripts/verify-pii-encryption.ts`.
+
+Only the SHA-256 blind indexes (`driverNameHash`, `driverIdHash`) leave the
+backend — they are passed to `ContractService.buildSubmitManifestTx`. Plaintext
+PII is never sent on-chain.
+
+Regression coverage: `backend/src/__tests__/manifest.pii-flow.test.ts` drives
+the real route and `ManifestService` and asserts every accepted PII field is
+persisted only as a ciphertext envelope that decrypts back to the input, no
+plaintext appears in the persisted row, an extra phone-number field is dropped,
+and the contract layer receives only hashes.
 
 ## 1a. Audit findings and follow-ups (2026-10-19)
 

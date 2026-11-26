@@ -1,6 +1,13 @@
 import { PrismaClient } from "@prisma/client";
 import * as StellarSdk from "@stellar/stellar-sdk";
-import { ContractService, buildConfirmDeliveryTx, buildReleaseFundsTx, buildInitiateDisputeTx } from "../contract.service";
+import {
+  ContractService,
+  buildConfirmDeliveryTx,
+  buildReleaseFundsTx,
+  buildInitiateDisputeTx,
+  __setRpcServerFactoryForTests,
+  __resetRpcServerFactoryForTests,
+} from "../contract.service";
 import { env } from "../../config/env";
 import type { TradeStatus } from "@prisma/client";
 
@@ -58,17 +65,16 @@ function makeRpcServer(overrides: Partial<RpcServerMock> = {}): RpcServerMock {
 }
 
 function makeContractService(rpcServer: RpcServerMock): ContractService {
-  const originalFactory = (global as any).__RPC_SERVER_FACTORY__;
-  (global as any).__RPC_SERVER_FACTORY__ = () => rpcServer;
-  
+  __setRpcServerFactoryForTests(() => rpcServer as unknown as StellarSdk.rpc.Server);
+
   const service = new ContractService(
     "https://mock-rpc.stellar.org",
     ESCROW_CONTRACT_ID,
     USDC_CONTRACT_ID,
     StellarSdk.Networks.TESTNET
   );
-  
-  (global as any).__RPC_SERVER_FACTORY__ = originalFactory;
+
+  __resetRpcServerFactoryForTests();
   return service;
 }
 
@@ -102,7 +108,7 @@ jest.mock("@stellar/stellar-sdk", () => {
       build: jest.fn().mockReturnValue({
         toXDR: jest.fn().mockReturnValue("mock-xdr"),
       }),
-    }),
+    })),
     BASE_FEE: 100,
     Networks: {
       TESTNET: "Test SDF Network ; September 2015",
@@ -216,10 +222,10 @@ describe("ContractService.buildCreateTradeTx", () => {
       sellerLossBps: 7000,
     });
 
-    // Verify the contract call was made with correct parameters
-    const callArgs = rpcServer.simulateTransaction.mock.calls[0][0];
-    const operations = callArgs.operations;
-    expect(operations).toHaveLength(1);
+    // Verify the loss ratios were encoded as u32 contract arguments.
+    const nativeToScVal = StellarSdk.nativeToScVal as jest.Mock;
+    expect(nativeToScVal).toHaveBeenCalledWith(3000, { type: "u32" });
+    expect(nativeToScVal).toHaveBeenCalledWith(7000, { type: "u32" });
   });
 });
 
@@ -432,6 +438,11 @@ describe("Static buildConfirmDeliveryTx", () => {
       }),
       prepareTransaction: jest.fn().mockImplementation(async (tx: StellarSdk.Transaction) => tx),
     });
+    __setRpcServerFactoryForTests(() => rpcServer as unknown as StellarSdk.rpc.Server);
+  });
+
+  afterEach(() => {
+    __resetRpcServerFactoryForTests();
   });
 
   it("builds confirm_delivery transaction for FUNDED trade", async () => {
@@ -466,6 +477,11 @@ describe("Static buildReleaseFundsTx", () => {
       }),
       prepareTransaction: jest.fn().mockImplementation(async (tx: StellarSdk.Transaction) => tx),
     });
+    __setRpcServerFactoryForTests(() => rpcServer as unknown as StellarSdk.rpc.Server);
+  });
+
+  afterEach(() => {
+    __resetRpcServerFactoryForTests();
   });
 
   it("builds release_funds transaction for DELIVERED trade", async () => {
@@ -500,6 +516,11 @@ describe("Static buildInitiateDisputeTx", () => {
       }),
       prepareTransaction: jest.fn().mockImplementation(async (tx: StellarSdk.Transaction) => tx),
     });
+    __setRpcServerFactoryForTests(() => rpcServer as unknown as StellarSdk.rpc.Server);
+  });
+
+  afterEach(() => {
+    __resetRpcServerFactoryForTests();
   });
 
   it("builds initiate_dispute transaction", async () => {
@@ -544,7 +565,7 @@ describe("RPC server factory override for tests", () => {
       sellerLossBps: 5000,
     });
 
-    expect(customServer.getAccount).toHaveBeenCalledWith("CUSTOM_ADDRESS");
+    expect(customServer.getAccount).toHaveBeenCalledWith(CUSTOM_ADDRESS);
     
     __resetRpcServerFactoryForTests();
   });

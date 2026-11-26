@@ -144,24 +144,44 @@ variable "region" {
   description = "AWS region"
   type        = string
   default     = "us-east-1"
+
+  validation {
+    condition     = can(regex("^[a-z]{2}(-gov)?-[a-z]+-[0-9]$", var.region))
+    error_message = "region must be a valid AWS region identifier such as us-east-1 or eu-west-2."
+  }
 }
 
 variable "db_master_username" {
   description = "Database master username"
   type        = string
   sensitive   = true
+
+  validation {
+    condition     = can(regex("^[a-zA-Z][a-zA-Z0-9_]{0,62}$", var.db_master_username))
+    error_message = "db_master_username must start with a letter and contain only letters, digits, or underscores (max 63 characters)."
+  }
 }
 
 variable "db_master_password" {
   description = "Database master password"
   type        = string
   sensitive   = true
+
+  validation {
+    condition     = length(var.db_master_password) >= 8 && length(var.db_master_password) <= 128
+    error_message = "db_master_password must be between 8 and 128 characters."
+  }
 }
 
 variable "redis_auth_token" {
   description = "Redis auth token"
   type        = string
   sensitive   = true
+
+  validation {
+    condition     = length(var.redis_auth_token) >= 16 && length(var.redis_auth_token) <= 128
+    error_message = "redis_auth_token must be between 16 and 128 characters, as required by ElastiCache."
+  }
 }
 
 output "rds_endpoint" {

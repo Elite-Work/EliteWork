@@ -77,11 +77,21 @@ resource "aws_iam_role_policy_attachment" "admin_secret_key_read" {
 variable "project_name" {
   description = "Project name"
   type        = string
+
+  validation {
+    condition     = can(regex("^[a-z][a-z0-9-]{1,29}$", var.project_name))
+    error_message = "project_name must be 2-30 characters of lowercase letters, digits, or hyphens, and start with a letter."
+  }
 }
 
 variable "environment" {
-  description = "Environment name"
+  description = "Environment name (dev, staging, or production)"
   type        = string
+
+  validation {
+    condition     = contains(["dev", "staging", "production"], var.environment)
+    error_message = "environment must be one of: dev, staging, production."
+  }
 }
 
 variable "eks_node_role_name" {

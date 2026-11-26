@@ -8,6 +8,10 @@ merged pull requests ("Fix, Merge, and Earn").
 This guide explains how to find an issue, understand its sizing, pick it up,
 and get your work merged.
 
+New contributors can also use the short
+[onboarding checklist](docs/onboarding.md) for the issue-to-merge workflow,
+the PR template, and review expectations.
+
 ## How issue sizing works
 
 Every issue opened for a Wave is sized with a `complexity:` label before it is

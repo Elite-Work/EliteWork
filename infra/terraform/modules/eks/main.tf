@@ -180,16 +180,31 @@ resource "aws_eks_node_group" "this" {
 variable "project_name" {
   description = "Project name"
   type        = string
+
+  validation {
+    condition     = can(regex("^[a-z][a-z0-9-]{1,29}$", var.project_name))
+    error_message = "project_name must be 2-30 characters of lowercase letters, digits, or hyphens, and start with a letter."
+  }
 }
 
 variable "environment" {
-  description = "Environment name"
+  description = "Environment name (dev, staging, or production)"
   type        = string
+
+  validation {
+    condition     = contains(["dev", "staging", "production"], var.environment)
+    error_message = "environment must be one of: dev, staging, production."
+  }
 }
 
 variable "region" {
-  description = "AWS region"
+  description = "AWS region (for example us-east-1)"
   type        = string
+
+  validation {
+    condition     = can(regex("^[a-z]{2}(-gov)?-[a-z]+-[0-9]$", var.region))
+    error_message = "region must be a valid AWS region identifier such as us-east-1 or eu-west-2."
+  }
 }
 
 variable "vpc_id" {
@@ -206,30 +221,55 @@ variable "kubernetes_version" {
   description = "Kubernetes version"
   type        = string
   default     = "1.29"
+
+  validation {
+    condition     = can(regex("^[0-9]+\\.[0-9]+$", var.kubernetes_version))
+    error_message = "kubernetes_version must be a major.minor version such as 1.29."
+  }
 }
 
 variable "instance_types" {
   description = "Instance types for node group"
   type        = list(string)
   default     = ["t3.medium"]
+
+  validation {
+    condition     = length(var.instance_types) > 0 && alltrue([for instance_type in var.instance_types : can(regex("^[a-z0-9]+\\.[a-z0-9]+$", instance_type))])
+    error_message = "instance_types must contain at least one EC2 instance type such as t3.medium."
+  }
 }
 
 variable "desired_size" {
   description = "Desired number of worker nodes"
   type        = number
   default     = 2
+
+  validation {
+    condition     = var.desired_size >= 1 && var.desired_size >= var.min_size && var.desired_size <= var.max_size
+    error_message = "desired_size must be at least 1 and within [min_size, max_size]."
+  }
 }
 
 variable "max_size" {
   description = "Maximum number of worker nodes"
   type        = number
   default     = 4
+
+  validation {
+    condition     = var.max_size >= 1 && var.max_size >= var.min_size
+    error_message = "max_size must be at least 1 and greater than or equal to min_size."
+  }
 }
 
 variable "min_size" {
   description = "Minimum number of worker nodes"
   type        = number
   default     = 1
+
+  validation {
+    condition     = var.min_size >= 1
+    error_message = "min_size must be at least 1; desired_size and max_size must not be lower."
+  }
 }
 
 variable "node_labels" {
@@ -254,6 +294,11 @@ variable "public_access_cidrs" {
   description = "CIDR blocks for public API access"
   type        = list(string)
   default     = []
+
+  validation {
+    condition     = alltrue([for cidr in var.public_access_cidrs : can(cidrhost(cidr, 0))])
+    error_message = "public_access_cidrs must contain only valid CIDR blocks."
+  }
 }
 
 variable "enabled_cluster_log_types" {

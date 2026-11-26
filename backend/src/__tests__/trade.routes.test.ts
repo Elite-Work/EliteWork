@@ -5,8 +5,10 @@ import * as StellarSdk from "@stellar/stellar-sdk";
 import { Trade, TradeStatus } from "@prisma/client";
 import { tradeRoutes } from "../routes/trade.routes";
 import { ContractService } from "../services/contract.service";
-import { TradeService } from "../services/trade.service";
+import { TradeAccessDeniedError, TradeService } from "../services/trade.service";
 import { AuthService } from "../services/auth.service";
+import { generateTradeReceiptPdf } from "../services/tradeReceipt.service";
+import { InvalidCursorError } from "../lib/cursorPagination";
 import { errorHandler } from "../middleware/errorHandler";
 import { ErrorCode } from "../errors/errorCodes";
 
@@ -19,6 +21,27 @@ jest.mock("../services/auth.service", () => ({
     isTokenRevoked: jest.fn().mockResolvedValue(false),
   },
 }));
+
+// The receipt route is the only handler here that touches Prisma directly
+// (for the settlement txHash); keep it off the network in tests.
+jest.mock("../lib/db", () => ({
+  prisma: {
+    trade: { findUnique: jest.fn(), findFirst: jest.fn() },
+    tradeNote: { findMany: jest.fn(), update: jest.fn() },
+    deliveryManifest: { findUnique: jest.fn(), update: jest.fn() },
+    payoutIntent: { findFirst: jest.fn().mockResolvedValue(null) },
+  },
+}));
+
+jest.mock("../services/tradeReceipt.service", () => {
+  const actual = jest.requireActual("../services/tradeReceipt.service");
+  return {
+    ...actual,
+    generateTradeReceiptPdf: jest
+      .fn()
+      .mockResolvedValue(Buffer.from("%PDF-1.4 test receipt")),
+  };
+});
 
 function createMockTradeService() {
   return {
@@ -109,6 +132,7 @@ describe("Trade Routes", () => {
     jest.spyOn(AuthService, "isTokenRevoked").mockResolvedValue(false);
     mockTradeService.createPendingTrade.mockReset();
     mockTradeService.getTradeById.mockReset().mockResolvedValue(null);
+    (generateTradeReceiptPdf as jest.Mock).mockClear();
     mockTradeService.listUserTrades.mockReset().mockResolvedValue({
       items: [],
       pagination: { page: 1, limit: 20, total: 0, totalPages: 1 },
@@ -211,6 +235,139 @@ describe("Trade Routes", () => {
 
       expect(res.status).toBe(400);
       expect(mockTradeService.listUserTrades).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("GET /trades cursor pagination (#502)", () => {
+    it("forwards the cursor and uses the cursor envelope without a warning", async () => {
+      mockTradeService.listUserTrades.mockResolvedValueOnce({
+        items: [],
+        pageInfo: { nextCursor: null, hasNextPage: false, limit: 20 },
+      });
+
+      const res = await request(app)
+        .get("/trades?cursor=abc&limit=20")
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.pageInfo).toEqual({ nextCursor: null, hasNextPage: false, limit: 20 });
+      expect(res.headers.warning).toBeUndefined();
+      expect(mockTradeService.listUserTrades).toHaveBeenCalledWith(
+        buyerAddress,
+        expect.objectContaining({ cursor: "abc", limit: 20 }),
+      );
+    });
+
+    it("defaults to cursor mode when no page is supplied", async () => {
+      const res = await request(app)
+        .get("/trades")
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(res.status).toBe(200);
+      expect(mockTradeService.listUserTrades).toHaveBeenCalledWith(
+        buyerAddress,
+        expect.objectContaining({ page: undefined }),
+      );
+    });
+
+    it("warns legacy page/limit clients that offset pagination is deprecated", async () => {
+      const res = await request(app)
+        .get("/trades?page=2&limit=10")
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(res.status).toBe(200);
+      expect(res.headers.warning).toContain("offset pagination is deprecated");
+    });
+
+    it("returns 400 for a malformed cursor instead of leaking the decoder error", async () => {
+      mockTradeService.listUserTrades.mockRejectedValueOnce(new InvalidCursorError());
+
+      const res = await request(app)
+        .get("/trades?cursor=%%%")
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/cursor/i);
+    });
+  });
+
+  describe("GET /trades/:id/receipt (#500)", () => {
+    it("returns a PDF attachment for a trade the caller can access", async () => {
+      mockTradeService.getTradeById.mockResolvedValueOnce(
+        makeTrade({ tradeId: "42", status: TradeStatus.COMPLETED }),
+      );
+
+      const res = await request(app)
+        .get("/trades/42/receipt")
+        .set("Authorization", `Bearer ${token}`)
+        .buffer(true)
+        .parse((response, callback) => {
+          const chunks: Buffer[] = [];
+          response.on("data", (chunk: Buffer) => chunks.push(chunk));
+          response.on("end", () => callback(null, Buffer.concat(chunks)));
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.headers["content-type"]).toContain("application/pdf");
+      expect(res.headers["content-disposition"]).toContain("trade-42-receipt.pdf");
+      expect(Buffer.isBuffer(res.body)).toBe(true);
+      expect(generateTradeReceiptPdf).toHaveBeenCalledWith(
+        expect.objectContaining({ tradeId: "42", status: TradeStatus.COMPLETED }),
+        expect.any(String),
+      );
+    });
+
+    it("returns a JSON attachment when format=json (#499)", async () => {
+      mockTradeService.getTradeById.mockResolvedValueOnce(
+        makeTrade({ tradeId: "42", status: TradeStatus.COMPLETED }),
+      );
+
+      const res = await request(app)
+        .get("/trades/42/receipt?format=json")
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(res.status).toBe(200);
+      expect(res.headers["content-type"]).toContain("application/json");
+      expect(res.headers["content-disposition"]).toContain("trade-42-receipt.json");
+      expect(res.body).toEqual(
+        expect.objectContaining({
+          tradeId: "42",
+          amountUsdc: "125.1234567",
+          status: TradeStatus.COMPLETED,
+          completedAt: null,
+          txHash: null,
+          network: "testnet",
+        }),
+      );
+    });
+
+    it("rejects an unsupported format", async () => {
+      const res = await request(app)
+        .get("/trades/42/receipt?format=xml")
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(res.status).toBe(400);
+      expect(mockTradeService.getTradeById).not.toHaveBeenCalled();
+    });
+
+    it("returns 404 when the trade does not exist", async () => {
+      mockTradeService.getTradeById.mockResolvedValueOnce(null);
+
+      const res = await request(app)
+        .get("/trades/missing/receipt")
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(res.status).toBe(404);
+    });
+
+    it("returns 403 when the caller is not a party to the trade", async () => {
+      mockTradeService.getTradeById.mockRejectedValueOnce(new TradeAccessDeniedError());
+
+      const res = await request(app)
+        .get("/trades/secret/receipt")
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(res.status).toBe(403);
     });
   });
 

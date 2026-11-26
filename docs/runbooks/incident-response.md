@@ -78,6 +78,7 @@ everyone knows who is doing what):
 |---|---|---|
 | P0/P1, on-call hasn't acknowledged within 10 min | Secondary on-call / eng lead | Don't wait past the response-time target to escalate |
 | Suspected fund loss or admin-key compromise | Eng lead + whoever holds treasury/admin key rotation authority | Follow the mitigation-before-diagnosis order above |
+| Aurora/RDS writer failure or suspected failover data loss | Database owner + on-call | Follow the [RDS primary failover runbook](./rds-primary-failover.md); do not manually change the cluster writer endpoint |
 | Failed production migration | On-call, immediately - see the escalation table in [migration-rollback-playbook.md](../migration-rollback-playbook.md#8-contacts-and-escalation) | Do not attempt further migrations until resolved |
 | Data loss suspected | On-call immediately; stop all writes | Same as the migration playbook's guidance - do not run further migrations or write operations until the extent of loss is understood |
 | Contract bug already executed on-chain (funds moved incorrectly) | Eng lead + treasury/admin key holder | This is not a rollback - see [rollback.md](./rollback.md#contract-rollback) |

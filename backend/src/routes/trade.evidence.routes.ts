@@ -11,6 +11,13 @@ import {
   TradeNotDisputedError,
 } from "../services/trade.evidence.service";
 
+/**
+ * OpenAPI path template for the trade evidence listing endpoint.
+ * Kept in sync with the route registered below so the OpenAPI coverage
+ * test can detect undocumented endpoints in this route group.
+ */
+export const TRADE_EVIDENCE_OPENAPI_PATH = "/trades/{id}/evidence";
+
 export function createTradeEvidenceRouter(evidence = new TradeEvidenceListService()) {
   const router = Router();
 

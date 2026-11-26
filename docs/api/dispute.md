@@ -78,6 +78,12 @@ re-requesting the same transition returns the current state without error.
 
 **Authentication:** Bearer token required; caller must be a mediator.
 
+**Optional headers**
+
+| Header | Description |
+|---|---|
+| `Idempotency-Key` | Optional client-supplied key (ADR-004). Duplicate requests with the same key and body within 24 hours return `200` with the cached response (`X-Idempotency-Cache: HIT`). Reusing the same key with a different body returns `409`. See [overview.md](./overview.md#idempotency). |
+
 **Path parameter**
 
 | Name | Type | Description |

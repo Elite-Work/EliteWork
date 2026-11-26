@@ -197,6 +197,31 @@ export interface AdminAuthClaims {
   audience: string | null;
 }
 
+export interface DlqEventSummary {
+  eventId: string;
+  queue: string;
+  jobName: string;
+  payloadHash: string;
+  failureReason: string;
+  errorClass: string;
+  retryCount: number;
+  failedAt: string;
+}
+
+export interface AdminDlqListResponse {
+  queue: string;
+  depth: number;
+  page: number;
+  limit: number;
+  events: DlqEventSummary[];
+}
+
+export interface AdminDlqReplayResponse {
+  success: boolean;
+  queue: string;
+  replayedJobId: string;
+}
+
 export const adminApi = {
   /** Soroban-backed contract maintenance. Each call returns an unsigned XDR. */
   contract: {
@@ -272,5 +297,34 @@ export const adminApi = {
   auth: {
     claims: (token: string, options?: AdminRequestOptions) =>
       adminRequest<AdminAuthClaims>("/api/admin/auth/claims", token, options),
+  },
+
+  dlq: {
+    list: (
+      token: string,
+      params?: { queue?: string; page?: number; limit?: number },
+      options?: AdminRequestOptions,
+    ) =>
+      adminRequest<AdminDlqListResponse>(
+        `/api/admin/dlq${createQueryString({
+          queue: params?.queue,
+          page: params?.page,
+          limit: params?.limit,
+        })}`,
+        token,
+        options,
+      ),
+
+    replay: (
+      token: string,
+      queue: string,
+      eventId: string,
+      options?: AdminRequestOptions,
+    ) =>
+      adminRequest<AdminDlqReplayResponse>(
+        `/api/admin/dlq/${encodeURIComponent(queue)}/${encodeURIComponent(eventId)}/replay`,
+        token,
+        { ...options, method: "POST" },
+      ),
   },
 };

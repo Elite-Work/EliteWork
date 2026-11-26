@@ -151,7 +151,7 @@ describe("TradeService", () => {
       })
     );
     expect(result.items).toHaveLength(1);
-    expect(result.pagination.total).toBe(1);
+    expect((result as { pagination: { total: number } }).pagination.total).toBe(1);
   });
 
   it("GET /trades?status=FUNDED filters correctly", async () => {
@@ -226,6 +226,7 @@ describe("TradeService", () => {
     prisma.trade.count.mockResolvedValue(0);
 
     await service.listUserTrades("GA_CALLER", {
+      page: 1,
       sort: "randomField:asc",
     });
 

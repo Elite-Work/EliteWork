@@ -276,11 +276,19 @@ describe("Trade Schemas - Formatters & Validators", () => {
         }
       });
 
-      it("should use default page=1 when not provided", () => {
+      it("leaves page undefined when not provided so cursor mode is selected (#502)", () => {
         const result = listTradesQuerySchema.safeParse({});
         expect(result.success).toBe(true);
         if (result.success) {
-          expect(result.data.page).toBe(1);
+          expect(result.data.page).toBeUndefined();
+        }
+      });
+
+      it("accepts an opaque cursor for the infinite trade list (#502)", () => {
+        const result = listTradesQuerySchema.safeParse({ cursor: "abc123" });
+        expect(result.success).toBe(true);
+        if (result.success) {
+          expect(result.data.cursor).toBe("abc123");
         }
       });
 

@@ -83,6 +83,23 @@ without maintaining separate mediator tiers. The cap is what keeps "quorum"
 meaningful: without it an admin could set one mediator's weight above
 `required_weight` and quietly restore single-signature resolution.
 
+## Roster and weight ceilings
+
+The mediator registry is **not** capped by count; the bound that matters is
+weight. Every vote carries at least 1 and at most `MAX_MEDIATOR_WEIGHT` (10),
+and a dispute settles as soon as `required_weight` backs one outcome, so a
+roster of `required_weight` unit-weight mediators is the largest set that can
+be needed for a single agreed outcome. A larger roster still matters when the
+outcome splits — every one of those mediators must be able to vote before the
+fallback window closes.
+
+At the other end, `required_weight` is a `u32`: an admin can configure a
+threshold no roster can reach. That is not a trap, because the fallback is what
+keeps the escrow live, and the weight tally saturates rather than overflowing.
+`quorum_stress_tests.rs` pins both ends — full-roster quorum, maximum-weight
+quorum, an evenly split full roster falling back, the `u32` weight ceiling, and
+the weight snapshot taken at vote time.
+
 ## Contract interface
 
 ```rust

@@ -59,18 +59,25 @@ endpoints.
 
 - `GET /api/admin/audit` ([adminAudit.service.ts](../src/services/adminAudit.service.ts))
 - `GET /webhooks/:id/logs` ([webhooks.logs.routes.ts](../src/routes/webhooks.logs.routes.ts))
+- `GET /api/trades` ([trade.service.ts](../src/services/trade.service.ts), #502)
 
-## Endpoints intentionally not migrated yet
+### `GET /trades` and watchlist-first ordering
 
-`GET /trades` (`TradeService.listUserTrades`) interleaves a caller's
-watchlisted trades ahead of the rest of their trade list — a bespoke
-in-memory merge of two differently-sourced result sets, not a single ordered
-query. That merge isn't cursor-compatible without changing the watchlist
-prioritization semantics, so it's left on offset pagination for now. A
-correct migration would need either a persisted "effective sort key" per
-trade (denormalizing watchlist priority into the trade row) or dropping
-watchlist-first ordering in favor of a `watched` filter/sort flag — both are
-product decisions, not pagination-mechanics, so they're out of scope here.
+The trades list is a merge of two sources: the caller's watchlisted trades
+(promoted to the top) and everything else. A single key cannot express
+"position in source A, then source B", so the trade cursor carries an extra
+opaque `segment` field:
+
+- `segment: "watched"` — anchored to the watchlist row's `(createdAt, id)`, so
+  a page boundary survives the trade being un-watchlisted mid-scroll.
+- `segment: "unwatched"` — anchored to the trade `id` via the shared
+  `paginateWithCursor` helper.
+
+A page starts in the watched segment and spills into the unwatched one once
+the watchlist is exhausted, preserving the legacy "watched first" semantics.
+`page` is still accepted without a cursor and returns the legacy `pagination`
+envelope plus a deprecation `Warning` header; the frontend infinite scroll
+(#503) is the first client on the cursor path.
 
 ## Adding cursor pagination to a new endpoint
 

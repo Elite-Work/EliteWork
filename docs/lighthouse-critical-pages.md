@@ -2,19 +2,23 @@
 
 > Status: Active | Owner: Frontend | Issue: #103
 
-Lighthouse CI runs performance and accessibility budgets on three critical pages:
+Lighthouse CI runs performance and accessibility budgets on the critical pages:
 - **`/trades/create`** — trade creation (highest-traffic authenticated page)
 - **`/dashboard`** — trade stats and recent trades overview
 - **`/vault`** — escrow vault overview
+- **`/reputation`** — reputation overview (high traffic)
 
-Each page has its own dedicated Lighthouse CI check that runs on every PR that touches
-`frontend/**`. The workflow is defined in `.github/workflows/lighthouse.yml`.
+Each page has its own check that runs on every PR touching `frontend/**`. The workflow is
+`.github/workflows/lighthouse.yml`; the per-page configs are
+`frontend/lighthouserc.<page>.json`. The `trades-create` / `dashboard` / `vault` details
+(including their baselines) are in `docs/lighthouse-trade-create.md`.
 
 - Workflow: `.github/workflows/lighthouse.yml`
 - Per-page configs: `frontend/lighthouserc.trades-create.json`, 
-  `frontend/lighthouserc.dashboard.json`, `frontend/lighthouserc.vault.json`
-- Output: scores table in the job summary + full HTML/JSON reports in the
-  `lighthouse-critical-pages` artifact
+  `frontend/lighthouserc.dashboard.json`, `frontend/lighthouserc.vault.json`,
+  `frontend/lighthouserc.reputation.json`
+- Output: scores table in the job summary + full reports in the `lighthouse-critical-pages`
+  artifact (`frontend/.lighthouseci/<page>/`, git-ignored locally)
 
 ## Budgets (median of 3 desktop runs — an `error` budget breach fails the check)
 
@@ -29,6 +33,9 @@ Each page has its own dedicated Lighthouse CI check that runs on every PR that t
 
 The performance budget sits below the measured baseline to absorb GitHub runner variance;
 tighten it once a few weeks of CI numbers are in.
+
+The `reputation` budgets match the other pages so the check is consistent. They are
+provisional until CI numbers are collected.
 
 ## Baselines (before / after this change)
 
@@ -65,6 +72,12 @@ exists to catch regressions, not to claim a speed-up.
 | Before (`main`) | 0.78 / 0.85 / 0.90 | **0.81** | 720–950 ms | 200–350 ms | 0.015 |
 | After | 0.78 / 0.92 / 0.96 | **0.88** | 610–800 ms | 170–300 ms | 0.012 |
 
+### reputation
+
+Not yet measured. The first `lighthouse.yml` run on `main` after this change produces the
+numbers; record them here as a `Before (main)` / `After` table in the same format as
+`docs/lighthouse-trade-create.md`, then revisit the budgets.
+
 ### Known remaining issues
 
 `color-contrast` still fails on all pages: the `text-muted` token (`#5a7a6a`) is 3.2–3.8:1
@@ -76,10 +89,10 @@ change that affects every page, so it's out of scope here.
 ```bash
 cd frontend
 pnpm build
-# Run all three pages
 npx @lhci/cli@0.15.1 autorun --config=./lighthouserc.trades-create.json
 npx @lhci/cli@0.15.1 autorun --config=./lighthouserc.dashboard.json
 npx @lhci/cli@0.15.1 autorun --config=./lighthouserc.vault.json
+npx @lhci/cli@0.15.1 autorun --config=./lighthouserc.reputation.json
 ```
 
 Reports are written to `frontend/.lighthouseci/<page>/` (git-ignored) for each page.

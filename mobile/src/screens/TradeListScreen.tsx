@@ -42,19 +42,38 @@ function TradeCard({ trade, onPress }: { trade: Trade; onPress: () => void }) {
   const statusColor = STATUS_COLORS[trade.status] ?? '#6B7280';
   const shortBuyer = `${trade.buyerAddress.slice(0, 6)}…${trade.buyerAddress.slice(-4)}`;
   const shortSeller = `${trade.sellerAddress.slice(0, 6)}…${trade.sellerAddress.slice(-4)}`;
+  const a11yLabel = `Trade ${trade.tradeId.slice(0, 8)}, status ${trade.status}, seller ${shortSeller}`;
 
   return (
-    <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.75}>
+    <TouchableOpacity
+      style={styles.card}
+      onPress={onPress}
+      activeOpacity={0.75}
+      accessibilityLabel={a11yLabel}
+      accessibilityRole="button"
+      accessibilityHint="Double tap to view trade details"
+    >
       <View style={styles.cardRow}>
-        <Text style={styles.tradeId}>#{trade.tradeId.slice(0, 8)}</Text>
-        <View style={[styles.statusBadge, { backgroundColor: `${statusColor}22` }]}>
+        <Text style={styles.tradeId} accessibilityLabel={`Trade ID ${trade.tradeId.slice(0, 8)}`}>
+          #{trade.tradeId.slice(0, 8)}
+        </Text>
+        <View
+          style={[styles.statusBadge, { backgroundColor: `${statusColor}22` }]}
+          accessibilityLabel={`Status: ${trade.status}`}
+        >
           <Text style={[styles.statusText, { color: statusColor }]}>{trade.status}</Text>
         </View>
       </View>
-      <Text style={styles.amount}>{trade.amountUsdc} USDC</Text>
+      <Text style={styles.amount} accessibilityLabel={`Amount: ${trade.amountUsdc} USDC`}>
+        {trade.amountUsdc} USDC
+      </Text>
       <View style={styles.cardRow}>
-        <Text style={styles.addressLabel}>Buyer: <Text style={styles.address}>{shortBuyer}</Text></Text>
-        <Text style={styles.addressLabel}>Seller: <Text style={styles.address}>{shortSeller}</Text></Text>
+        <Text style={styles.addressLabel} accessibilityLabel={`Buyer: ${shortBuyer}`}>
+          Buyer: <Text style={styles.address}>{shortBuyer}</Text>
+        </Text>
+        <Text style={styles.addressLabel} accessibilityLabel={`Seller: ${shortSeller}`}>
+          Seller: <Text style={styles.address}>{shortSeller}</Text>
+        </Text>
       </View>
     </TouchableOpacity>
   );
@@ -114,22 +133,33 @@ export default function TradeListScreen({ navigation }: Props) {
       <View style={styles.header}>
         <Text style={styles.headerTitle}>🌾 Trades</Text>
         <View style={styles.headerActions}>
-          <TouchableOpacity onPress={() => navigation.navigate('CreateTrade')}>
+          <TouchableOpacity
+            onPress={() => navigation.navigate('CreateTrade')}
+            accessibilityLabel="Create new trade"
+            accessibilityRole="button"
+          >
             <Text style={styles.createBtnText}>+ New</Text>
           </TouchableOpacity>
-          <TouchableOpacity onPress={handleLogout}>
+          <TouchableOpacity
+            onPress={handleLogout}
+            accessibilityLabel="Logout"
+            accessibilityRole="button"
+          >
             <Text style={styles.logoutText}>Logout</Text>
           </TouchableOpacity>
         </View>
       </View>
 
       {/* Filter tabs */}
-      <View style={styles.filterRow}>
+      <View style={styles.filterRow} accessibilityRole="tablist" accessibilityLabel="Filter trades by status">
         {STATUS_FILTERS.map((f) => (
           <TouchableOpacity
             key={f.value}
             style={[styles.filterTab, activeFilter === f.value && styles.filterTabActive]}
             onPress={() => handleFilterChange(f.value)}
+            accessibilityRole="tab"
+            accessibilityLabel={`Filter by ${f.label}`}
+            accessibilityState={{ selected: activeFilter === f.value }}
           >
             <Text style={[styles.filterLabel, activeFilter === f.value && styles.filterLabelActive]}>
               {f.label}

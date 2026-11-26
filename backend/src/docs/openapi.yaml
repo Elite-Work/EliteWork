@@ -1523,6 +1523,61 @@ paths:
           $ref: "#/components/responses/LegacyValidationError"
         "500":
           $ref: "#/components/responses/InternalError"
+  /api/cooperatives/{id}/trades:
+    get:
+      tags: [Cooperatives]
+      summary: List trades touching any member wallet of a cooperative
+      description: |-
+        Read-only view for cooperative members (and global admins). Returns
+        trades where the buyer or seller is a member of the cooperative.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Cooperative identifier.
+          schema:
+            type: string
+        - $ref: "#/components/parameters/ListTradesStatusQuery"
+        - $ref: "#/components/parameters/ListTradesPageQuery"
+        - $ref: "#/components/parameters/ListTradesLimitQuery"
+        - $ref: "#/components/parameters/ListTradesSortQuery"
+      responses:
+        "200":
+          description: Paginated cooperative trade list returned.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - cooperativeId
+                  - items
+                  - pagination
+                properties:
+                  cooperativeId:
+                    type: string
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/TradeSummary"
+                  pagination:
+                    type: object
+                    properties:
+                      page:
+                        type: integer
+                      limit:
+                        type: integer
+                      total:
+                        type: integer
+                      totalPages:
+                        type: integer
+        "400":
+          $ref: "#/components/responses/LegacyValidationError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
   /api/admin/audit:
     get:
       tags: [Admin]

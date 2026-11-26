@@ -47,7 +47,7 @@
   --text-inverse: #FFFFFF;
 
   /* ── Status ───────────────────────────────────────────────────────────── */
-  --status-success: #059669;
+  --status-success: #047857; /* darkened from #059669 for 4.5:1 text contrast on surface-2 */
   --status-warning: #D97706;
   --status-danger: #DC2626;
   --status-info: #2563EB;

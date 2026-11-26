@@ -178,13 +178,29 @@ together with `tradeId` + `event` to discard stale or duplicate deliveries.
 
 A delivery is retried when your endpoint returns `5xx` or `429`, or the
 request fails at the network level. Any other `4xx` stops retries
-immediately. Retries use exponential backoff:
+immediately.
+
+Retries use **exponential backoff with equal jitter** so concurrent retries
+spread out instead of hitting a recovering subscriber at the exact same
+instant. For failed attempt `k` (1-indexed):
+
+```text
+capped = min(WEBHOOK_RETRY_BASE_MS * 2^(k - 1), WEBHOOK_RETRY_MAX_MS)
+delay  = round(capped / 2 + random() * (capped / 2))   // uniform in [capped / 2, capped]
+```
+
+With the default settings (`WEBHOOK_MAX_ATTEMPTS=3`,
+`WEBHOOK_RETRY_BASE_MS=1000`, `WEBHOOK_RETRY_MAX_MS=30000`):
+
+- Attempt 1 fails → waits `500–1000 ms` before attempt 2.
+- Attempt 2 fails → waits `1000–2000 ms` before attempt 3.
+- Attempt 3 fails → delivery is aborted and logged as failed after retries.
 
 | Env var | Default | Meaning |
 |---|---|---|
-| `WEBHOOK_MAX_ATTEMPTS` | `3` | Total attempts, including the first |
-| `WEBHOOK_RETRY_BASE_MS` | `1000` | Delay before the first retry; doubles each attempt |
-| `WEBHOOK_RETRY_MAX_MS` | `30000` | Upper bound on the delay |
+| `WEBHOOK_MAX_ATTEMPTS` | `3` | Total attempts, including the initial delivery |
+| `WEBHOOK_RETRY_BASE_MS` | `1000` | Base delay in ms; doubles after each failed attempt before jitter |
+| `WEBHOOK_RETRY_MAX_MS` | `30000` | Upper bound in ms on the capped delay |
 
 Respond `2xx` quickly and do heavy processing asynchronously. Since a
 delivery can arrive more than once, make your handler idempotent.

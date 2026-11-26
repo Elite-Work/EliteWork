@@ -60,6 +60,8 @@ export function WalletStateCallout({
         <div className="mt-1 flex items-center gap-3">
           <button
             type="button"
+            data-testid="wallet-state-cta"
+            data-busy={busy || undefined}
             disabled={busy}
             onClick={() => onAction(view.action as WalletAction)}
             className="inline-flex h-9 items-center rounded-full bg-gradient-gold-cta px-4 text-sm font-semibold text-text-inverse transition-opacity disabled:opacity-40"

@@ -61,6 +61,48 @@ function isEvidenceMetadataExpired(createdAt: Date): boolean {
     return Date.now() - createdAt.getTime() > retentionMs;
 }
 
+/**
+ * Sanitize an uploaded filename before persisting metadata or passing it to logging/IPFS.
+ * Strips directory components, control characters, and HTML tag sequences, then constrains
+ * the result to inert filename characters [A-Za-z0-9._-].
+ */
+export function sanitizeEvidenceFilename(rawFilename: string, mimeType?: string): string {
+    const fallback = mimeType === "video/webm" ? "evidence.webm" : "evidence.mp4";
+    if (typeof rawFilename !== "string") {
+        return fallback;
+    }
+
+    const withoutControl = Array.from(rawFilename)
+        .filter((ch) => {
+            const code = ch.charCodeAt(0);
+            return code >= 0x20 && code !== 0x7f;
+        })
+        .join("");
+
+    // Strip HTML tag sequences before basename extraction so closing tags like </script>
+    // or attributes like <svg/onload=...> cannot get split on "/" before removal.
+    let withoutTags = withoutControl;
+    let previous = "";
+    while (withoutTags !== previous) {
+        previous = withoutTags;
+        withoutTags = withoutTags.replace(/<[^>]*>/g, "");
+    }
+
+    const basename = withoutTags.split(/[\\/]/).pop() ?? "";
+    const sanitized = basename
+        .replace(/[^A-Za-z0-9._-]/g, "_")
+        .replace(/\.{2,}/g, ".")
+        .replace(/_+/g, "_")
+        .replace(/^[._-]+|[._-]+$/g, "")
+        .slice(0, 255);
+
+    if (!sanitized || sanitized === "mp4" || sanitized === "webm") {
+        return fallback;
+    }
+
+    return sanitized;
+}
+
 type EvidenceDatabase = {
     trade: Pick<PrismaClient["trade"], "findUnique">;
     tradeEvidence: Pick<PrismaClient["tradeEvidence"], "findMany" | "create">;
@@ -165,13 +207,14 @@ export class EvidenceService {
             throw new EvidenceValidationError(scan.reason || "Evidence blocked by malware scanner");
         }
 
-        const cid = await this.ipfs.uploadFile(file.buffer, file.originalname);
+        const safeFilename = sanitizeEvidenceFilename(file.originalname, file.mimetype);
+        const cid = await this.ipfs.uploadFile(file.buffer, safeFilename);
 
         const record = await this.prisma.tradeEvidence.create({
             data: {
                 tradeId,
                 cid,
-                filename: file.originalname,
+                filename: safeFilename,
                 mimeType: file.mimetype,
                 uploadedBy: caller,
             },

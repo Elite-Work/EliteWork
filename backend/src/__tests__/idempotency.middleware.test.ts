@@ -4,7 +4,7 @@ import { Request, Response } from "express";
 jest.mock("../lib/redis", () => ({
   redis: {
     get: jest.fn(),
-    set: jest.fn(),
+    eval: jest.fn(),
     del: jest.fn(),
   },
 }));
@@ -24,33 +24,13 @@ jest.mock("../middleware/logger", () => ({
 
 import { redis } from "../lib/redis";
 import { alertService } from "../services/alert.service";
-import { idempotencyMiddleware } from "../middleware/idempotency";
+import {
+  IDEMPOTENCY_ACQUIRE_SCRIPT,
+  IDEMPOTENCY_COMMIT_SCRIPT,
+  idempotencyMiddleware,
+} from "../middleware/idempotency";
 
 // ── Typed mock factories ─────────────────────────────────────────────────────
-
-type RedisMock = {
-  get: jest.Mock<Promise<string | null>, [string]>;
-  set: jest.Mock<Promise<string>, [string, string, string?, number?]>;
-  del: jest.Mock<Promise<number>, [string]>;
-};
-
-function createMockRedis(): RedisMock {
-  return {
-    get: jest.fn(),
-    set: jest.fn(),
-    del: jest.fn(),
-  };
-}
-
-type AlertServiceMock = {
-  dispatch: jest.Mock<Promise<void>, [string, string, object]>;
-};
-
-function createMockAlertService(): AlertServiceMock {
-  return {
-    dispatch: jest.fn().mockResolvedValue(undefined),
-  };
-}
 
 interface MockResponse extends Response {
   body?: unknown;
@@ -100,7 +80,7 @@ function createRes() {
 
 type RedisTestMock = {
   get: jest.Mock<Promise<string | null>, [string]>;
-  set: jest.Mock<Promise<string | null>, [string, string, string, ...unknown[]]>;
+  eval: jest.Mock<Promise<number | string>, [string, number, string, string, number | string, number?]>;
   del: jest.Mock<Promise<number>, [string]>;
 };
 
@@ -111,7 +91,7 @@ describe("idempotencyMiddleware", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     redisMock.get.mockResolvedValue(null);
-    redisMock.set.mockResolvedValue("OK");
+    redisMock.eval.mockResolvedValue(1);
     redisMock.del.mockResolvedValue(1);
     alertMock.dispatch.mockResolvedValue(undefined);
   });
@@ -139,7 +119,7 @@ describe("idempotencyMiddleware", () => {
   });
 
   it("replays cached response for duplicate/stale keys", async () => {
-    redisMock.get.mockResolvedValueOnce(
+    redisMock.eval.mockResolvedValueOnce(
       JSON.stringify({
         status: 201,
         body: { tradeId: "t-1" },
@@ -169,13 +149,15 @@ describe("idempotencyMiddleware", () => {
 
     await Promise.resolve();
 
-    expect(redisMock.set).toHaveBeenCalledWith(
+    expect(redisMock.eval).toHaveBeenCalledWith(
+      IDEMPOTENCY_COMMIT_SCRIPT,
+      2,
       "idempotency:POST:/trades:idem-1",
+      "idempotency:lock:POST:/trades:idem-1",
       expect.any(String),
-      "EX",
       86400,
     );
-    expect(redisMock.del).toHaveBeenCalledWith("idempotency:lock:POST:/trades:idem-1");
+    expect(redisMock.del).not.toHaveBeenCalled();
   });
 
   it("caches successful responses sent via res.send", async () => {
@@ -188,14 +170,16 @@ describe("idempotencyMiddleware", () => {
 
     await Promise.resolve();
 
-    expect(redisMock.set).toHaveBeenCalledWith(
+    expect(redisMock.eval).toHaveBeenCalledWith(
+      IDEMPOTENCY_COMMIT_SCRIPT,
+      2,
       "idempotency:POST:/trades:idem-1",
+      "idempotency:lock:POST:/trades:idem-1",
       expect.stringContaining('"body":{"ok":true}'),
-      "EX",
       86400,
     );
     expect(headers["X-Idempotency-Cache"]).not.toBe("HIT");
-    expect(redisMock.del).toHaveBeenCalledWith("idempotency:lock:POST:/trades:idem-1");
+    expect(redisMock.del).not.toHaveBeenCalled();
   });
 
   it("serves in-flight duplicate request from replay cache without duplicate side effects", async () => {
@@ -210,23 +194,13 @@ describe("idempotencyMiddleware", () => {
       return null;
     });
 
-    redisMock.set.mockImplementation(async (key: string, value: string, mode: string) => {
-      if (key === "idempotency:lock:POST:/trades:idem-1" && mode === "NX") {
-        if (lockHeld) return null;
+    redisMock.eval.mockImplementation(async (script, _keyCount, _cacheKey, _lockKey, payload) => {
+      if (script === IDEMPOTENCY_ACQUIRE_SCRIPT) {
+        if (cachedPayload !== null) return cachedPayload;
+        if (lockHeld) return 0;
         lockHeld = true;
-        return "OK";
-      }
-
-      if (key === "idempotency:POST:/trades:idem-1") {
-        cachedPayload = value;
-        return "OK";
-      }
-
-      return "OK";
-    });
-
-    redisMock.del.mockImplementation(async (key: string) => {
-      if (key === "idempotency:lock:POST:/trades:idem-1") {
+      } else {
+        cachedPayload = String(payload);
         lockHeld = false;
       }
       return 1;
@@ -273,23 +247,13 @@ describe("idempotencyMiddleware", () => {
       return null;
     });
 
-    redisMock.set.mockImplementation(async (key: string, value: string, mode: string) => {
-      if (key === "idempotency:lock:POST:/trades:idem-1" && mode === "NX") {
-        if (lockHeld) return null;
+    redisMock.eval.mockImplementation(async (script, _keyCount, _cacheKey, _lockKey, payload) => {
+      if (script === IDEMPOTENCY_ACQUIRE_SCRIPT) {
+        if (cachedPayload !== null) return cachedPayload;
+        if (lockHeld) return 0;
         lockHeld = true;
-        return "OK";
-      }
-
-      if (key === "idempotency:POST:/trades:idem-1") {
-        cachedPayload = value;
-        return "OK";
-      }
-
-      return "OK";
-    });
-
-    redisMock.del.mockImplementation(async (key: string) => {
-      if (key === "idempotency:lock:POST:/trades:idem-1") {
+      } else {
+        cachedPayload = String(payload);
         lockHeld = false;
       }
       return 1;
@@ -331,7 +295,7 @@ describe("idempotencyMiddleware", () => {
       .update(JSON.stringify({ amount: 100 }))
       .digest("hex");
 
-    redisMock.get.mockResolvedValueOnce(
+    redisMock.eval.mockResolvedValueOnce(
       JSON.stringify({
         status: 201,
         body: { tradeId: "t-original" },
@@ -355,7 +319,7 @@ describe("idempotencyMiddleware", () => {
   });
 
   it("continues request flow when Redis storage fails", async () => {
-    redisMock.get.mockRejectedValueOnce(new Error("redis down"));
+    redisMock.eval.mockRejectedValueOnce(new Error("redis down"));
 
     const req = createReq();
     const { res } = createRes();

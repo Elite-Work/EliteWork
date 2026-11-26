@@ -206,11 +206,11 @@ export default function ReputationPage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-        <div className="bg-bg-elevated rounded-lg border border-border-default p-8 flex flex-col items-center gap-3">
+        <div data-testid="reputation-trust-score" className="bg-bg-elevated rounded-lg border border-border-default p-8 flex flex-col items-center gap-3">
           <RepScoreRing score={ringScore} size="xl" animated />
           <p className="text-sm text-text-secondary mt-2">Trust Score</p>
           <p className="text-3xl font-bold text-text-primary">{data.trustScore}</p>
-          <p className="text-xs text-text-muted">out of 100</p>
+          <p className="text-xs text-text-secondary">out of 100</p>
         </div>
 
         <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -221,7 +221,7 @@ export default function ReputationPage() {
             >
               <div className="flex items-center gap-2 mb-3">
                 {metric.icon}
-                <h3 className="text-sm font-medium text-text-secondary">{metric.title}</h3>
+                <h2 className="text-sm font-medium text-text-secondary">{metric.title}</h2>
               </div>
               <p className="text-2xl font-bold text-text-primary">{metric.value}</p>
             </div>
@@ -229,7 +229,7 @@ export default function ReputationPage() {
         </div>
       </div>
 
-      <div className="bg-bg-elevated rounded-lg border border-border-default">
+      <div data-testid="reputation-history" className="bg-bg-elevated rounded-lg border border-border-default">
         <div className="p-6 border-b border-border-default">
           <h2 className="text-xl font-semibold text-text-primary">Trust History</h2>
           <p className="text-sm text-text-secondary mt-1">

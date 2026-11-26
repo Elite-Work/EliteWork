@@ -130,6 +130,12 @@ Builds the release-funds transaction, moving escrowed funds to the seller.
 **Buyer or an admin wallet** (see [admin.md](./admin.md)), and the trade
 must be `DELIVERED`. Supports `Idempotency-Key`.
 
+`POST /api/escrow/release` accepts the same operation with a JSON body such as
+`{ "tradeId": "123" }`. With an `Idempotency-Key` header, both URLs share the
+same cache for the authenticated wallet. A successful retry returns the
+original `200` response and `X-Idempotency-Cache: HIT`. Reusing the same key
+for another trade returns `409`.
+
 `403` example: `{ "error": "Only the buyer or an admin may release funds" }`
 
 ## Open a dispute

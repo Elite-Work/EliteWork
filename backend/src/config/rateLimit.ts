@@ -33,8 +33,8 @@ export const RATE_LIMIT_CONFIG = {
     message: "Too many admin requests, try again later.",
   },
   evidenceUpload: {
-    windowMs: 60 * 60 * 1000,
-    max: 20,
+    windowMs: env.RATE_LIMIT_EVIDENCE_UPLOAD_WINDOW_MS,
+    max: env.RATE_LIMIT_EVIDENCE_UPLOAD_MAX,
     message: "Evidence upload quota exceeded, try again later.",
   },
   tradeExport: {

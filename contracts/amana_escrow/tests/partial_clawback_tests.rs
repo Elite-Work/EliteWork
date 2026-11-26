@@ -443,3 +443,119 @@ fn clawback_succeeds_after_re_enabling() {
     let trade = h.client().get_trade(&trade_id);
     assert_eq!(trade.amount, 7_000_i128);
 }
+
+// ---------------------------------------------------------------------------
+// #452  Partial-amount edge cases — 1 stroop and total-minus-one
+// ---------------------------------------------------------------------------
+
+/// Clawback of exactly 1 stroop (the minimum transferable unit) must succeed:
+/// the trade remains open with amount reduced by 1, and the destination receives
+/// exactly 1 token unit.
+#[test]
+fn clawback_of_one_stroop_reduces_amount_by_one() {
+    let h = Harness::new();
+    let trade_id = h.funded_trade(10_000);
+    let dest = Address::generate(&h.env);
+
+    h.client().admin_clawback(&trade_id, &1_i128, &dest);
+
+    let trade = h.client().get_trade(&trade_id);
+    assert_eq!(
+        trade.amount, 9_999,
+        "clawback of 1 stroop must reduce trade.amount by exactly 1"
+    );
+    assert!(
+        matches!(trade.status, TradeStatus::Funded),
+        "trade must remain Funded after a 1-stroop clawback"
+    );
+    assert_eq!(
+        h.token().balance(&dest),
+        1,
+        "destination must receive exactly 1 stroop"
+    );
+    assert_eq!(
+        h.client().get_clawback_total(&trade_id),
+        1,
+        "clawback total must equal 1 after a 1-stroop clawback"
+    );
+}
+
+/// Clawback of exactly (total − 1) leaves a single stroop in escrow.  The trade
+/// must remain open (not cancelled) since 1 unit of escrowed principal remains.
+#[test]
+fn clawback_of_total_minus_one_leaves_one_stroop_in_escrow() {
+    let total: i128 = 10_000;
+    let h = Harness::new();
+    let trade_id = h.funded_trade(total);
+    let dest = Address::generate(&h.env);
+
+    h.client().admin_clawback(&trade_id, &(total - 1), &dest);
+
+    let trade = h.client().get_trade(&trade_id);
+    assert_eq!(
+        trade.amount, 1,
+        "one stroop must remain in escrow after (total - 1) clawback"
+    );
+    assert!(
+        matches!(trade.status, TradeStatus::Funded),
+        "trade must remain Funded while any principal remains"
+    );
+    assert_eq!(
+        h.token().balance(&dest),
+        total - 1,
+        "destination must receive exactly total - 1 stroops"
+    );
+    assert_eq!(
+        h.client().get_clawback_total(&trade_id),
+        total - 1,
+    );
+}
+
+/// Clawback of 1 stroop on a 1-stroop escrow must cancel the trade.
+/// This is the degenerate case where a single-unit escrow is fully claimed.
+#[test]
+fn clawback_of_one_stroop_on_single_stroop_escrow_cancels_trade() {
+    let h = Harness::new();
+    let trade_id = h.funded_trade(1);
+    let dest = Address::generate(&h.env);
+
+    h.client().admin_clawback(&trade_id, &1_i128, &dest);
+
+    let trade = h.client().get_trade(&trade_id);
+    assert_eq!(trade.amount, 0);
+    assert!(
+        matches!(trade.status, TradeStatus::Cancelled),
+        "clawback of the only stroop must cancel the trade"
+    );
+    assert_eq!(h.token().balance(&dest), 1);
+}
+
+/// Two successive clawbacks: first 1 stroop, then (total − 1 − 1) stroops,
+/// leaving 1 stroop in escrow each time the trade stays Funded, confirming
+/// that the cumulative total tracks correctly through two minimal operations.
+#[test]
+fn successive_one_stroop_and_near_total_clawbacks_track_correctly() {
+    let total: i128 = 10_000;
+    let h = Harness::new();
+    let trade_id = h.funded_trade(total);
+    let dest = Address::generate(&h.env);
+
+    // First: 1 stroop
+    h.client().admin_clawback(&trade_id, &1_i128, &dest);
+    assert_eq!(h.client().get_trade(&trade_id).amount, total - 1);
+    assert_eq!(h.client().get_clawback_total(&trade_id), 1);
+    assert!(matches!(
+        h.client().get_trade(&trade_id).status,
+        TradeStatus::Funded
+    ));
+
+    // Second: (total - 1 - 1) stroops — leaves 1 stroop
+    h.client()
+        .admin_clawback(&trade_id, &(total - 2), &dest);
+    assert_eq!(h.client().get_trade(&trade_id).amount, 1);
+    assert_eq!(h.client().get_clawback_total(&trade_id), total - 1);
+    assert!(matches!(
+        h.client().get_trade(&trade_id).status,
+        TradeStatus::Funded
+    ));
+}

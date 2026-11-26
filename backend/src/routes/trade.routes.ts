@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+import { z } from "zod";
 import { PrismaClient, TradeStatus } from "@prisma/client";
 import { NextFunction, Response, Router } from "express";
 import { TradeController } from "../controllers/trade.controller";
@@ -8,7 +10,7 @@ import { TradeAccessDeniedError, TradeService } from "../services/trade.service"
 import { EncryptionService } from "../services/encryption.service";
 import { getAdminAllowlistLowercase } from "../lib/accessControl";
 import { validateRequest } from "../middleware/validateRequest";
-import { idempotencyMiddleware } from "../middleware/idempotency";
+import { createIdempotencyMiddleware, idempotencyMiddleware } from "../middleware/idempotency";
 import { 
   createTradeSchema, 
   bulkTradeBodySchema,
@@ -20,6 +22,43 @@ import { RATE_LIMIT_CONFIG } from "../config/rateLimit";
 import { createWalletRateLimiter } from "../lib/rateLimit";
 import { CURSOR_DEPRECATION_WARNING, InvalidCursorError } from "../lib/cursorPagination";
 import { buildTradeReceiptJson, generateTradeReceiptPdf } from "../services/tradeReceipt.service";
+
+const releaseBodySchema = z.object({ tradeId: tradeIdParamSchema.shape.id });
+
+const scopedReleaseIdempotency = createIdempotencyMiddleware((req: AuthRequest) => {
+  const wallet = req.user?.walletAddress?.trim();
+  if (!wallet) return undefined;
+  const scope = createHash("sha256")
+    .update(wallet)
+    .digest("hex");
+  return `escrow-release:${scope}`;
+});
+
+function releaseIdempotency(req: AuthRequest, res: Response, next: NextFunction) {
+  // Both URLs identify the same operation by trade ID. The release handler
+  // builds the transaction from the trade and the authenticated caller.
+  req.body = { tradeId: req.params.id };
+  return scopedReleaseIdempotency(req, res, next);
+}
+
+export function createEscrowFundsReleaseRouter(prisma: PrismaClient = defaultPrisma) {
+  const router = Router();
+  const controller = new TradeController(new TradeService(prisma));
+
+  router.post(
+    "/release",
+    authMiddleware,
+    validateRequest({ body: releaseBodySchema }),
+    (req, _res, next) => {
+      req.params.id = req.body.tradeId;
+      next();
+    },
+    releaseIdempotency,
+    controller.releaseFunds,
+  );
+
+  return router;
+}
 
 export function createTradeRouter(prisma: PrismaClient = defaultPrisma) {
   const router = Router();
@@ -69,11 +108,11 @@ export function createTradeRouter(prisma: PrismaClient = defaultPrisma) {
   );
 
   router.post(
-    "/:id/release", 
-    authMiddleware, 
-    idempotencyMiddleware,
+    "/:id/release",
+    authMiddleware,
     validateRequest({ params: tradeIdParamSchema }),
-    tradeController.releaseFunds
+    releaseIdempotency,
+    tradeController.releaseFunds,
   );
 
   router.post(

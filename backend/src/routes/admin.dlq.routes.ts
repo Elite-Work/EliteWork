@@ -28,6 +28,118 @@ const listQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(200).default(50),
 });
 
+/**
+ * OpenAPI coverage metadata for the admin DLQ route group.
+ *
+ * Each entry mirrors a route registered below so that coverage tests can
+ * assert every exported endpoint is documented in `backend/src/docs/openapi.yaml`
+ * (drift tests only catch documented paths, not undocumented ones).
+ */
+export const adminDlqRouteDocs = [
+  {
+    method: 'get',
+    path: '/api/admin/dlq/{queue}',
+    operationId: 'listAdminDlqJobs',
+    summary: 'List dead-lettered jobs for a queue family',
+    tags: ['Admin'],
+    parameters: [
+      { name: 'queue', in: 'path', required: true, schema: { type: 'string' } },
+      { name: 'page', in: 'query', required: false, schema: { type: 'integer', minimum: 1, default: 1 } },
+      {
+        name: 'limit',
+        in: 'query',
+        required: false,
+        schema: { type: 'integer', minimum: 1, maximum: 200, default: 50 },
+      },
+    ],
+    responses: {
+      '200': {
+        description: 'Dead-letter jobs for the queue',
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              required: ['queue', 'depth', 'jobs'],
+              properties: {
+                queue: { type: 'string' },
+                depth: { type: 'integer' },
+                jobs: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    properties: { id: { type: 'string' } },
+                    additionalProperties: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      '404': { description: 'Unknown queue' },
+      '500': { description: 'Internal server error' },
+    },
+  },
+  {
+    method: 'get',
+    path: '/api/admin/dlq/{queue}/depth',
+    operationId: 'getAdminDlqDepth',
+    summary: 'Current dead-letter depth, for alerting/dashboards',
+    tags: ['Admin'],
+    parameters: [{ name: 'queue', in: 'path', required: true, schema: { type: 'string' } }],
+    responses: {
+      '200': {
+        description: 'Dead-letter depth for the queue',
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              required: ['queue', 'depth'],
+              properties: {
+                queue: { type: 'string' },
+                depth: { type: 'integer' },
+              },
+            },
+          },
+        },
+      },
+      '404': { description: 'Unknown queue' },
+      '500': { description: 'Internal server error' },
+    },
+  },
+  {
+    method: 'post',
+    path: '/api/admin/dlq/{queue}/{jobId}/replay',
+    operationId: 'replayAdminDlqJob',
+    summary: 'Re-enqueue a dead-lettered job on its source queue',
+    tags: ['Admin'],
+    parameters: [
+      { name: 'queue', in: 'path', required: true, schema: { type: 'string' } },
+      { name: 'jobId', in: 'path', required: true, schema: { type: 'string' } },
+    ],
+    responses: {
+      '200': {
+        description: 'Job replayed',
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              required: ['success', 'queue', 'replayedJobId'],
+              properties: {
+                success: { type: 'boolean' },
+                queue: { type: 'string' },
+                replayedJobId: { type: 'string' },
+              },
+            },
+          },
+        },
+      },
+      '404': { description: 'Unknown queue or dead-letter job not found' },
+      '500': { description: 'Internal server error' },
+    },
+  },
+] as const;
+
 export function createAdminDlqRouter(): Router {
   const router = Router();
 

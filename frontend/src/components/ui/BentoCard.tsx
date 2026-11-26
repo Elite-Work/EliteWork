@@ -4,6 +4,7 @@ interface BentoCardProps extends React.HTMLAttributes<HTMLDivElement> {
   title: string;
   icon?: React.ReactNode;
   glowVariant?: "gold" | "emerald" | "none";
+  headingLevel?: 2 | 3;
   children: React.ReactNode;
 }
 
@@ -11,10 +12,12 @@ export function BentoCard({
   title,
   icon,
   glowVariant = "none",
+  headingLevel = 3,
   children,
   className = "",
   ...props
 }: BentoCardProps) {
+  const Heading = headingLevel === 2 ? "h2" : "h3";
   const glowClasses = {
     gold: "hover:shadow-glow-gold",
     emerald: "hover:shadow-glow-emerald",
@@ -45,9 +48,9 @@ export function BentoCard({
     >
       <div className="flex items-center gap-2 mb-4">
         {icon && <span className="text-gold dark:text-gold">{icon}</span>}
-        <h3 className="text-lg font-semibold text-text-primary dark:text-text-primary">
+        <Heading className="text-lg font-semibold text-text-primary dark:text-text-primary">
           {title}
-        </h3>
+        </Heading>
       </div>
       <div className="flex-1">{children}</div>
     </div>

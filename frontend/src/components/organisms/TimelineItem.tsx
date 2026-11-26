@@ -105,3 +105,17 @@ export function TimelineItem({
     </div>
   );
 }
+
+export interface PageHeaderProps {
+  title: string;
+  children?: React.ReactNode;
+}
+
+export function PageHeader({ title, children }: PageHeaderProps) {
+  return (
+    <header data-testid="page-header">
+      <h1 className="text-2xl font-bold">{title}</h1>
+      {children && <div data-testid="page-header-slot">{children}</div>}
+    </header>
+  );
+}

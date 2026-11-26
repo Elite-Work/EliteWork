@@ -206,7 +206,7 @@ export default function ReputationPage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-        <div className="bg-bg-elevated rounded-lg border border-border-default p-8 flex flex-col items-center gap-3">
+        <div data-testid="reputation-trust-score" className="bg-bg-elevated rounded-lg border border-border-default p-8 flex flex-col items-center gap-3">
           <RepScoreRing score={ringScore} size="xl" animated />
           <p className="text-sm text-text-secondary mt-2">Trust Score</p>
           <p className="text-3xl font-bold text-text-primary">{data.trustScore}</p>
@@ -229,7 +229,7 @@ export default function ReputationPage() {
         </div>
       </div>
 
-      <div className="bg-bg-elevated rounded-lg border border-border-default">
+      <div data-testid="reputation-history" className="bg-bg-elevated rounded-lg border border-border-default">
         <div className="p-6 border-b border-border-default">
           <h2 className="text-xl font-semibold text-text-primary">Trust History</h2>
           <p className="text-sm text-text-secondary mt-1">

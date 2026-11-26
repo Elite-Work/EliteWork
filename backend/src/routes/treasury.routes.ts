@@ -8,6 +8,16 @@ import { treasuryWithdrawSchema } from "../schemas/treasury.schemas";
 import { createAdminQuotaMiddleware } from "../middleware/adminQuota.middleware";
 import { ADMIN_QUOTA_CONFIG } from "../config/adminQuota";
 
+/**
+ * Route metadata used to audit OpenAPI coverage (see openapi.coverage.test.ts).
+ * Keep in sync with the router registrations below.
+ */
+export const treasuryRouteDefinitions = [
+  { method: "get", path: "/balance" },
+  { method: "post", path: "/withdraw" },
+  { method: "get", path: "/config" },
+] as const;
+
 export function createTreasuryRouter(): Router {
   const router = Router();
   const treasuryService = new TreasuryService();

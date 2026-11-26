@@ -55,6 +55,18 @@ test.describe('Vault Overview — authenticated', () => {
     await expect(page).toHaveScreenshot('vault-auth-full.png', { fullPage: true });
   });
 
+  test('vault balance panel and activity feed match snapshot', async ({ authenticatedPage: page }) => {
+    await page.goto('/vault');
+    await waitForStable(page);
+
+    const balance = page.getByTestId('vault-balance-panel');
+    const feed = page.getByTestId('vault-activity-feed');
+    await expect(balance).toBeVisible();
+    await expect(feed).toBeVisible();
+    await expect(balance).toHaveScreenshot('vault-auth-balance-panel.png');
+    await expect(feed).toHaveScreenshot('vault-auth-activity-feed.png');
+  });
+
   test('vault partner network row matches snapshot', async ({ authenticatedPage: page }) => {
     await page.goto('/vault');
     await waitForStable(page);

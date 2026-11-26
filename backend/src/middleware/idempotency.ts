@@ -62,11 +62,12 @@ async function waitForCachedResponse(cacheKey: string): Promise<string | null> {
   return null;
 }
 
-export const idempotencyMiddleware = async (
+async function guardRequest(
   req: Request,
   res: Response,
-  next: NextFunction
-) => {
+  next: NextFunction,
+  scope?: (req: Request) => string | undefined,
+) {
   const key = req.headers["idempotency-key"] as string;
 
   if (!key) {
@@ -78,8 +79,12 @@ export const idempotencyMiddleware = async (
     return next();
   }
 
-  const cacheKey = `idempotency:${req.method}:${req.path}:${key}`;
-  const lockKey = `idempotency:lock:${req.method}:${req.path}:${key}`;
+  const namespace = scope ? scope(req) : req.path;
+  if (namespace === undefined) {
+    return next();
+  }
+  const cacheKey = `idempotency:${req.method}:${namespace}:${key}`;
+  const lockKey = `idempotency:lock:${req.method}:${namespace}:${key}`;
 
   try {
     const acquired = (await redis.eval(
@@ -90,45 +95,30 @@ export const idempotencyMiddleware = async (
       IDEMPOTENCY_LOCK_TTL,
     )) as string | number;
 
-    if (typeof acquired === "string") {
-      const cachedResponse = acquired;
-      appLogger.info({ key, path: req.path }, "Idempotency cache hit");
-      const { status, body, headers, requestBodyHash } = JSON.parse(cachedResponse);
+    if (acquired !== 1) {
+      const cached = typeof acquired === "string"
+        ? acquired
+        : await waitForCachedResponse(cacheKey);
+      if (!cached) {
+        res.setHeader("X-Idempotency-Cache", "IN_PROGRESS");
+        return res.status(409).json({
+          error: "Request with this idempotency key is already in progress",
+        });
+      }
 
-      // 409 if same key but different request body
+      const { status, body, headers, requestBodyHash } = JSON.parse(cached);
       if (requestBodyHash !== undefined && requestBodyHash !== bodyHash(req.body)) {
         return res.status(409).json({
           error: "Idempotency key already used with a different request body",
         });
       }
 
-      // Set cached headers
-      Object.entries(headers).forEach(([k, v]) => {
-        res.setHeader(k, v as string);
+      Object.entries(headers).forEach(([name, value]) => {
+        res.setHeader(name, value as string);
       });
       res.setHeader("X-Idempotency-Cache", "HIT");
-
+      appLogger.info({ key, path: req.path }, "Idempotency cache hit");
       return res.status(status).json(body);
-    }
-
-    if (acquired !== 1) {
-      const replayResponse = await waitForCachedResponse(cacheKey);
-      if (replayResponse) {
-        appLogger.info({ key, path: req.path }, "Idempotency replay after in-flight request");
-        const { status, body, headers } = JSON.parse(replayResponse);
-
-        Object.entries(headers).forEach(([k, v]) => {
-          res.setHeader(k, v as string);
-        });
-        res.setHeader("X-Idempotency-Cache", "HIT");
-
-        return res.status(status).json(body);
-      }
-
-      res.setHeader("X-Idempotency-Cache", "IN_PROGRESS");
-      return res.status(409).json({
-        error: "Request with this idempotency key is already in progress",
-      });
     }
 
     let lockReleased = false;
@@ -210,4 +200,11 @@ export const idempotencyMiddleware = async (
     );
     next(); // Proceed without idempotency if Redis fails
   }
-};
+}
+
+/** Supply a scope when aliases need to share a cache or results are caller-specific. */
+export function createIdempotencyMiddleware(scope?: (req: Request) => string | undefined) {
+  return (req: Request, res: Response, next: NextFunction) => guardRequest(req, res, next, scope);
+}
+
+export const idempotencyMiddleware = createIdempotencyMiddleware();

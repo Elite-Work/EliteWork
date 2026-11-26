@@ -9,14 +9,15 @@
 ///   - Tie-breaking, which must be deterministic and buyer-protective
 ///   - Double-vote rejection and mediator-registry churn mid-vote
 ///   - Settlement invariants after every quorum path
+///   - The mediator-roster and vote-weight ceilings (#453)
 extern crate std;
 
 use amana_escrow::{
-    EscrowContract, EscrowContractClient, QuorumOutcome, TradeStatus,
+    EscrowContract, EscrowContractClient, QuorumOutcome, TradeStatus, MAX_MEDIATOR_WEIGHT,
 };
 use soroban_sdk::{
     Address, Env, String as SStr,
-    testutils::{Address as _, Ledger as _},
+    testutils::{Address as _, EnvTestConfig, Ledger as _},
     token,
 };
 
@@ -42,7 +43,45 @@ impl Quorum {
     /// Register `mediator_count` mediators and enable quorum at `THRESHOLD`
     /// with the given required and fallback weights.
     fn new(fee_bps: u32, mediator_count: usize, required_weight: u32, fallback_min: u32) -> Self {
-        let env = Env::default();
+        Self::build(
+            Env::default(),
+            fee_bps,
+            mediator_count,
+            required_weight,
+            fallback_min,
+        )
+    }
+
+    /// The same harness with snapshot capture disabled.
+    ///
+    /// The roster-ceiling cases (#453) drive a full mediator roster through the
+    /// whole quorum path and assert each outcome directly, so a golden ledger
+    /// dump per case would be large and low-signal. That is the same reasoning
+    /// `state_machine_fuzz_tests.rs` records for its generated cases.
+    fn new_without_snapshot(
+        fee_bps: u32,
+        mediator_count: usize,
+        required_weight: u32,
+        fallback_min: u32,
+    ) -> Self {
+        Self::build(
+            Env::new_with_config(EnvTestConfig {
+                capture_snapshot_at_drop: false,
+            }),
+            fee_bps,
+            mediator_count,
+            required_weight,
+            fallback_min,
+        )
+    }
+
+    fn build(
+        env: Env,
+        fee_bps: u32,
+        mediator_count: usize,
+        required_weight: u32,
+        fallback_min: u32,
+    ) -> Self {
         env.mock_all_auths();
         env.ledger().with_mut(|l| {
             l.timestamp = 1_700_000_000;
@@ -573,6 +612,206 @@ fn test_votes_isolated_across_trades() {
 #[test]
 fn test_quorum_outcome_variants_are_distinct() {
     assert_ne!(QuorumOutcome::Quorum, QuorumOutcome::Fallback);
+}
+
+// ---------------------------------------------------------------------------
+// Maximum mediator roster and weight ceilings (#453)
+// ---------------------------------------------------------------------------
+
+/// The largest mediator roster these cases exercise.
+///
+/// The contract does not cap the registry; what it caps is *weight* — a
+/// mediator carries at least `DEFAULT_MEDIATOR_WEIGHT` and at most
+/// `MAX_MEDIATOR_WEIGHT` (10), and a dispute settles the moment
+/// `required_weight` backs one outcome. The roster ceiling that follows from
+/// that is a roster of `required_weight` unit-weight mediators: a larger roster
+/// cannot all be *needed*, yet every one of them must still be able to vote
+/// when the outcome splits and the dispute falls through to the deadline
+/// fallback. These cases pin that ceiling at both ends — a roster sized exactly
+/// to `required_weight`, a roster carried entirely by maximum weights, and the
+/// `u32` weight ceiling where quorum can never assemble and the fallback is the
+/// only thing that unsticks the escrow.
+const MAX_MEDIATORS: usize = 20;
+
+/// A roster sized exactly to `required_weight` settles on the final vote, not
+/// before: no early settlement from a partial roster.
+#[test]
+fn test_roster_at_ceiling_settles_on_the_final_vote() {
+    let q = Quorum::new_without_snapshot(100, MAX_MEDIATORS, MAX_MEDIATORS as u32, 2);
+    let amount = THRESHOLD * 4;
+    let tid = q.disputed_trade(amount);
+
+    for idx in 0..MAX_MEDIATORS - 1 {
+        q.vote(tid, idx, 7_000, &std::format!("QmCeiling{idx}"));
+        assert_eq!(
+            q.client().get_trade(&tid).status,
+            TradeStatus::Disputed,
+            "a roster-sized quorum must not settle before the last vote"
+        );
+    }
+
+    q.vote(tid, MAX_MEDIATORS - 1, 7_000, "QmCeilingFinal");
+
+    assert_eq!(q.client().get_trade(&tid).status, TradeStatus::Completed);
+    assert_eq!(
+        q.client().get_dispute_votes(&tid).len(),
+        MAX_MEDIATORS as u32,
+        "every roster vote must be recorded"
+    );
+    q.assert_conservation(amount);
+}
+
+/// A full roster voting at the maximum weight reaches a quorum that is itself
+/// expressed in maximum-weight units — the largest tally the roster can carry.
+#[test]
+fn test_roster_at_ceiling_with_max_weights_reaches_quorum() {
+    let required_weight = (MAX_MEDIATORS as u32) * MAX_MEDIATOR_WEIGHT;
+    let q = Quorum::new_without_snapshot(100, MAX_MEDIATORS, required_weight, 2);
+    for mediator in q.mediators.iter() {
+        q.client().set_mediator_weight(mediator, &MAX_MEDIATOR_WEIGHT);
+    }
+
+    let amount = THRESHOLD * 4;
+    let tid = q.disputed_trade(amount);
+
+    for idx in 0..MAX_MEDIATORS - 1 {
+        q.vote(tid, idx, 6_000, &std::format!("QmMaxWeight{idx}"));
+        assert_eq!(
+            q.client().get_trade(&tid).status,
+            TradeStatus::Disputed,
+            "the roster must still be one vote short of a maximum-weight quorum"
+        );
+    }
+
+    q.vote(tid, MAX_MEDIATORS - 1, 6_000, "QmMaxWeightFinal");
+
+    assert_eq!(q.client().get_trade(&tid).status, TradeStatus::Completed);
+    let votes = q.client().get_dispute_votes(&tid);
+    assert_eq!(votes.len(), MAX_MEDIATORS as u32);
+    for vote in votes.iter() {
+        assert_eq!(vote.weight, MAX_MEDIATOR_WEIGHT);
+    }
+    q.assert_conservation(amount);
+}
+
+/// A roster at the ceiling that splits evenly reaches nothing and must still
+/// unstuck itself: the fallback applies the plurality, and the tie breaks to
+/// the lower seller share so the buyer is refunded more.
+#[test]
+fn test_roster_at_ceiling_split_votes_fall_back_to_the_tie_break() {
+    let q = Quorum::new_without_snapshot(0, MAX_MEDIATORS, MAX_MEDIATORS as u32, 2);
+    let amount = THRESHOLD * 4;
+    let tid = q.disputed_trade(amount);
+
+    for idx in 0..MAX_MEDIATORS {
+        let bps = if idx % 2 == 0 { 8_000 } else { 2_000 };
+        q.vote(tid, idx, bps, &std::format!("QmSplit{idx}"));
+    }
+
+    assert_eq!(q.client().get_trade(&tid).status, TradeStatus::Disputed);
+    assert_eq!(q.client().get_dispute_votes(&tid).len(), MAX_MEDIATORS as u32);
+
+    q.advance(WINDOW_SECS);
+    q.client().resolve_dispute_by_fallback(&tid, &q.buyer);
+
+    assert_eq!(q.client().get_trade(&tid).status, TradeStatus::Completed);
+    // Ten votes each way is a dead heat on weight; the tie broke to 2_000, so
+    // with 50/50 loss sharing and no platform fee the buyer receives 40%.
+    assert_eq!(q.tok().balance(&q.buyer), amount * 4 / 10);
+    assert_eq!(q.tok().balance(&q.seller), amount * 6 / 10);
+    q.assert_conservation(amount);
+}
+
+/// At the weight ceiling the roster can never assemble a quorum, so the
+/// fallback is what keeps the escrow live — and the weight tally must sum
+/// without overflowing `u32`.
+#[test]
+fn test_roster_at_ceiling_cannot_reach_max_weight_and_falls_back() {
+    let q = Quorum::new_without_snapshot(100, MAX_MEDIATORS, u32::MAX, 2);
+    for mediator in q.mediators.iter() {
+        q.client().set_mediator_weight(mediator, &MAX_MEDIATOR_WEIGHT);
+    }
+
+    let amount = THRESHOLD * 4;
+    let tid = q.disputed_trade(amount);
+
+    for idx in 0..MAX_MEDIATORS {
+        q.vote(tid, idx, 6_000, &std::format!("QmWeightCeiling{idx}"));
+    }
+
+    assert_eq!(
+        q.client().get_trade(&tid).status,
+        TradeStatus::Disputed,
+        "a maximum-weight roster still sits below a u32-maximum required weight"
+    );
+
+    q.advance(WINDOW_SECS);
+    q.client().resolve_dispute_by_fallback(&tid, &q.seller);
+
+    assert_eq!(q.client().get_trade(&tid).status, TradeStatus::Completed);
+    let votes = q.client().get_dispute_votes(&tid);
+    assert_eq!(votes.len(), MAX_MEDIATORS as u32);
+    let total_weight: u32 = votes.iter().map(|vote| vote.weight).sum();
+    assert_eq!(
+        total_weight,
+        (MAX_MEDIATORS as u32) * MAX_MEDIATOR_WEIGHT,
+        "the weight tally must accumulate, not overflow"
+    );
+    q.assert_conservation(amount);
+}
+
+/// Once quorum settles, the rest of the roster is locked out — a large roster
+/// must not become a way to keep voting on a decided dispute.
+#[test]
+#[should_panic(expected = "Trade must be in Disputed status")]
+fn test_roster_at_ceiling_cannot_vote_after_quorum_settles() {
+    let q = Quorum::new_without_snapshot(100, MAX_MEDIATORS, 3, 2);
+    let tid = q.disputed_trade(THRESHOLD * 4);
+
+    q.vote(tid, 0, 7_000, "QmA");
+    q.vote(tid, 1, 7_000, "QmB");
+    q.vote(tid, 2, 7_000, "QmC");
+    assert_eq!(q.client().get_trade(&tid).status, TradeStatus::Completed);
+
+    // Seventeen registered mediators remain, and none of them may vote now.
+    q.vote(tid, 3, 7_000, "QmLate");
+}
+
+/// Weight is read when the vote is cast and stays fixed: raising a mediator's
+/// weight afterwards must not retroactively strengthen their earlier vote, or
+/// the audit trail would not describe the tally that decided the dispute.
+#[test]
+fn test_roster_vote_weight_is_snapshotted_at_the_ceiling() {
+    let q = Quorum::new_without_snapshot(100, MAX_MEDIATORS, MAX_MEDIATORS as u32, 2);
+    let amount = THRESHOLD * 4;
+    let tid = q.disputed_trade(amount);
+
+    q.vote(tid, 0, 7_000, "QmSnapshot0");
+    q.client().set_mediator_weight(&q.mediators[0], &MAX_MEDIATOR_WEIGHT);
+    assert_eq!(q.client().get_mediator_weight(&q.mediators[0]), MAX_MEDIATOR_WEIGHT);
+
+    // If the raised weight counted retroactively the quorum would settle after
+    // ten more votes; it must need all twenty recorded unit weights instead.
+    for idx in 1..MAX_MEDIATORS - 1 {
+        q.vote(tid, idx, 7_000, &std::format!("QmSnapshot{idx}"));
+        assert_eq!(
+            q.client().get_trade(&tid).status,
+            TradeStatus::Disputed,
+            "a re-weighted mediator must not settle the dispute early"
+        );
+    }
+
+    q.vote(tid, MAX_MEDIATORS - 1, 7_000, "QmSnapshotFinal");
+    assert_eq!(q.client().get_trade(&tid).status, TradeStatus::Completed);
+
+    let votes = q.client().get_dispute_votes(&tid);
+    assert_eq!(votes.len(), MAX_MEDIATORS as u32);
+    assert_eq!(
+        votes.get(0).unwrap().weight,
+        1,
+        "the weight recorded at vote time is the weight that was tallied"
+    );
+    q.assert_conservation(amount);
 }
 
 /// A resolved dispute cannot be voted on again.

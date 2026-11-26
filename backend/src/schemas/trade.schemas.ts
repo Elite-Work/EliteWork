@@ -73,7 +73,15 @@ export const bulkTradeBodySchema = z.object({
 
 export const listTradesQuerySchema = z.object({
   status: z.nativeEnum(TradeStatus).optional(),
-  page: z.preprocess((val: unknown) => val === undefined ? undefined : Number(val), z.number().int().min(1).default(1)),
+  /**
+   * Opaque cursor for the infinite-scroll trade list (#502). Sending it (or
+   * omitting `page`) selects the cursor response envelope
+   * `{ items, pageInfo }`; `page` remains only for un-migrated clients.
+   */
+  cursor: z.string().trim().min(1).optional(),
+  /** @deprecated offset pagination — use `cursor` instead. No default: an
+   * absent `page` is what selects the cursor envelope. */
+  page: z.preprocess((val: unknown) => val === undefined ? undefined : Number(val), z.number().int().min(1).optional()),
   limit: z.preprocess((val: unknown) => val === undefined ? undefined : Number(val), z.number().int().min(1).max(100).default(20)),
   sort: z.string().optional(),
   /**

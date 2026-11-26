@@ -4,6 +4,7 @@ name: Lighthouse — Critical Pages
 #   /trades/create — trade creation (highest-traffic authenticated page)
 #   /dashboard     — trade stats and recent trades overview
 #   /vault         — escrow vault overview
+#   /reputation    — reputation overview (high traffic)
 #
 # Every page has its own config with its own thresholds and baseline
 # numbers: frontend/lighthouserc.<page>.json. The measured baselines live in
@@ -66,7 +67,7 @@ jobs:
         run: |
           set +e
           status=0
-          for page in trades-create dashboard vault; do
+          for page in trades-create dashboard vault reputation; do
             echo "::group::Lighthouse ${page}"
             npx --yes @lhci/cli@0.15.1 autorun --config=./lighthouserc.${page}.json
             code=$?
@@ -85,7 +86,8 @@ jobs:
             --dir .lighthouseci \
             --page trades-create:/trades/create \
             --page dashboard:/dashboard \
-            --page vault:/vault
+            --page vault:/vault \
+            --page reputation:/reputation
 
       - name: Upload Lighthouse reports
         if: always()

@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+import { z } from "zod";
 import { PrismaClient, TradeStatus } from "@prisma/client";
 import { NextFunction, Response, Router } from "express";
 import { TradeController } from "../controllers/trade.controller";
@@ -8,7 +10,7 @@ import { TradeAccessDeniedError, TradeService } from "../services/trade.service"
 import { EncryptionService } from "../services/encryption.service";
 import { getAdminAllowlistLowercase } from "../lib/accessControl";
 import { validateRequest } from "../middleware/validateRequest";
-import { idempotencyMiddleware } from "../middleware/idempotency";
+import { createIdempotencyMiddleware, idempotencyMiddleware } from "../middleware/idempotency";
 import { 
   createTradeSchema, 
   bulkTradeBodySchema,
@@ -18,12 +20,52 @@ import {
 } from "../schemas/trade.schemas";
 import { RATE_LIMIT_CONFIG } from "../config/rateLimit";
 import { createWalletRateLimiter } from "../lib/rateLimit";
+import { CURSOR_DEPRECATION_WARNING, InvalidCursorError } from "../lib/cursorPagination";
+import { buildTradeReceiptJson, generateTradeReceiptPdf } from "../services/tradeReceipt.service";
+
+const releaseBodySchema = z.object({ tradeId: tradeIdParamSchema.shape.id });
+
+const scopedReleaseIdempotency = createIdempotencyMiddleware((req: AuthRequest) => {
+  const wallet = req.user?.walletAddress?.trim();
+  if (!wallet) return undefined;
+  const scope = createHash("sha256")
+    .update(wallet)
+    .digest("hex");
+  return `escrow-release:${scope}`;
+});
+
+function releaseIdempotency(req: AuthRequest, res: Response, next: NextFunction) {
+  // Both URLs identify the same operation by trade ID. The release handler
+  // builds the transaction from the trade and the authenticated caller.
+  req.body = { tradeId: req.params.id };
+  return scopedReleaseIdempotency(req, res, next);
+}
+
+export function createEscrowFundsReleaseRouter(prisma: PrismaClient = defaultPrisma) {
+  const router = Router();
+  const controller = new TradeController(new TradeService(prisma));
+
+  router.post(
+    "/release",
+    authMiddleware,
+    validateRequest({ body: releaseBodySchema }),
+    (req, _res, next) => {
+      req.params.id = req.body.tradeId;
+      next();
+    },
+    releaseIdempotency,
+    controller.releaseFunds,
+  );
+
+  return router;
+}
 
 export function createTradeRouter(prisma: PrismaClient = defaultPrisma) {
   const router = Router();
   const tradeService = new TradeService(prisma);
   const tradeController = new TradeController(tradeService);
   const disputeLimiter = createWalletRateLimiter(RATE_LIMIT_CONFIG.dispute);
+  const receiptLimiter = createWalletRateLimiter(RATE_LIMIT_CONFIG.tradeExport);
 
   const requireWalletFromJwt = (req: AuthRequest, res: Response): string | null => {
     const addr = req.user?.walletAddress?.trim();
@@ -66,11 +108,11 @@ export function createTradeRouter(prisma: PrismaClient = defaultPrisma) {
   );
 
   router.post(
-    "/:id/release", 
-    authMiddleware, 
-    idempotencyMiddleware,
+    "/:id/release",
+    authMiddleware,
     validateRequest({ params: tradeIdParamSchema }),
-    tradeController.releaseFunds
+    releaseIdempotency,
+    tradeController.releaseFunds,
   );
 
   router.post(
@@ -93,7 +135,7 @@ export function createTradeRouter(prisma: PrismaClient = defaultPrisma) {
       }
 
       try {
-        const { status, page, limit, sort, q } = req.query as any;
+        const { status, page, limit, sort, q, cursor } = req.query as any;
 
         const result = await tradeService.listUserTrades(callerAddress, {
           status,
@@ -101,10 +143,21 @@ export function createTradeRouter(prisma: PrismaClient = defaultPrisma) {
           limit,
           sort,
           q,
+          cursor,
         });
+
+        // Offset pagination is deprecated now that cursor mode is the default
+        // (#502); tell legacy clients to migrate.
+        if (cursor === undefined && page !== undefined) {
+          res.setHeader("Warning", CURSOR_DEPRECATION_WARNING);
+        }
 
         res.status(200).json(result);
       } catch (error) {
+        if (error instanceof InvalidCursorError) {
+          res.status(400).json({ error: error.message });
+          return;
+        }
         return next(error);
       }
     }
@@ -189,11 +242,93 @@ export function createTradeRouter(prisma: PrismaClient = defaultPrisma) {
     },
   );
 
+  /**
+   * Trade receipt (#500, #499). Backs the frontend's download button and the
+   * mobile share sheet; any party to the trade may fetch it. The receipt is a
+   * snapshot of the off-chain record plus a QR/link to the on-chain settlement
+   * when one exists — see `tradeReceipt.service.ts`. Defaults to PDF; pass
+   * `?format=json` for the machine-readable receipt used by integrations.
+   */
+  router.get(
+    "/:id/receipt",
+    authMiddleware,
+    receiptLimiter,
+    validateRequest({ params: tradeIdParamSchema }),
+    async (req: AuthRequest, res, next: NextFunction) => {
+      const callerAddress = requireWalletFromJwt(req, res);
+      if (!callerAddress) {
+        return;
+      }
+
+      try {
+        const format = String(req.query.format ?? "pdf").toLowerCase();
+        if (format !== "pdf" && format !== "json") {
+          res.status(400).json({ error: "format must be 'pdf' or 'json'" });
+          return;
+        }
+
+        const tradeId = req.params.id as string;
+        const trade = await tradeService.getTradeById(tradeId, callerAddress);
+        if (!trade) {
+          res.status(404).json({ error: "Trade not found" });
+          return;
+        }
+
+        const latestPayout = await (prisma as unknown as {
+          payoutIntent?: {
+            findFirst: (args: unknown) => Promise<{ txHash: string | null } | null>;
+          };
+        }).payoutIntent?.findFirst({
+          where: { tradeId: trade.tradeId, txHash: { not: null } },
+          orderBy: { confirmedAt: "desc" },
+        });
+
+        const network =
+          process.env.STELLAR_NETWORK?.toLowerCase() === "mainnet" ? "mainnet" : "testnet";
+        const receipt = {
+          tradeId: trade.tradeId,
+          buyerAddress: trade.buyerAddress,
+          sellerAddress: trade.sellerAddress,
+          amountUsdc: trade.amountUsdc,
+          status: trade.status,
+          createdAt: trade.createdAt,
+          completedAt: trade.completedAt,
+          txHash: latestPayout?.txHash ?? null,
+        };
+
+        if (format === "json") {
+          res.setHeader("Content-Type", "application/json");
+          res.setHeader(
+            "Content-Disposition",
+            `attachment; filename="trade-${trade.tradeId}-receipt.json"`,
+          );
+          res.status(200).json(buildTradeReceiptJson(receipt, network));
+          return;
+        }
+
+        const pdf = await generateTradeReceiptPdf(receipt, network);
+
+        res.setHeader("Content-Type", "application/pdf");
+        res.setHeader(
+          "Content-Disposition",
+          `attachment; filename="trade-${trade.tradeId}-receipt.pdf"`,
+        );
+        res.status(200).send(pdf);
+      } catch (error) {
+        if (error instanceof TradeAccessDeniedError) {
+          res.status(403).json({ error: "Forbidden" });
+          return;
+        }
+        next(error);
+      }
+    }
+  );
+
   router.get(
     "/:id", 
     authMiddleware, 
     validateRequest({ params: tradeIdParamSchema }),
-    async (req: AuthRequest, res) => {
+    async (req: AuthRequest, res, next: NextFunction) => {
       const callerAddress = requireWalletFromJwt(req, res);
       if (!callerAddress) {
         return;
@@ -213,7 +348,7 @@ export function createTradeRouter(prisma: PrismaClient = defaultPrisma) {
           res.status(403).json({ error: "Forbidden" });
           return;
         }
-        throw error; // Let centralized error handler handle it
+        return next(error);
       }
     }
   );

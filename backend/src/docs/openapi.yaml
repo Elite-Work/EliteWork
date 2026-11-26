@@ -51,6 +51,7 @@ tags:
   - name: Admin
   - name: Wallet
   - name: Users
+  - name: Notifications
   - name: Trades
   - name: Disputes
   - name: Dispute Categories
@@ -59,6 +60,7 @@ tags:
   - name: Audit Trail
   - name: Treasury
   - name: Goals
+  - name: Notifications
   - name: Stellar
   - name: Cooperatives
 components:
@@ -172,10 +174,19 @@ components:
           - RELEASED
           - DISPUTED
           - RESOLVED
+    ListTradesCursorQuery:
+      in: query
+      name: cursor
+      required: false
+      description: "Opaque cursor from a previous response's `pageInfo.nextCursor`. Pass it back verbatim to load the next page. When `cursor` is sent (or `page` is omitted) the response uses the cursor envelope `{ items, pageInfo }`."
+      schema:
+        type: string
     ListTradesPageQuery:
       in: query
       name: page
       required: false
+      deprecated: true
+      description: "Legacy offset pagination, kept only for un-migrated clients. Prefer `cursor`; offset requests receive a deprecation `Warning` header and a `pagination` object instead of `pageInfo`."
       schema:
         type: integer
         minimum: 1
@@ -242,7 +253,127 @@ components:
         maxLength: 100
         pattern: "^[a-zA-Z0-9._-]+$"
       example: beta
+    NotificationIdPath:
+      in: path
+      name: id
+      required: true
+      description: In-app notification identifier. Must be a numeric string.
+      schema:
+        type: string
+        pattern: "^\\d+$"
+      example: "42"
   schemas:
+    InAppNotification:
+      type: object
+      required: [id, title, message, type, isRead, metadata, createdAt]
+      properties:
+        id:
+          type: integer
+          example: 42
+        title:
+          type: string
+          example: Trade funded
+        message:
+          type: string
+          example: Trade #4294967297 has been funded.
+        type:
+          type: string
+          description: Notification job type set by the producer. Stored values are not enumerated in the backend.
+          example: in_app
+        isRead:
+          type: boolean
+          example: false
+        metadata:
+          type: object
+          nullable: true
+          additionalProperties: true
+          description: Free-form context set by the notification producer. Shape varies by `type`.
+        createdAt:
+          type: string
+          format: date-time
+    NotificationListResponse:
+      type: object
+      required: [notifications, pagination, unreadCount]
+      properties:
+        notifications:
+          type: array
+          items:
+            $ref: "#/components/schemas/InAppNotification"
+        pagination:
+          type: object
+          required: [page, limit, total, totalPages]
+          properties:
+            page:
+              type: integer
+              example: 1
+            limit:
+              type: integer
+              example: 20
+            total:
+              type: integer
+              example: 57
+            totalPages:
+              type: integer
+              example: 3
+        unreadCount:
+          type: integer
+          example: 5
+    MessageResponse:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+          example: Notification marked as read
+    NotificationReadAllResponse:
+      type: object
+      required: [message, count]
+      properties:
+        message:
+          type: string
+          example: All notifications marked as read
+        count:
+          type: integer
+          description: Number of notifications updated.
+          example: 5
+    NotificationPreferences:
+      type: object
+      description: |-
+        Map of event key to the channels that should receive that event. Channels are limited to `email`, `push`, `in-app` and `sms`, with at most four per event. Event keys are not enumerated by the backend; the example keys are illustrative.
+      additionalProperties:
+        type: array
+        maxItems: 4
+        items:
+          type: string
+          enum: [email, push, in-app, sms]
+      example:
+        trade-funded: [email, push]
+        trade-released: [in-app, sms]
+    NotificationPreferencesResponse:
+      type: object
+      required: [preferences, phoneNumber]
+      properties:
+        preferences:
+          $ref: "#/components/schemas/NotificationPreferences"
+        phoneNumber:
+          type: string
+          nullable: true
+          example: "+2348012345678"
+    NotificationPreferencesUpdateResponse:
+      type: object
+      required: [preferences]
+      properties:
+        preferences:
+          $ref: "#/components/schemas/NotificationPreferences"
+    SmsSettingsRequest:
+      type: object
+      required: [phoneNumber]
+      properties:
+        phoneNumber:
+          type: string
+          pattern: "^\\+[1-9]\\d{7,14}$"
+          description: E.164 phone number. Surrounding whitespace is trimmed before validation. No per-country validation is applied; the SMS provider reports invalid numbers.
+          example: "+2348012345678"
     PilotRegisterRequest:
       type: object
       required:
@@ -810,6 +941,51 @@ components:
           items:
             $ref: "#/components/schemas/PathPaymentRoute"
       required: [routes]
+    ReputationEvent:
+      type: object
+      required: [id, event, impact, impactLabel, timestamp, type]
+      properties:
+        id:
+          type: string
+        event:
+          type: string
+        impact:
+          type: number
+        impactLabel:
+          type: string
+          description: Signed display form of `impact`, e.g. `+5` or `-10`.
+        timestamp:
+          type: string
+          format: date-time
+        type:
+          type: string
+          enum: [trade_completed, trade_initiated, dispute_initiated, dispute_resolved, dispute_involved, account_created]
+    ReputationResponse:
+      type: object
+      required: [trustScore, totalTrades, completedTrades, disputedTrades, successRate, history]
+      properties:
+        trustScore:
+          type: integer
+          minimum: 0
+          maximum: 100
+        totalTrades:
+          type: integer
+          minimum: 0
+        completedTrades:
+          type: integer
+          minimum: 0
+        disputedTrades:
+          type: integer
+          minimum: 0
+        successRate:
+          type: number
+          minimum: 0
+          maximum: 100
+        history:
+          type: array
+          maxItems: 20
+          items:
+            $ref: "#/components/schemas/ReputationEvent"
     UserProfile:
       type: object
       additionalProperties: true
@@ -845,6 +1021,60 @@ components:
       example:
         displayName: Amana Trader
         avatarUrl: https://cdn.example.com/avatar.png
+    UserReputationResponse:
+      type: object
+      required: [trustScore, totalTrades, completedTrades, disputedTrades, successRate, history]
+      properties:
+        trustScore:
+          type: number
+        totalTrades:
+          type: integer
+        completedTrades:
+          type: integer
+        disputedTrades:
+          type: integer
+        successRate:
+          type: number
+        history:
+          type: array
+          maxItems: 20
+          items:
+            type: object
+            additionalProperties: true
+    NotificationChannel:
+      type: string
+      enum: [email, push, in-app, sms]
+    NotificationPreferencesResponse:
+      type: object
+      required: [preferences, phoneNumber]
+      properties:
+        preferences:
+          type: object
+          additionalProperties:
+            type: array
+            maxItems: 4
+            items:
+              $ref: "#/components/schemas/NotificationChannel"
+        phoneNumber:
+          type: string
+          nullable: true
+    NotificationPreferencesUpdateRequest:
+      type: object
+      additionalProperties:
+        type: array
+        maxItems: 4
+        items:
+          $ref: "#/components/schemas/NotificationChannel"
+      example:
+        trade_funded: [email, in-app]
+    SmsSettingsRequest:
+      type: object
+      required: [phoneNumber]
+      properties:
+        phoneNumber:
+          type: string
+          pattern: "^\\+[1-9]\\d{7,14}$"
+          example: "+2348012345678"
     TradeMutationRequest:
       type: object
       properties:
@@ -909,8 +1139,23 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/TradeSummary"
+        pageInfo:
+          type: object
+          description: Present in cursor mode (the default, and whenever `cursor` is sent).
+          properties:
+            nextCursor:
+              type: string
+              nullable: true
+              description: Pass as `cursor` to load the next page; null on the last page.
+            hasNextPage:
+              type: boolean
+            limit:
+              type: integer
+          required: [nextCursor, hasNextPage, limit]
         pagination:
           type: object
+          deprecated: true
+          description: Legacy offset envelope returned only when `page` is supplied without a cursor.
           properties:
             page:
               type: integer
@@ -920,6 +1165,7 @@ components:
               type: integer
             totalPages:
               type: integer
+          required: [page, limit, total, totalPages]
       required: [items]
     BulkTradeRequest:
       type: object
@@ -1268,6 +1514,33 @@ components:
         - overallProgressPercentage
         - goals
         - timestamp
+    StellarAsset:
+      type: object
+      required: [code, issuer, supply, authRequired, authRevocable, authClawbackEnabled, numAccounts]
+      properties:
+        code:
+          type: string
+          description: Asset code, defaulting to XLM when Horizon omits it.
+        issuer:
+          type: string
+          description: Asset issuer account, or an empty string when Horizon omits it.
+        supply:
+          type: string
+          description: Asset amount or the authorized-balance total.
+        authRequired:
+          type: boolean
+        authRevocable:
+          type: boolean
+        authClawbackEnabled:
+          type: boolean
+        numAccounts:
+          type: integer
+    StellarError:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
   responses:
     UnauthorizedError:
       description: Missing, invalid, revoked, or semantically invalid bearer token.
@@ -1337,6 +1610,61 @@ paths:
           $ref: "#/components/responses/LegacyValidationError"
         "500":
           $ref: "#/components/responses/InternalError"
+  /api/cooperatives/{id}/trades:
+    get:
+      tags: [Cooperatives]
+      summary: List trades touching any member wallet of a cooperative
+      description: |-
+        Read-only view for cooperative members (and global admins). Returns
+        trades where the buyer or seller is a member of the cooperative.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Cooperative identifier.
+          schema:
+            type: string
+        - $ref: "#/components/parameters/ListTradesStatusQuery"
+        - $ref: "#/components/parameters/ListTradesPageQuery"
+        - $ref: "#/components/parameters/ListTradesLimitQuery"
+        - $ref: "#/components/parameters/ListTradesSortQuery"
+      responses:
+        "200":
+          description: Paginated cooperative trade list returned.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - cooperativeId
+                  - items
+                  - pagination
+                properties:
+                  cooperativeId:
+                    type: string
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/TradeSummary"
+                  pagination:
+                    type: object
+                    properties:
+                      page:
+                        type: integer
+                      limit:
+                        type: integer
+                      total:
+                        type: integer
+                      totalPages:
+                        type: integer
+        "400":
+          $ref: "#/components/responses/LegacyValidationError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
   /api/admin/audit:
     get:
       tags: [Admin]
@@ -1748,6 +2076,172 @@ paths:
           $ref: "#/components/responses/NotFoundError"
         "500":
           $ref: "#/components/responses/InternalError"
+  /stellar/account/{address}/balance:
+    get:
+      tags: [Stellar]
+      summary: Get the balances for a Stellar account
+      description: Returns an empty balance list when the account is not funded.
+      parameters:
+        - in: path
+          name: address
+          required: true
+          schema:
+            type: string
+            minLength: 56
+            maxLength: 56
+            pattern: "^G"
+      responses:
+        "200":
+          description: Account balances, or an empty list for an unfunded account.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [address, balances]
+                properties:
+                  address:
+                    type: string
+                  balances:
+                    type: array
+                    items:
+                      type: object
+                      required: [assetType, assetCode, issuer, balance, limit]
+                      properties:
+                        assetType:
+                          type: string
+                          description: Horizon asset type, including native and liquidity-pool shares.
+                        assetCode:
+                          type: string
+                          description: Asset code, or an empty string for liquidity-pool shares.
+                        issuer:
+                          type: string
+                          nullable: true
+                          description: Asset issuer, liquidity pool ID, or null for native XLM.
+                        balance:
+                          type: string
+                        limit:
+                          type: string
+                          nullable: true
+        "400":
+          description: The address is missing or has an invalid shape.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StellarError"
+        "502":
+          description: Horizon could not provide account data.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StellarError"
+  /stellar/account/create:
+    post:
+      tags: [Stellar]
+      summary: Create a Stellar keypair
+      description: Creates a keypair and returns its secret encrypted by the backend. On testnet, `fund: true` requests a Friendbot airdrop; funding failure does not prevent account creation.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                fund:
+                  type: boolean
+                  description: Request testnet funding through Friendbot.
+      responses:
+        "201":
+          description: The account was created. `funded` indicates whether a testnet airdrop succeeded.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [publicKey, encryptedSecretKey, funded]
+                properties:
+                  publicKey:
+                    type: string
+                  encryptedSecretKey:
+                    type: string
+                    description: Encrypted Stellar secret key; decrypt using the backend's configured key.
+                  funded:
+                    type: boolean
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /stellar/assets:
+    get:
+      tags: [Stellar]
+      summary: List Stellar assets
+      parameters:
+        - in: query
+          name: issuer
+          required: false
+          schema:
+            type: string
+          description: Limit results to assets issued by this Stellar account.
+      responses:
+        "200":
+          description: Up to 200 matching assets and whether the response came from cache.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [assets, cached]
+                properties:
+                  assets:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/StellarAsset"
+                  cached:
+                    type: boolean
+        "502":
+          description: Horizon could not provide asset data.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StellarError"
+  /stellar/assets/{code}:
+    get:
+      tags: [Stellar]
+      summary: Find Stellar assets by asset code
+      parameters:
+        - in: path
+          name: code
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: issuer
+          required: false
+          schema:
+            type: string
+          description: Limit results to assets issued by this Stellar account.
+      responses:
+        "200":
+          description: Matching assets and whether the response came from cache.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [assets, cached]
+                properties:
+                  assets:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/StellarAsset"
+                  cached:
+                    type: boolean
+        "404":
+          description: No assets were found for the requested code.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StellarError"
+        "502":
+          description: Horizon could not provide asset data.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StellarError"
   /stellar/fees:
     get:
       tags: [Stellar]
@@ -1779,6 +2273,13 @@ paths:
             application/json:
               schema:
                 type: object
+                required:
+                  - feeCharged
+                  - maxFee
+                  - ledger
+                  - lastLedgerBaseFee
+                  - ledgerCapacityUsage
+                  - recommended
                 properties:
                   feeCharged:
                     type: object
@@ -1797,6 +2298,17 @@ paths:
                     format: float
                   recommended:
                     type: object
+                    required:
+                      - perOperationFee
+                      - transactionFee
+                      - operations
+                      - percentile
+                      - percentileFee
+                      - multiplier
+                      - congested
+                      - cappedAtMax
+                      - minStroops
+                      - maxStroops
                     properties:
                       perOperationFee:
                         type: integer
@@ -1826,10 +2338,77 @@ paths:
           content:
             application/json:
               schema:
+                $ref: "#/components/schemas/StellarError"
+  /stellar/tx/{hash}/status:
+    get:
+      tags: [Stellar]
+      summary: Get the status of a Stellar transaction
+      description: Returns success or failure details for a known transaction, or pending when Horizon does not yet know the hash.
+      parameters:
+        - in: path
+          name: hash
+          required: true
+          schema:
+            type: string
+            minLength: 64
+            maxLength: 64
+          description: Stellar transaction hash.
+      responses:
+        "200":
+          description: The transaction is confirmed.
+          content:
+            application/json:
+              schema:
                 type: object
+                required: [status, resultCodes, ledger, hash, createdAt]
                 properties:
-                  error:
+                  status:
                     type: string
+                    enum: [success, failed]
+                  resultCodes:
+                    type: object
+                    required: [transaction, operations]
+                    properties:
+                      transaction:
+                        type: string
+                      operations:
+                        type: array
+                        items:
+                          type: string
+                  ledger:
+                    type: integer
+                  hash:
+                    type: string
+                  createdAt:
+                    type: string
+                    format: date-time
+        "400":
+          description: The transaction hash is missing or has an invalid length.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StellarError"
+        "404":
+          description: The transaction is not yet known to Horizon and may still be pending.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, hash, message]
+                properties:
+                  status:
+                    type: string
+                    enum: [pending]
+                  hash:
+                    type: string
+                  message:
+                    type: string
+        "502":
+          description: Horizon could not provide transaction status.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StellarError"
   /health:
     get:
       tags: [Health]
@@ -2087,6 +2666,68 @@ paths:
           $ref: "#/components/responses/UnauthorizedError"
         "500":
           $ref: "#/components/responses/InternalError"
+    delete:
+      tags: [Users]
+      summary: Erase the authenticated user's data (irreversible)
+      description: "Deletes the caller's user record and related data in a single transaction. There is no confirmation step; the request itself is the confirmation. Error code references: `AUTH_ERROR`, `NOT_FOUND`, `INFRA_ERROR`, `INTERNAL_ERROR`."
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: User data erased. Body summarises what was removed.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "404":
+          description: No user record exists for the caller.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+              example:
+                error: User not found
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /users/me/export:
+    get:
+      tags: [Users]
+      summary: Export the authenticated user's stored data
+      description: "Returns the caller's stored user record, including trades where they are buyer or seller. Error code references: `AUTH_ERROR`, `INFRA_ERROR`, `INTERNAL_ERROR`."
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Export generated.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /users/me/reputation:
+    get:
+      tags: [Users]
+      summary: Fetch the authenticated user's reputation
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Reputation summary returned.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserReputationResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "500":
+          $ref: "#/components/responses/InternalError"
   /users/{address}:
     get:
       tags: [Users]
@@ -2109,6 +2750,110 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
               example:
                 error: User not found
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /users/me/reputation:
+    get:
+      tags: [Users]
+      summary: Fetch the authenticated user's reputation
+      description: "Error code references: `AUTH_ERROR`, `INTERNAL_ERROR`."
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Reputation summary returned.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReputationResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /users/{address}/reputation:
+    get:
+      tags: [Users]
+      summary: Fetch a public reputation summary by Stellar address
+      description: "Public endpoint, no authentication. Error code references: `VALIDATION_ERROR`, `INTERNAL_ERROR`."
+      parameters:
+        - $ref: "#/components/parameters/UserAddressPath"
+      responses:
+        "200":
+          description: Reputation summary returned.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserReputationResponse"
+        "400":
+          $ref: "#/components/responses/LegacyValidationError"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /notifications/preferences:
+    get:
+      tags: [Notifications]
+      summary: Fetch the authenticated user's notification preferences
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Preferences and SMS number returned. Missing records return empty defaults.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationPreferencesResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    put:
+      tags: [Notifications]
+      summary: Update notification preferences per event
+      description: Keys present in the body replace the stored value for that event; other events are left unchanged.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NotificationPreferencesUpdateRequest"
+      responses:
+        "200":
+          description: Merged preferences returned.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationPreferencesResponse"
+        "400":
+          $ref: "#/components/responses/LegacyValidationError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /notifications/sms-settings:
+    put:
+      tags: [Notifications]
+      summary: Set the SMS number for trade notifications
+      description: The number is set explicitly by the user and is never inferred from profile or wallet data.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SmsSettingsRequest"
+      responses:
+        "200":
+          description: Saved SMS number and current preferences returned.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationPreferencesResponse"
+        "400":
+          $ref: "#/components/responses/LegacyValidationError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
         "500":
           $ref: "#/components/responses/InternalError"
   /dispute-categories:
@@ -2387,11 +3132,12 @@ paths:
     get:
       tags: [Trades]
       summary: List the authenticated user's trades
-      description: "Error code references: `AUTH_ERROR`, `VALIDATION_ERROR`, `INTERNAL_ERROR`."
+      description: "Cursor-paginated by default: send `cursor` (from the previous page's `pageInfo.nextCursor`) and read `pageInfo` for the next one. The caller's watchlisted trades are still returned first. The legacy `page` parameter is deprecated and switches the response to the old `pagination` envelope.\nError code references: `AUTH_ERROR`, `VALIDATION_ERROR`, `INTERNAL_ERROR`."
       security:
         - bearerAuth: []
       parameters:
         - $ref: "#/components/parameters/ListTradesStatusQuery"
+        - $ref: "#/components/parameters/ListTradesCursorQuery"
         - $ref: "#/components/parameters/ListTradesPageQuery"
         - $ref: "#/components/parameters/ListTradesLimitQuery"
         - $ref: "#/components/parameters/ListTradesSortQuery"
@@ -2450,6 +3196,146 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "500":
           $ref: "#/components/responses/InternalError"
+  /trades/export:
+    get:
+      tags: [Trades]
+      summary: Export the authenticated user's trades as JSON, CSV, or a single-trade PDF receipt
+      description: "Returns trades where the authenticated caller is either buyer or seller. Supports `format=json` (default, paginated), `format=csv` (UTF-8 CSV with BOM), or `format=pdf` (single-trade PDF receipt, requires `tradeId`).\nError code references: `AUTH_ERROR`, `VALIDATION_ERROR`, `NOT_FOUND`, `INTERNAL_ERROR`."
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: format
+          in: query
+          required: false
+          description: Export format. Defaults to json.
+          schema:
+            type: string
+            enum: [csv, json, pdf]
+            default: json
+        - name: status
+          in: query
+          required: false
+          description: Optional trade status filter.
+          schema:
+            type: string
+            enum:
+              - PENDING_SIGNATURE
+              - CREATED
+              - FUNDED
+              - DELIVERED
+              - COMPLETED
+              - DISPUTED
+              - CANCELLED
+              - EXPIRED
+        - name: dateFrom
+          in: query
+          required: false
+          description: Filter trades created at or after this ISO 8601 timestamp.
+          schema:
+            type: string
+            format: date-time
+        - name: dateTo
+          in: query
+          required: false
+          description: Filter trades created at or before this ISO 8601 timestamp.
+          schema:
+            type: string
+            format: date-time
+        - name: page
+          in: query
+          required: false
+          description: Page number when format=json.
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          required: false
+          description: Page size when format=json (max 100).
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+        - name: tradeId
+          in: query
+          required: false
+          description: Trade identifier. Required when format=pdf.
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        "200":
+          description: Exported trades returned as JSON (default), CSV (`text/csv`), or PDF (`application/pdf`).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, pagination]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        tradeId:
+                          type: string
+                        buyerAddress:
+                          type: string
+                        sellerAddress:
+                          type: string
+                        amountUsdc:
+                          type: string
+                        status:
+                          type: string
+                        fundedAt:
+                          type: string
+                          format: date-time
+                          nullable: true
+                        deliveredAt:
+                          type: string
+                          format: date-time
+                          nullable: true
+                        completedAt:
+                          type: string
+                          format: date-time
+                          nullable: true
+                        createdAt:
+                          type: string
+                          format: date-time
+                        updatedAt:
+                          type: string
+                          format: date-time
+                  pagination:
+                    type: object
+                    required: [page, limit, total, totalPages]
+                    properties:
+                      page:
+                        type: integer
+                      limit:
+                        type: integer
+                      total:
+                        type: integer
+                      totalPages:
+                        type: integer
+            text/csv:
+              schema:
+                type: string
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        "400":
+          $ref: "#/components/responses/LegacyValidationError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+        "429":
+          description: Rate limit exceeded.
+        "500":
+          $ref: "#/components/responses/InternalError"
   /trades/stats:
     get:
       tags: [Trades]
@@ -2493,6 +3379,82 @@ paths:
           $ref: "#/components/responses/ForbiddenError"
         "404":
           $ref: "#/components/responses/NotFoundError"
+  /trades/{id}/receipt:
+    get:
+      tags: [Trades]
+      summary: Download a trade receipt (PDF or JSON)
+      description: "Returns a receipt for a trade the caller is party to. The default PDF includes the trade id, parties, amount, status, and a QR code linking to the on-chain record (or a stellar.expert lookup when there is no settlement transaction yet). Pass `?format=json` for the same snapshot as a machine-readable document. Used by the web download button, the mobile share sheet, and integrations.\nError code references: `AUTH_ERROR`, `VALIDATION_ERROR`, `DOMAIN_ERROR`, `NOT_FOUND`, `INTERNAL_ERROR`."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/TradeIdPath"
+        - name: format
+          in: query
+          required: false
+          description: Receipt encoding. Defaults to pdf.
+          schema:
+            type: string
+            enum: [pdf, json]
+            default: pdf
+      responses:
+        "200":
+          description: Trade receipt returned as a PDF (default) or JSON document.
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+            application/json:
+              schema:
+                type: object
+                required:
+                  - tradeId
+                  - buyerAddress
+                  - sellerAddress
+                  - amountUsdc
+                  - status
+                  - createdAt
+                  - completedAt
+                  - txHash
+                  - onChainRecordUrl
+                  - network
+                properties:
+                  tradeId:
+                    type: string
+                  buyerAddress:
+                    type: string
+                  sellerAddress:
+                    type: string
+                  amountUsdc:
+                    type: string
+                  status:
+                    type: string
+                  createdAt:
+                    type: string
+                    format: date-time
+                  completedAt:
+                    type: string
+                    format: date-time
+                    nullable: true
+                  txHash:
+                    type: string
+                    nullable: true
+                  onChainRecordUrl:
+                    type: string
+                    format: uri
+                  network:
+                    type: string
+                    enum: [mainnet, testnet]
+        "400":
+          $ref: "#/components/responses/LegacyValidationError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+        "500":
+          $ref: "#/components/responses/InternalError"
   /trades/{id}/deposit:
     post:
       tags: [Trades]
@@ -3398,6 +4360,176 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/GoalsAnalyticsResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /notifications:
+    get:
+      tags: [Notifications]
+      summary: List the authenticated user's in-app notifications
+      description: |-
+        Returns notifications newest first. `unreadCount` counts all unread notifications for the caller, not only the returned page.
+        `unreadOnly` uses JavaScript Boolean coercion, so any non-empty value (including `false`) is treated as `true`.
+        Error code references: `VALIDATION_ERROR`, `INTERNAL_ERROR`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: unreadOnly
+          required: false
+          schema:
+            type: boolean
+            default: false
+          description: Return only unread notifications.
+        - in: query
+          name: page
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - in: query
+          name: limit
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        "200":
+          description: Notification page returned.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationListResponse"
+        "400":
+          $ref: "#/components/responses/LegacyValidationError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /notifications/{id}/read:
+    patch:
+      tags: [Notifications]
+      summary: Mark one in-app notification as read
+      description: |-
+        Only the notification's owner may mark it as read. Marking an already-read notification is a no-op that returns 200 with a different message.
+        Error code references: `VALIDATION_ERROR`, `INTERNAL_ERROR`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/NotificationIdPath"
+      responses:
+        "200":
+          description: Notification marked as read, or already read.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "400":
+          $ref: "#/components/responses/LegacyValidationError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /notifications/read-all:
+    post:
+      tags: [Notifications]
+      summary: Mark all of the authenticated user's unread notifications as read
+      description: |-
+        Returns the number of notifications updated. Does not accept a request body.
+        Error code references: `INTERNAL_ERROR`.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Unread notifications marked as read.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationReadAllResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /notifications/preferences:
+    get:
+      tags: [Notifications]
+      summary: Get the authenticated user's notification preferences
+      description: |-
+        Returns an empty `preferences` object when none are stored or the stored value fails validation. `phoneNumber` is `null` until set via `PUT /notifications/sms-settings`.
+        Error code references: `INTERNAL_ERROR`.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Preferences returned.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationPreferencesResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    put:
+      tags: [Notifications]
+      summary: Update notification preferences per event
+      description: |-
+        Merges the body into the stored preferences at the event-key level: each key in the body replaces that event's channel list, and keys not in the body are kept. Send an empty array to disable all channels for an event.
+        Error code references: `VALIDATION_ERROR`, `INTERNAL_ERROR`.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NotificationPreferences"
+      responses:
+        "200":
+          description: Merged preferences returned.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationPreferencesUpdateResponse"
+        "400":
+          $ref: "#/components/responses/LegacyValidationError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /notifications/sms-settings:
+    put:
+      tags: [Notifications]
+      summary: Set the phone number used for SMS notifications
+      description: |-
+        The phone number is never inferred from the wallet or profile; the user must set it explicitly. Channel opt-in still lives in `preferences`.
+        The `preferences` field in the response reflects the stored value before this update.
+        Error code references: `VALIDATION_ERROR`, `INTERNAL_ERROR`.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SmsSettingsRequest"
+      responses:
+        "200":
+          description: SMS phone number saved.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationPreferencesResponse"
+        "400":
+          $ref: "#/components/responses/LegacyValidationError"
         "401":
           $ref: "#/components/responses/UnauthorizedError"
         "500":

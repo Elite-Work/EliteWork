@@ -90,7 +90,7 @@ export function RepScoreRing({
         </text>
       </svg>
 
-      <span className={`${labelSize} text-text-muted font-medium`}>
+      <span className={`${labelSize} text-text-secondary font-medium`}>
         / {maxScore}
       </span>
     </div>

@@ -35,6 +35,42 @@ export function buildOnChainRecordUrl(
   return trade.txHash ? `${base}/tx/${trade.txHash}` : `${base}/search?term=${encodeURIComponent(trade.tradeId)}`;
 }
 
+/**
+ * Machine-readable receipt payload (#499). Mirrors the PDF's fields plus the
+ * resolved on-chain record URL so a client can render or archive the receipt
+ * without parsing a PDF. Dates are ISO-8601 strings for stable JSON output.
+ */
+export interface TradeReceiptJson {
+  tradeId: string;
+  buyerAddress: string;
+  sellerAddress: string;
+  amountUsdc: string;
+  status: string;
+  createdAt: string;
+  completedAt: string | null;
+  txHash: string | null;
+  onChainRecordUrl: string;
+  network: "mainnet" | "testnet";
+}
+
+export function buildTradeReceiptJson(
+  trade: TradeReceiptData,
+  network: "mainnet" | "testnet" = "testnet",
+): TradeReceiptJson {
+  return {
+    tradeId: trade.tradeId,
+    buyerAddress: trade.buyerAddress,
+    sellerAddress: trade.sellerAddress,
+    amountUsdc: trade.amountUsdc,
+    status: trade.status,
+    createdAt: trade.createdAt.toISOString(),
+    completedAt: trade.completedAt ? trade.completedAt.toISOString() : null,
+    txHash: trade.txHash ?? null,
+    onChainRecordUrl: buildOnChainRecordUrl(trade, network),
+    network,
+  };
+}
+
 function formatUsdc(amountUsdc: string): string {
   const value = Number(amountUsdc);
   return Number.isFinite(value) ? `$${value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : amountUsdc;

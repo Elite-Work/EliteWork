@@ -449,7 +449,7 @@ export default function SettingsPage() {
               Save preferences
             </button>
             {saveSuccess && (
-              <span className="text-sm text-emerald flex items-center gap-1.5">
+              <span role="status" className="text-sm text-emerald flex items-center gap-1.5">
                 <svg
                   className="w-4 h-4"
                   viewBox="0 0 16 16"

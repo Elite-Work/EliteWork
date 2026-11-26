@@ -323,6 +323,7 @@ Created → Funded → Delivered → Completed
 | Signed audit export (Ed25519) | Backend `/history/verify` | ✅ Implemented |
 | Optimistic concurrency on status | Backend event processor | ✅ Implemented |
 | Schema validation (Zod) | Backend middleware | ✅ Implemented |
+| CORS origin allowlist | `backend/src/app.ts` – `buildCorsOptions()` via `CORS_ORIGINS` | ✅ Implemented — see [CORS policy](./cors-policy.md) |
 | Structured error taxonomy | Backend error handler | ✅ Implemented |
 | Dispute bond / stake | Contract | ❌ Not implemented |
 | Seller acceptance of trade terms | Contract | ❌ Not implemented |
@@ -362,6 +363,7 @@ Created → Funded → Delivered → Completed
 ## 7. References
 
 - [Soroban Security Best Practices](https://developers.stellar.org/docs/smart-contracts)
+- [Backend CORS Policy](./cors-policy.md)
 - [Amana Backend Reliability Layer](./backend.md)
 - [Amana Escrow Contract README](../contracts/amana_escrow/README.md)
 - OWASP Smart Contract Top 10

@@ -5,6 +5,11 @@ import {
   UserWatchlist,
 } from "@prisma/client";
 import { TradeWatchlistService } from "../services/trade.watchlist.service";
+import { notificationQueue } from "../jobs/queue";
+
+jest.mock("../jobs/queue", () => ({
+  notificationQueue: { add: jest.fn().mockResolvedValue({}) },
+}));
 
 describe("TradeWatchlistService", () => {
   const trade: Trade = {
@@ -51,6 +56,12 @@ describe("TradeWatchlistService", () => {
         [args: Prisma.UserWatchlistFindManyArgs]
       >(),
     },
+    inAppNotification: {
+      create: jest.fn().mockResolvedValue({}),
+    },
+    notificationPreference: {
+      findUnique: jest.fn().mockResolvedValue(null),
+    },
   };
   const service = new TradeWatchlistService(
     prisma as unknown as WatchlistDatabase,
@@ -80,5 +91,75 @@ describe("TradeWatchlistService", () => {
     expect(prisma.userWatchlist.findMany).toHaveBeenCalledWith(expect.objectContaining({
       where: { userAddress: "g-user" },
     }));
+  });
+
+  describe("dispatchTradeNotification (#497)", () => {
+    const findWatchers = prisma.userWatchlist.findMany as unknown as jest.Mock;
+    const createInApp = prisma.inAppNotification.create as jest.Mock;
+    const findPreference = prisma.notificationPreference.findUnique as jest.Mock;
+
+    const update = {
+      eventKey: "trade-funded",
+      title: "Trade funded",
+      message: "Watched trade trade-1 has been funded.",
+      metadata: { status: "FUNDED" },
+      eventId: "evt-1",
+    };
+
+    it("writes an in-app notification for every watcher", async () => {
+      findWatchers.mockResolvedValue([
+        { userAddress: "g-user" },
+        { userAddress: "g-seller" },
+      ]);
+
+      const result = await service.dispatchTradeNotification("trade-1", update);
+
+      expect(result).toEqual({ notified: 2, pushQueued: 0 });
+      expect(createInApp).toHaveBeenCalledTimes(2);
+      expect(createInApp).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          userAddress: "g-user",
+          title: "Trade funded",
+          type: "trade",
+          metadata: expect.objectContaining({
+            tradeId: "trade-1",
+            eventKey: "trade-funded",
+            status: "FUNDED",
+          }),
+        }),
+      });
+    });
+
+    it("queues push only when that watcher opted into the push channel", async () => {
+      findWatchers.mockResolvedValue([
+        { userAddress: "g-user" },
+        { userAddress: "g-seller" },
+      ]);
+      findPreference.mockImplementation(async ({ where }: { where: { userAddress: string } }) =>
+        where.userAddress === "g-user"
+          ? { preferences: { "trade-funded": ["in-app", "push"] } }
+          : { preferences: { "trade-funded": ["in-app"] } },
+      );
+
+      const result = await service.dispatchTradeNotification("trade-1", update);
+
+      expect(result).toEqual({ notified: 2, pushQueued: 1 });
+      expect(notificationQueue.add).toHaveBeenCalledTimes(1);
+      expect(notificationQueue.add).toHaveBeenCalledWith(
+        "trade-funded-push",
+        expect.objectContaining({ userAddress: "g-user", type: "push" }),
+        { jobId: "evt-1:g-user:push" },
+      );
+    });
+
+    it("does not enqueue push when no preferences are stored", async () => {
+      findWatchers.mockResolvedValue([{ userAddress: "g-user" }]);
+      findPreference.mockResolvedValue(null);
+
+      const result = await service.dispatchTradeNotification("trade-1", update);
+
+      expect(result).toEqual({ notified: 1, pushQueued: 0 });
+      expect(notificationQueue.add).not.toHaveBeenCalled();
+    });
   });
 });

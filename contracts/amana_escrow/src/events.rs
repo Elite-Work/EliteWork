@@ -369,3 +369,29 @@ pub struct ContractUpgradeQueued {
     pub queued_at: u64,
     pub execute_after: u64,
 }
+
+// ---------------------------------------------------------------------------
+// Per-trade emergency freeze events (Issue #498)
+// ---------------------------------------------------------------------------
+
+/// Emitted when an admin freezes a single trade.
+///
+/// A per-trade freeze stops deposit, release, dispute settlement and clawback
+/// for that trade while leaving the rest of the contract operable — the
+/// narrow-scope counterpart to the global guardian pause.
+#[contractevent(topics = ["TRDFRZ"])]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TradeFrozenEvent {
+    pub trade_id: u64,
+    pub admin: Address,
+    pub timestamp: u64,
+}
+
+/// Emitted when an admin lifts a per-trade freeze so the trade can settle.
+#[contractevent(topics = ["TRDUNF"])]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TradeUnfrozenEvent {
+    pub trade_id: u64,
+    pub admin: Address,
+    pub timestamp: u64,
+}

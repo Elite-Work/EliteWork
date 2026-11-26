@@ -30,7 +30,7 @@ export function createLedgerRouter(): Router {
         sequence: latest.sequence,
         hash: latest.hash,
         closedAt: latest.closed_at,
-        totalOps: latest.total_operations,
+        totalOps: latest.operation_count,
         protocolVersion: latest.protocol_version,
         txCount: latest.successful_transaction_count,
       });

@@ -41,11 +41,12 @@ const DARK: Palette = {
 };
 
 /** Miniature of an app screen: title bar + gold accent + body text lines. */
-function MiniScreen({ palette }: { palette: Palette }) {
+function MiniScreen({ palette, testId }: { palette: Palette; testId?: string }) {
   return (
     <div
       aria-hidden="true"
       className="h-full w-full overflow-hidden"
+      data-testid={testId}
       style={{ background: palette.bg, color: palette.text }}
     >
       <div
@@ -97,10 +98,10 @@ export function ThemePreviewSwatch({ theme }: { theme: PreviewTheme }) {
         data-theme="system"
       >
         <div className="w-1/2 overflow-hidden">
-          <MiniScreen palette={LIGHT} />
+          <MiniScreen palette={LIGHT} testId="theme-mini-screen-light" />
         </div>
         <div className="w-1/2 overflow-hidden">
-          <MiniScreen palette={DARK} />
+          <MiniScreen palette={DARK} testId="theme-mini-screen-dark" />
         </div>
       </div>
     );
@@ -113,7 +114,7 @@ export function ThemePreviewSwatch({ theme }: { theme: PreviewTheme }) {
       data-testid={`theme-preview-${theme}`}
       data-theme={theme}
     >
-      <MiniScreen palette={theme === "dark" ? DARK : LIGHT} />
+      <MiniScreen palette={theme === "dark" ? DARK : LIGHT} testId={`theme-mini-screen-${theme}`} />
     </div>
   );
 }

@@ -92,7 +92,10 @@ export function ThemeToggle() {
                 : "border-border-default bg-surface-2 hover:border-border-hover hover:bg-surface-1"
             }`}
           >
-            <span className="block h-16 w-full border-b border-border-default">
+            <span
+              className="block h-16 w-full border-b border-border-default"
+              data-testid={`theme-swatch-container-${opt.value}`}
+            >
               <ThemePreviewSwatch theme={opt.value} />
             </span>
             <span className="flex flex-col gap-0.5 p-3">

@@ -36,9 +36,13 @@ To provide a programmable safety net for regional commodity trading. Amana ensur
 ## 🧪 Local Environments (Folder-Based)
 
 - `frontend/` → Next.js app environment (UI + wallet + Supabase/Pinata client integration)
+
 - `backend/` → Node.js/TypeScript API environment (Supabase + Pinata + integration endpoints)
+
 - `mobile/` → React Native Expo environment (mobile wallet, notification, and trade UX)
+
 - `contracts/` → Rust/Soroban smart contract environment
+
 
 ### Frontend setup
 

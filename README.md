@@ -33,6 +33,72 @@ To provide a programmable safety net for regional commodity trading. Amana ensur
 - **Database:** Supabase (Off-chain metadata, driver logs, and user profiles).
 - **Observability:** OpenTelemetry distributed tracing with correlation IDs for end-to-end request tracking.
 
+## 🧭 System Context
+
+The diagram below is a [C4 model](https://c4model.com/) **system-context** view of
+the platform: who uses it, what we run, and which external systems we depend on.
+It deliberately stops at the system boundary - package-level detail lives in the
+stack READMEs and the [ADRs](./docs/adr).
+
+```mermaid
+C4Context
+    title System context - EliteWork / Amana escrow platform
+
+    Person(buyer, "Buyer", "Creates a trade - deposits funds - confirms delivery")
+    Person(seller, "Seller", "Lists produce - submits the driver manifest - dispatches goods")
+    Person(mediator, "Mediator / Admin", "Reviews evidence - resolves disputes - administers the contract")
+
+    Enterprise_Boundary(platform, "EliteWork monorepo") {
+        System(web, "Web app", "Next.js App Router client in frontend/")
+        System(mobile, "Mobile app", "React Native Expo client in mobile/")
+        System(api, "Backend API", "Node.js and TypeScript Express API in backend/")
+    }
+
+    System_Ext(wallet, "Stellar wallet", "Freighter or Albedo - holds keys - signs transactions")
+    System_Ext(stellar, "Stellar network", "Horizon and Soroban RPC - ledger and transaction submission")
+    System_Ext(escrow, "Amana escrow contract", "Soroban contract that holds escrowed funds and enforces trade rules")
+    System_Ext(token, "USDC token contract", "Stellar asset contract moved by the escrow at settlement")
+    System_Ext(ipfs, "IPFS via Pinata", "Pins proof-of-delivery video and dispute evidence")
+    SystemDb_Ext(db, "Supabase Postgres", "Off-chain trades - manifests - evidence metadata - users")
+    System_Ext(redis, "Redis", "Caches - rate limits - token denylist - stream state")
+
+    Rel(buyer, web, "Creates trades - uploads evidence - releases funds")
+    Rel(buyer, mobile, "Same flows on mobile")
+    Rel(seller, web, "Lists produce - submits manifest - tracks trades")
+    Rel(seller, mobile, "Same flows on mobile")
+    Rel(mediator, web, "Reviews disputes - resolves trades")
+
+    Rel(web, api, "Calls REST API", "HTTPS JSON")
+    Rel(mobile, api, "Calls REST API", "HTTPS JSON")
+    Rel(web, wallet, "Requests transaction signatures")
+    Rel(mobile, wallet, "Requests transaction signatures")
+    Rel(wallet, stellar, "Submits signed transactions")
+
+    Rel(api, stellar, "Builds unsigned transactions - polls contract events - reads balances")
+    Rel(stellar, escrow, "Executes invocations and emits events")
+    Rel(escrow, token, "Transfers escrowed funds and platform fees")
+    Rel(api, ipfs, "Pins evidence and resolves content identifiers")
+    Rel(api, db, "Reads and writes trade state")
+    Rel(api, redis, "Caches - rate limits - revocation denylist")
+
+    UpdateLayoutConfig($c4ShapeInRow="3", $c4BoundaryInRow="1")
+```
+
+| Component | Responsibility |
+|---|---|
+| `frontend/` (Next.js) | Trade creation, wallet connection and signing, evidence capture, mediator and admin dashboards |
+| `mobile/` (Expo) | Field-first trade, manifest and evidence flows for buyers, sellers and drivers |
+| `backend/` (Node/TypeScript) | REST API, unsigned-transaction building, Soroban event ingestion and mirroring, IPFS pinning, webhooks |
+| `contracts/` (Soroban) | Escrow custody, trade state machine, loss-ratio settlement, mediator quorum and admin clawback |
+| Stellar network | Ledger, Soroban RPC for simulation/submission and event polling, Horizon for balances, fees and path-payment quotes |
+| Supabase Postgres | Prisma-managed off-chain state: trades, disputes, manifests, evidence metadata, users |
+| IPFS via Pinata | Decentralized storage for proof-of-delivery video and dispute evidence; only CIDs go on-chain |
+| Redis | Caching, rate limiting, JWT revocation denylist and stream state |
+
+Full end-to-end trade flow, including contract calls and events: see
+[docs/escrow-lifecycle.md](./docs/escrow-lifecycle.md). Off-chain event
+processing is documented in [docs/event-flow.md](./docs/event-flow.md).
+
 ## 🧪 Local Environments (Folder-Based)
 
 
@@ -117,6 +183,10 @@ For the protected branch (`main`), set these required status checks:
 4. **Verification:** - **Success:** Buyer receives goods and uploads a confirmation video. Funds release to Seller.
    - **Dispute:** Buyer uploads a video of loss/damage with driver affirmation. A mediator reviews the evidence.
 5. **Settlement:** Based on the outcome, funds are distributed (either 100% to one party or split via the `Loss_Ratio`).
+
+For the full sequence - API endpoints, contract functions, emitted events and
+off-chain mirrors at each step - see
+[docs/escrow-lifecycle.md](./docs/escrow-lifecycle.md).
 
 ---
 

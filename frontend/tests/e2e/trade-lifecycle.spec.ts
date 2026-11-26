@@ -74,8 +74,9 @@ test.describe('Trade Lifecycle E2E', () => {
 
     await page.getByRole('button', { name: /review trade/i }).click();
     await page.getByRole('button', { name: /lock funds & create trade/i }).click();
+    await page.getByRole('button', { name: /accept & proceed/i }).click();
 
-    await expect(page.getByText(/trade created/i)).toBeVisible();
+    await expect(page.getByText('Trade Created', { exact: true })).toBeVisible();
     await expect(page.getByText('4294967297')).toBeVisible();
     await expect(page.getByText('mock-tx-hash')).toBeVisible();
   });
@@ -247,6 +248,34 @@ test.describe('Trade Lifecycle E2E', () => {
       }
     });
 
+    let depositRequested = false;
+    await page.route(`http://localhost:4000/trades/${tradeId}`, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          tradeId,
+          buyerAddress: BUYER_ADDRESS,
+          sellerAddress: SELLER_ADDRESS,
+          amountCngn: '25000',
+          status: 'PENDING',
+          buyerLossBps: 5000,
+          sellerLossBps: 5000,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        }),
+      });
+    });
+
+    await page.route(`http://localhost:4000/trades/${tradeId}/deposit`, async (route) => {
+      depositRequested = true;
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ unsignedXdr: 'deposit-tx-xdr' }),
+      });
+    });
+
     await page.goto('/trades/create');
     await page.waitForLoadState('networkidle');
 
@@ -257,8 +286,17 @@ test.describe('Trade Lifecycle E2E', () => {
     await page.getByRole('button', { name: /continue to negotiation/i }).click();
     await page.getByRole('button', { name: /review trade/i }).click();
     await page.getByRole('button', { name: /lock funds & create trade/i }).click();
+    await page.getByRole('button', { name: /accept & proceed/i }).click();
 
-    await expect(page.getByText(/trade created/i)).toBeVisible();
+    await expect(page.getByText('Trade Created', { exact: true })).toBeVisible();
     expect(createdTrade).toBe(true);
+
+    await page.getByRole('button', { name: /view trade details/i }).click();
+    await page.waitForURL(`**/trades/${tradeId}`);
+
+    await page.getByTestId('action-deposit').click();
+
+    await expect(page.getByText(/deposit signed successfully/i)).toBeVisible();
+    expect(depositRequested).toBe(true);
   });
 });

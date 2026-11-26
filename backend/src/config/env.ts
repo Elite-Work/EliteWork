@@ -173,6 +173,8 @@ export const envSchema = z.object({
   RATE_LIMIT_USER_MAX: z.coerce.number().int().positive().default(30),
   RATE_LIMIT_DISPUTE_WINDOW_MS: z.coerce.number().int().positive().default(60 * 60 * 1000),
   RATE_LIMIT_DISPUTE_MAX: z.coerce.number().int().positive().default(5),
+  RATE_LIMIT_EVIDENCE_UPLOAD_WINDOW_MS: z.coerce.number().int().positive().default(60 * 60 * 1000),
+  RATE_LIMIT_EVIDENCE_UPLOAD_MAX: z.coerce.number().int().positive().default(20),
   // Admin operation quotas (high-volume/expensive operations e.g. treasury clawback, batch updates)
   ADMIN_QUOTA_CLAWBACK_WINDOW_MS: z.coerce.number().int().positive().default(60 * 60 * 1000),
   ADMIN_QUOTA_CLAWBACK_MAX: z.coerce.number().int().positive().default(10),

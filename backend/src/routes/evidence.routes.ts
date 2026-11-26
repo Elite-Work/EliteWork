@@ -18,9 +18,7 @@ import {
 import { tradeIdParamSchema } from "../schemas/trade.schemas";
 import { env } from "../config/env";
 import { createWalletRateLimiter } from "../lib/rateLimit";
-import { RATE_LIMIT_CONFIG } from "../config/rateLimit";
-
-const evidenceUploadLimiter = createWalletRateLimiter(RATE_LIMIT_CONFIG.evidenceUpload);
+import { RATE_LIMIT_CONFIG, RateLimitPreset } from "../config/rateLimit";
 
 const ALLOWED_MIME_TYPES = ["video/mp4", "video/webm"];
 const MAX_FILE_SIZE = env.EVIDENCE_MAX_BYTES;
@@ -51,8 +49,16 @@ function handleVideoMulter(req: Request, res: Response, next: NextFunction) {
     });
 }
 
-export function createEvidenceRouter(evidenceService = new EvidenceService()) {
+export function createEvidenceRouter(
+    evidenceService = new EvidenceService(),
+    uploadRateLimit: RateLimitPreset = RATE_LIMIT_CONFIG.evidenceUpload,
+) {
     const router = Router({ mergeParams: true });
+
+    // Per-wallet burst limit on multipart uploads (keyed by req.user.walletAddress,
+    // so it must run after authMiddleware). Created per router so each mounted
+    // instance — and each test — gets its own counter store.
+    const evidenceUploadLimiter = createWalletRateLimiter(uploadRateLimit);
 
     // GET /trades/:id/evidence — list all evidence for a trade
     router.get(

@@ -2,8 +2,10 @@ import { __resetRetrySleepForTests, __setRetrySleepForTests } from "../lib/retry
 import * as StellarSdk from "@stellar/stellar-sdk";
 import { StellarService } from "../services/stellar.service";
 import { PathPaymentService } from "../services/pathPayment.service";
+import { isQuoteWithinSlippage, setCachedQuote } from "../services/quoteCache.service";
 
 jest.mock("../services/quoteCache.service", () => ({
+  ...jest.requireActual("../services/quoteCache.service"),
   getCachedQuote: jest.fn().mockResolvedValue(null),
   setCachedQuote: jest.fn().mockResolvedValue(undefined),
 }));
@@ -60,7 +62,23 @@ describe("PathPaymentService network resilience", () => {
         destination_asset_code: "USDC",
       }),
     ]);
+    expect(setCachedQuote).toHaveBeenCalledWith(
+      { sourceAmount: "1000", sourceAssetCode: "XLM", sourceAssetIssuer: undefined },
+      result.quotes,
+    );
     expect(sleepMock).not.toHaveBeenCalled();
+  });
+
+  it("does not cache a quote when Horizon fails", async () => {
+    strictSendPathsCall.mockRejectedValue({ response: { status: 400 } });
+    jest.mocked(setCachedQuote).mockClear();
+
+    const service = new PathPaymentService();
+    await expect(service.getPathPaymentQuote("1000", "XLM")).rejects.toThrow(
+      "Failed to fetch path payment quotes",
+    );
+
+    expect(setCachedQuote).not.toHaveBeenCalled();
   });
 
   it("keeps multi-hop path metadata in mapped quote responses", async () => {
@@ -221,5 +239,35 @@ describe("PathPaymentService network resilience", () => {
       "Payment service temporarily unavailable"
     );
     expect(strictSendPathsCall).not.toHaveBeenCalled();
+  });
+});
+
+describe("path payment quote slippage guard", () => {
+  const cachedQuote = {
+    sourceAssetCode: "XLM",
+    sourceAmount: "1000",
+    quotes: [
+      {
+        source_amount: "1000",
+        source_asset_type: "native",
+        source_asset_code: "XLM",
+        destination_amount: "10500",
+        destination_asset_type: "credit_alphanum4",
+        destination_asset_code: "USDC",
+        path: [],
+      },
+    ],
+    quotedAt: new Date().toISOString(),
+    freshnessMs: 0,
+  };
+
+  it("accepts a quote at the slippage limit and rejects one beyond it", () => {
+    expect(isQuoteWithinSlippage(cachedQuote, "10000", 500)).toBe(true);
+    expect(isQuoteWithinSlippage(cachedQuote, "9999", 500)).toBe(false);
+  });
+
+  it("rejects empty quotes and a zero fresh destination amount", () => {
+    expect(isQuoteWithinSlippage({ ...cachedQuote, quotes: [] }, "10000", 500)).toBe(false);
+    expect(isQuoteWithinSlippage(cachedQuote, "0", 500)).toBe(false);
   });
 });

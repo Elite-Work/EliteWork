@@ -25,7 +25,9 @@ import { env } from "./config/env";
 import { csrfProtection } from "./middleware/csrf.middleware";
 import { createOutboxRoutes } from "./routes/outbox.routes";
 import { createJobHealthRoutes } from "./routes/job-health.routes";
+import { createEscrowFundsReleaseRouter } from "./routes/trade.routes";
 import { createPublicApiRouter } from "./routes/publicApi.router";
+import { createCooperativeRouter } from "./routes/cooperative.routes";
 import {
   apiVersionMiddleware,
   API_VERSION,
@@ -124,12 +126,17 @@ export function createApp(isShuttingDown?: () => boolean): express.Application {
   //  1. `/api/v1`  — the stable, versioned lane (current version).
   //  2. legacy aliases (`/auth`, `/trades`, ...) — deprecated backwards-
   //     compatibility lane for shipped mobile/web builds that are slow to update.
+  app.use("/api/escrow", createEscrowFundsReleaseRouter());
+
   const publicApi = createPublicApiRouter();
   app.use(`/api/${API_VERSION}`, publicApi);
   // v1 must be registered first so /api/v1/* never falls through to the root
   // legacy mount. The legacy lane is mounted at "/" to preserve every current
   // URL exactly.
   app.use("/", publicApi);
+
+  // Cooperative routes (pilot registration & trade viewing): POST /api/cooperatives/pilot-register (#494)
+  app.use("/api/cooperatives", createCooperativeRouter());
 
   // Feature flags (admin-managed) — gated by ADMIN_ROUTES_ENABLED
   app.use(adminFeatureGate, csrfProtection, createAdminFeaturesRouter());

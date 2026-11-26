@@ -15,6 +15,7 @@ describe("TradeRepository", () => {
     buyerAddress: "gbuyer00000000000000000000000000000000000000000000000000",
     sellerAddress: "gseller000000000000000000000000000000000000000000000000",
     amountUsdc: "250.00",
+    commodity: null,
     buyerLossBps: 5000,
     sellerLossBps: 5000,
     version: 0,

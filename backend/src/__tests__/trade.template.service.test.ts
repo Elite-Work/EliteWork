@@ -24,6 +24,7 @@ describe("TradeTemplateService", () => {
     buyerAddress: userAddress,
     sellerAddress: "g-seller",
     amountUsdc: "125.50",
+    commodity: null,
     buyerLossBps: 5000,
     sellerLossBps: 5000,
     version: 0,

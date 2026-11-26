@@ -1,6 +1,8 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import React from "react";
 import { StreamClawbackForm } from "../StreamClawbackForm";
+import { AdminStatsCard } from "../AdminStatsCard";
 import { api, ApiError } from "@/lib/api";
 import { useToast } from "@/hooks/useToast";
 

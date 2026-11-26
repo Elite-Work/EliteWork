@@ -804,6 +804,48 @@
           "type": "u32"
         }
       ]
+    },
+    {
+      "name": "TradeFrozen",
+      "rustStruct": "TradeFrozenEvent",
+      "topics": [
+        "TRDFRZ"
+      ],
+      "fields": [
+        {
+          "name": "trade_id",
+          "type": "u64"
+        },
+        {
+          "name": "admin",
+          "type": "Address"
+        },
+        {
+          "name": "timestamp",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "TradeUnfrozen",
+      "rustStruct": "TradeUnfrozenEvent",
+      "topics": [
+        "TRDUNF"
+      ],
+      "fields": [
+        {
+          "name": "trade_id",
+          "type": "u64"
+        },
+        {
+          "name": "admin",
+          "type": "Address"
+        },
+        {
+          "name": "timestamp",
+          "type": "u64"
+        }
+      ]
     }
   ]
 }

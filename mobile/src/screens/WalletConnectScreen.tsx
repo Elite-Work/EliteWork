@@ -11,7 +11,22 @@ import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../types/navigation';
 import { useAuthStore } from '../stores/authStore';
 import { authApi } from '../api/auth';
-import { authenticateWithBiometrics, isBiometricUnlockAvailable } from '../utils/biometrics';
+import {
+  BIOMETRIC_ATTEMPTS_BEFORE_PIN,
+  authenticateWithBiometrics,
+  classifyBiometricFailure,
+  isBiometricUnlockAvailable,
+  shouldFallBackToPin,
+} from '../utils/biometrics';
+import {
+  WALLET_PIN_MAX_LENGTH,
+  WALLET_PIN_MIN_LENGTH,
+  hasWalletPin,
+  isValidWalletPinFormat,
+  setWalletPin,
+  verifyWalletPin,
+} from '../utils/walletPin';
+import { WalletPinUnlock } from '../components/WalletPinUnlock';
 
 type Props = StackScreenProps<RootStackParamList, 'WalletConnect'>;
 
@@ -20,6 +35,12 @@ export default function WalletConnectScreen({ navigation }: Props) {
   const [unlocking, setUnlocking] = useState(false);
   const [rememberedAddress, setRememberedAddress] = useState<string | null>(null);
   const [biometricsAvailable, setBiometricsAvailable] = useState(false);
+  // #511: PIN fallback state. `biometricFailures` counts genuine failed
+  // attempts only — a dismissed prompt does not count — and `pinRequired`
+  // switches the card from the Face ID / fingerprint button to PIN entry.
+  const [biometricFailures, setBiometricFailures] = useState(0);
+  const [pinRequired, setPinRequired] = useState(false);
+  const [pinConfigured, setPinConfigured] = useState(false);
   const { setWalletAddress, setToken, getRememberedWalletAddress } = useAuthStore();
 
   // #57: offer a faster re-auth path for returning users instead of always
@@ -28,13 +49,18 @@ export default function WalletConnectScreen({ navigation }: Props) {
     let cancelled = false;
 
     (async () => {
-      const [address, hardwareReady] = await Promise.all([
+      const [address, hardwareReady, hasPin] = await Promise.all([
         getRememberedWalletAddress(),
         isBiometricUnlockAvailable(),
+        hasWalletPin(),
       ]);
       if (cancelled) return;
       setRememberedAddress(address);
       setBiometricsAvailable(hardwareReady);
+      setPinConfigured(hasPin);
+      // A configured PIN is the only unlock path when the device has no
+      // usable biometrics.
+      setPinRequired(Boolean(address && hasPin && !hardwareReady));
     })();
 
     return () => {
@@ -81,18 +107,49 @@ export default function WalletConnectScreen({ navigation }: Props) {
     }
   };
 
+  const showPinPrompt = (message: string) => {
+    if (!pinConfigured) {
+      setBiometricFailures(BIOMETRIC_ATTEMPTS_BEFORE_PIN);
+      Alert.alert(
+        'Unlock failed',
+        'Biometric unlock is unavailable. Set up a wallet PIN or connect your wallet manually.'
+      );
+      return;
+    }
+    setBiometricFailures(BIOMETRIC_ATTEMPTS_BEFORE_PIN);
+    setPinRequired(true);
+    if (message) Alert.alert('Enter your PIN', message);
+  };
+
   const handleBiometricUnlock = async () => {
     if (!rememberedAddress) return;
     setUnlocking(true);
     try {
       const result = await authenticateWithBiometrics('Unlock Amana to continue trading');
-      if (!result.success) {
-        if (result.error && result.error !== 'user_cancel') {
-          Alert.alert('Unlock failed', 'Please try again or connect your wallet manually.');
-        }
+      if (result.success) {
+        await authenticateAddress(rememberedAddress);
         return;
       }
-      await authenticateAddress(rememberedAddress);
+
+      const disposition = classifyBiometricFailure(result.error);
+      if (disposition === 'ignore') return;
+
+      const nextFailures = biometricFailures + 1;
+      if (disposition === 'fallback' || shouldFallBackToPin(nextFailures)) {
+        showPinPrompt(
+          `Face ID / fingerprint failed ${BIOMETRIC_ATTEMPTS_BEFORE_PIN} times. Enter your wallet PIN to continue.`
+        );
+        return;
+      }
+
+      setBiometricFailures(nextFailures);
+      const remaining = BIOMETRIC_ATTEMPTS_BEFORE_PIN - nextFailures;
+      Alert.alert(
+        'Unlock failed',
+        `Please try again. PIN entry unlocks after ${remaining} more failed ${
+          remaining === 1 ? 'attempt' : 'attempts'
+        }.`
+      );
     } catch (err: unknown) {
       Alert.alert('Connection failed', (err as Error)?.message ?? 'Unknown error');
     } finally {
@@ -100,7 +157,48 @@ export default function WalletConnectScreen({ navigation }: Props) {
     }
   };
 
-  const showBiometricUnlock = biometricsAvailable && !!rememberedAddress;
+  const handlePinSubmit = async (pin: string): Promise<boolean> => {
+    if (!rememberedAddress) return false;
+    const valid = await verifyWalletPin(pin);
+    if (!valid) return false;
+    await authenticateAddress(rememberedAddress);
+    return true;
+  };
+
+  const handleSetPin = () => {
+    Alert.prompt(
+      'Set wallet PIN',
+      `Choose a ${WALLET_PIN_MIN_LENGTH}–${WALLET_PIN_MAX_LENGTH} digit PIN. It unlocks this wallet when biometrics fail.`,
+      async (value) => {
+        const pin = (value ?? '').trim();
+        if (!isValidWalletPinFormat(pin)) {
+          Alert.alert(
+            'Invalid PIN',
+            `Use ${WALLET_PIN_MIN_LENGTH} to ${WALLET_PIN_MAX_LENGTH} digits.`
+          );
+          return;
+        }
+        try {
+          await setWalletPin(pin);
+          setPinConfigured(true);
+          Alert.alert('PIN saved', 'You can now unlock with your PIN if biometrics fail.');
+        } catch (err: unknown) {
+          Alert.alert('Could not save PIN', (err as Error)?.message ?? 'Unknown error');
+        }
+      },
+      'plain-text'
+    );
+  };
+
+  const showBiometricUnlock =
+    biometricsAvailable &&
+    !!rememberedAddress &&
+    !pinRequired &&
+    // Once the fallback threshold is reached, stop offering the biometric
+    // prompt so the user cannot get stuck in a failing loop (#511).
+    !shouldFallBackToPin(biometricFailures);
+  const showPinUnlock =
+    !!rememberedAddress && (pinRequired || (pinConfigured && !biometricsAvailable));
   const truncatedAddress = rememberedAddress
     ? `${rememberedAddress.slice(0, 4)}…${rememberedAddress.slice(-4)}`
     : '';
@@ -136,6 +234,43 @@ export default function WalletConnectScreen({ navigation }: Props) {
           </TouchableOpacity>
         )}
 
+        {showPinUnlock && (
+          <View style={styles.pinSection}>
+            <WalletPinUnlock
+              onSubmit={handlePinSubmit}
+              message={
+                pinRequired
+                  ? `Face ID / fingerprint failed ${BIOMETRIC_ATTEMPTS_BEFORE_PIN} times. Enter the PIN you set for this wallet.`
+                  : 'Biometrics are unavailable on this device. Enter your wallet PIN.'
+              }
+              onUseDifferentWallet={handleConnect}
+              disabled={connecting}
+            />
+          </View>
+        )}
+
+        {showBiometricUnlock && !pinConfigured && (
+          <TouchableOpacity
+            onPress={handleSetPin}
+            disabled={unlocking || connecting}
+            accessibilityRole="button"
+            accessibilityLabel="Set up wallet PIN"
+          >
+            <Text style={styles.pinLink}>Set up a PIN as a backup</Text>
+          </TouchableOpacity>
+        )}
+
+        {showBiometricUnlock && pinConfigured && (
+          <TouchableOpacity
+            onPress={() => setPinRequired(true)}
+            disabled={unlocking || connecting}
+            accessibilityRole="button"
+            accessibilityLabel="Unlock with PIN instead"
+          >
+            <Text style={styles.pinLink}>Unlock with PIN instead</Text>
+          </TouchableOpacity>
+        )}
+
         <TouchableOpacity
           style={[styles.button, connecting && styles.buttonDisabled]}
           onPress={handleConnect}
@@ -148,7 +283,7 @@ export default function WalletConnectScreen({ navigation }: Props) {
             <ActivityIndicator color="#fff" />
           ) : (
             <Text style={styles.buttonText}>
-              {showBiometricUnlock ? 'Use a different wallet' : 'Connect Wallet'}
+              {showBiometricUnlock || showPinUnlock ? 'Use a different wallet' : 'Connect Wallet'}
             </Text>
           )}
         </TouchableOpacity>
@@ -236,5 +371,14 @@ const styles = StyleSheet.create({
     color: '#2d6a2d',
     fontSize: 16,
     fontWeight: '600',
+  },
+  pinSection: {
+    marginBottom: 12,
+  },
+  pinLink: {
+    color: '#2d6a2d',
+    fontSize: 13,
+    textAlign: 'center',
+    paddingVertical: 8,
   },
 });

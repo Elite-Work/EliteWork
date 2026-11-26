@@ -10,6 +10,7 @@ describe("TradeEvidenceListService", () => {
     buyerAddress: "g-buyer",
     sellerAddress: "g-seller",
     amountUsdc: "100",
+    commodity: null,
     buyerLossBps: 5000,
     sellerLossBps: 5000,
     version: 0,

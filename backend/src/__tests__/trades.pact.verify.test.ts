@@ -61,6 +61,7 @@ function makeTrade(overrides: Partial<Trade> = {}): Trade {
     buyerAddress: '',
     sellerAddress: '',
     amountUsdc: '100.00',
+    commodity: null,
     buyerLossBps: 5000,
     sellerLossBps: 5000,
     version: 0,

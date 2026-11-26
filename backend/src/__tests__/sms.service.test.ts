@@ -1,11 +1,16 @@
 describe("sms.service", () => {
   const OLD_ENV = process.env;
+  const ORIGINAL_FETCH = global.fetch;
 
   beforeEach(() => {
     jest.resetModules();
     process.env = { ...OLD_ENV };
     delete process.env.AFRICAS_TALKING_API_KEY;
     delete process.env.AFRICAS_TALKING_USERNAME;
+  });
+
+  afterEach(() => {
+    global.fetch = ORIGINAL_FETCH;
   });
 
   afterAll(() => {
@@ -50,5 +55,23 @@ describe("sms.service", () => {
       "https://api.africastalking.com/version1/messaging",
       expect.objectContaining({ method: "POST" }),
     );
+  });
+
+  it("reports provider failures without throwing", async () => {
+    process.env.AFRICAS_TALKING_API_KEY = "key";
+    process.env.AFRICAS_TALKING_USERNAME = "user";
+    const fetchMock = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 503,
+      text: async () => "temporarily unavailable",
+    });
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    const { sendSms } = await import("../services/sms.service");
+    await expect(sendSms("+2348012345678", "hello")).resolves.toEqual({
+      sent: false,
+      reason: "provider_error_503",
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });

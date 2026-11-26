@@ -1,6 +1,6 @@
 import React from "react";
 import { render, screen } from "@testing-library/react";
-import { TimelineItem } from "../TimelineItem";
+import { TimelineItem, PageHeader } from "../TimelineItem";
 
 const base = {
   event: "Funds Deposited",
@@ -69,5 +69,24 @@ describe("TimelineItem", () => {
       "dateTime",
       "2024-01-02T12:00:00.000Z",
     );
+  });
+});
+
+describe("PageHeader", () => {
+  it("renders the title", () => {
+    render(<PageHeader title="Dashboard" />);
+    expect(screen.getByRole("banner")).toBeInTheDocument();
+    expect(screen.getByText("Dashboard")).toBeInTheDocument();
+  });
+
+  it("renders children in the slot when provided", () => {
+    render(<PageHeader title="Dashboard"><button>Action</button></PageHeader>);
+    expect(screen.getByTestId("page-header-slot")).toBeInTheDocument();
+    expect(screen.getByText("Action")).toBeInTheDocument();
+  });
+
+  it("does not render slot when no children", () => {
+    render(<PageHeader title="Dashboard" />);
+    expect(screen.queryByTestId("page-header-slot")).not.toBeInTheDocument();
   });
 });

@@ -76,11 +76,18 @@ const IMPLEMENTED_ROUTES = [
   "/wallet/path-payment-quote",
   "/users/me",
   "/users/{address}",
+  "/users/me/export",
+  "/users/me/reputation",
+  "/users/{address}/reputation",
+  "/notifications/preferences",
+  "/notifications/sms-settings",
   "/dispute-categories",
   "/dispute-categories/{id}",
   "/trades",
+  "/trades/export",
   "/trades/stats",
   "/trades/{id}",
+  "/trades/{id}/receipt",
   "/trades/{id}/deposit",
   "/trades/{id}/confirm",
   "/trades/{id}/release",
@@ -92,7 +99,12 @@ const IMPLEMENTED_ROUTES = [
   "/trades/{id}/history",
   "/trades/{id}/history/verify",
   "/goals",
+  "/stellar/account/{address}/balance",
+  "/stellar/account/create",
+  "/stellar/assets",
+  "/stellar/assets/{code}",
   "/stellar/fees",
+  "/stellar/tx/{hash}/status",
   "/treasury/balance",
   "/treasury/withdraw",
   "/treasury/config",
@@ -114,6 +126,8 @@ const IMPLEMENTED_ROUTES = [
   "/api/admin/streams/{id}/terminate",
   "/disputes",
   "/disputes/{id}/transition",
+  "/api/cooperatives/pilot-register",
+  "/api/cooperatives/{id}/trades",
 ];
 
 describe("OpenAPI drift detection", () => {
@@ -305,6 +319,15 @@ describe("OpenAPI drift detection", () => {
       expect(path?.post?.responses?.["201"]?.content?.["application/json"]?.schema?.$ref).toBe(
         "#/components/schemas/TradeMutationResponse",
       );
+    });
+
+    it("GET /trades documents cursor pagination alongside the legacy page param", () => {
+      const path = spec.paths["/trades"] as any;
+      const refs = (path?.get?.parameters ?? []).map((p: any) => p.$ref);
+      expect(refs).toContain("#/components/parameters/ListTradesCursorQuery");
+      expect(refs).toContain("#/components/parameters/ListTradesPageQuery");
+      const listSchema = (spec as OpenApiSpec).components.schemas["TradeListResponse"];
+      expect(listSchema.properties).toHaveProperty("pageInfo");
     });
 
     it("GET /trades response is documented with 200 status and TradeListResponse schema", () => {

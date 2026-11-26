@@ -17,6 +17,7 @@ import {
   authenticateWithBiometrics,
   isBiometricUnlockAvailable,
 } from '../utils/biometrics';
+import { hasWalletPin, setWalletPin, verifyWalletPin } from '../utils/walletPin';
 
 jest.mock('../stores/authStore', () => ({
   useAuthStore: jest.fn(),
@@ -30,14 +31,25 @@ jest.mock('../api/auth', () => ({
 }));
 
 jest.mock('../utils/biometrics', () => ({
+  ...jest.requireActual('../utils/biometrics'),
   authenticateWithBiometrics: jest.fn(),
   isBiometricUnlockAvailable: jest.fn(),
+}));
+
+jest.mock('../utils/walletPin', () => ({
+  ...jest.requireActual('../utils/walletPin'),
+  hasWalletPin: jest.fn(),
+  verifyWalletPin: jest.fn(),
+  setWalletPin: jest.fn(),
 }));
 
 const mockGenerateChallenge = authApi.generateChallenge as jest.Mock;
 const mockVerifyChallenge = authApi.verifyChallenge as jest.Mock;
 const mockAuthenticate = authenticateWithBiometrics as jest.Mock;
 const mockBiometricsAvailable = isBiometricUnlockAvailable as jest.Mock;
+const mockHasWalletPin = hasWalletPin as jest.Mock;
+const mockVerifyWalletPin = verifyWalletPin as jest.Mock;
+const mockSetWalletPin = setWalletPin as jest.Mock;
 
 const WALLET = 'GDNM7WSJ7VIUVK2TSZ2OQES5XR2663TZEIBFXRDT56B5IRLHERVWSXMU';
 const UNLOCK_LABEL =
@@ -86,6 +98,8 @@ describe('WalletConnectScreen', () => {
     mockVerifyChallenge.mockResolvedValue({ token: 'jwt-token' });
     setToken.mockResolvedValue(undefined);
     mockAuthenticate.mockResolvedValue({ success: true });
+    mockHasWalletPin.mockResolvedValue(false);
+    mockVerifyWalletPin.mockResolvedValue(false);
     (useAuthStore as unknown as jest.Mock).mockReturnValue({
       setWalletAddress,
       setToken,
@@ -329,10 +343,10 @@ describe('WalletConnectScreen', () => {
       expect(navigation.replace).not.toHaveBeenCalled();
     });
 
-    it('tells the user to retry on a non-cancel biometric failure', async () => {
+    it('counts a normal biometric failure and tells the user how many attempts remain', async () => {
       mockAuthenticate.mockResolvedValueOnce({
         success: false,
-        error: 'lockout',
+        error: 'authentication_failed',
       });
       const { getByLabelText } = await renderReturningUser();
 
@@ -342,9 +356,77 @@ describe('WalletConnectScreen', () => {
 
       expect(alertSpy).toHaveBeenCalledWith(
         'Unlock failed',
-        'Please try again or connect your wallet manually.',
+        'Please try again. PIN entry unlocks after 2 more failed attempts.',
       );
       expect(mockGenerateChallenge).not.toHaveBeenCalled();
+      expect(navigation.replace).not.toHaveBeenCalled();
+    });
+
+    it('falls back to PIN entry after 3 biometric failures', async () => {
+      mockHasWalletPin.mockResolvedValue(true);
+      mockAuthenticate.mockResolvedValue({
+        success: false,
+        error: 'authentication_failed',
+      });
+      const utils = await renderReturningUser();
+
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        await act(async () => {
+          fireEvent.press(utils.getByLabelText(UNLOCK_LABEL));
+        });
+      }
+
+      expect(utils.getByLabelText('Wallet PIN')).toBeTruthy();
+      expect(utils.queryByLabelText(UNLOCK_LABEL)).toBeNull();
+      expect(utils.getByText(/failed 3 times/)).toBeTruthy();
+      expect(mockGenerateChallenge).not.toHaveBeenCalled();
+    });
+
+    it('unlocks with the wallet PIN after the biometric fallback', async () => {
+      mockHasWalletPin.mockResolvedValue(true);
+      mockVerifyWalletPin.mockResolvedValue(true);
+      mockAuthenticate.mockResolvedValue({
+        success: false,
+        error: 'authentication_failed',
+      });
+      const utils = await renderReturningUser();
+
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        await act(async () => {
+          fireEvent.press(utils.getByLabelText(UNLOCK_LABEL));
+        });
+      }
+
+      fireEvent.changeText(utils.getByLabelText('Wallet PIN'), '1234');
+      await act(async () => {
+        fireEvent.press(utils.getByLabelText('Unlock with PIN'));
+      });
+
+      expect(mockVerifyWalletPin).toHaveBeenCalledWith('1234');
+      expect(navigation.replace).toHaveBeenCalledWith('TradeList');
+    });
+
+    it('shows an error and stays locked when the PIN is wrong', async () => {
+      mockHasWalletPin.mockResolvedValue(true);
+      mockVerifyWalletPin.mockResolvedValue(false);
+      mockAuthenticate.mockResolvedValue({
+        success: false,
+        error: 'authentication_failed',
+      });
+      const utils = await renderReturningUser();
+
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        await act(async () => {
+          fireEvent.press(utils.getByLabelText(UNLOCK_LABEL));
+        });
+      }
+
+      fireEvent.changeText(utils.getByLabelText('Wallet PIN'), '9999');
+      await act(async () => {
+        fireEvent.press(utils.getByLabelText('Unlock with PIN'));
+      });
+
+      expect(utils.getByText('Incorrect PIN. Try again.')).toBeTruthy();
       expect(navigation.replace).not.toHaveBeenCalled();
     });
 
@@ -398,6 +480,134 @@ describe('WalletConnectScreen', () => {
 
       expect(mockAuthenticate).not.toHaveBeenCalled();
       expect(navigation.replace).toHaveBeenCalledWith('TradeList');
+    });
+  });
+
+  describe('error states', () => {
+    it('goes straight to PIN entry on a terminal biometric error when a PIN exists', async () => {
+      mockHasWalletPin.mockResolvedValue(true);
+      mockAuthenticate.mockResolvedValueOnce({ success: false, error: 'lockout' });
+      const utils = await renderReturningUser();
+
+      await act(async () => {
+        fireEvent.press(utils.getByLabelText(UNLOCK_LABEL));
+      });
+
+      expect(alertSpy).toHaveBeenCalledWith('Enter your PIN', expect.stringMatching(/failed 3 times/));
+      expect(utils.getByLabelText('Wallet PIN')).toBeTruthy();
+      expect(utils.queryByLabelText(UNLOCK_LABEL)).toBeNull();
+    });
+
+    it('tells the user biometrics are unavailable when no PIN is configured', async () => {
+      mockAuthenticate.mockResolvedValueOnce({ success: false, error: 'not_enrolled' });
+      const utils = await renderReturningUser();
+
+      await act(async () => {
+        fireEvent.press(utils.getByLabelText(UNLOCK_LABEL));
+      });
+
+      expect(alertSpy).toHaveBeenCalledWith(
+        'Unlock failed',
+        expect.stringContaining('Biometric unlock is unavailable'),
+      );
+      // The failing biometric path is withdrawn and manual connect remains.
+      expect(utils.queryByLabelText(UNLOCK_LABEL)).toBeNull();
+      expect(utils.queryByLabelText('Wallet PIN')).toBeNull();
+      expect(utils.getByText('Connect Wallet')).toBeTruthy();
+    });
+
+    it('surfaces an exception thrown by the biometric prompt itself', async () => {
+      mockAuthenticate.mockRejectedValueOnce(new Error('Sensor error'));
+      const utils = await renderReturningUser();
+
+      await act(async () => {
+        fireEvent.press(utils.getByLabelText(UNLOCK_LABEL));
+      });
+
+      expect(alertSpy).toHaveBeenCalledWith('Connection failed', 'Sensor error');
+      expect(mockGenerateChallenge).not.toHaveBeenCalled();
+      expect(utils.getByLabelText(UNLOCK_LABEL)).toBeTruthy();
+    });
+
+    it('uses singular wording when one attempt remains', async () => {
+      mockAuthenticate.mockResolvedValue({ success: false, error: 'authentication_failed' });
+      const utils = await renderReturningUser();
+
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        await act(async () => {
+          fireEvent.press(utils.getByLabelText(UNLOCK_LABEL));
+        });
+      }
+
+      expect(alertSpy).toHaveBeenLastCalledWith(
+        'Unlock failed',
+        'Please try again. PIN entry unlocks after 1 more failed attempt.',
+      );
+    });
+
+    it('shows PIN entry up front on a device without biometrics', async () => {
+      getRememberedWalletAddress.mockResolvedValue(WALLET);
+      mockBiometricsAvailable.mockResolvedValue(false);
+      mockHasWalletPin.mockResolvedValue(true);
+      const utils = renderScreen();
+
+      expect(await utils.findByLabelText('Wallet PIN')).toBeTruthy();
+      expect(utils.getByText(/Biometrics are unavailable on this device/)).toBeTruthy();
+      expect(utils.queryByLabelText(UNLOCK_LABEL)).toBeNull();
+    });
+
+    describe('PIN setup', () => {
+      async function openSetPin() {
+        const utils = await renderReturningUser();
+        fireEvent.press(utils.getByLabelText('Set up wallet PIN'));
+        expect(promptSpy).toHaveBeenCalledWith(
+          'Set wallet PIN',
+          expect.stringContaining('4–6 digit PIN'),
+          expect.any(Function),
+          'plain-text',
+        );
+        return { utils, onSubmit: promptSpy.mock.calls[0][2] as PromptCallback };
+      }
+
+      it.each([['too short', '12'], ['non-numeric', 'abcd'], ['too long', '1234567']])(
+        'rejects a %s PIN without saving it',
+        async (_label, pin) => {
+          const { onSubmit } = await openSetPin();
+
+          await act(async () => {
+            await onSubmit(pin);
+          });
+
+          expect(alertSpy).toHaveBeenCalledWith('Invalid PIN', 'Use 4 to 6 digits.');
+          expect(mockSetWalletPin).not.toHaveBeenCalled();
+        },
+      );
+
+      it('reports a storage failure when saving the PIN', async () => {
+        mockSetWalletPin.mockRejectedValueOnce(new Error('Keychain locked'));
+        const { utils, onSubmit } = await openSetPin();
+
+        await act(async () => {
+          await onSubmit('1234');
+        });
+
+        expect(alertSpy).toHaveBeenCalledWith('Could not save PIN', 'Keychain locked');
+        expect(utils.getByLabelText('Set up wallet PIN')).toBeTruthy();
+      });
+
+      it('saves a valid PIN and offers PIN unlock afterwards', async () => {
+        mockSetWalletPin.mockResolvedValueOnce(undefined);
+        const { utils, onSubmit } = await openSetPin();
+
+        await act(async () => {
+          await onSubmit(' 1234 ');
+        });
+
+        expect(mockSetWalletPin).toHaveBeenCalledWith('1234');
+        expect(alertSpy).toHaveBeenCalledWith('PIN saved', expect.any(String));
+        expect(utils.getByLabelText('Unlock with PIN instead')).toBeTruthy();
+        expect(utils.queryByLabelText('Set up wallet PIN')).toBeNull();
+      });
     });
   });
 });

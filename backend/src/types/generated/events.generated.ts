@@ -43,6 +43,8 @@ export enum GeneratedEventType {
   MediatorWeightUpdated = "MediatorWeightUpdated",
   DeadlineExtensionBudget = "DeadlineExtensionBudget",
   ExtensionPolicyUpdated = "ExtensionPolicyUpdated",
+  TradeFrozen = "TradeFrozen",
+  TradeUnfrozen = "TradeUnfrozen",
 }
 
 /**
@@ -85,6 +87,8 @@ export const TOPIC_TO_EVENT_TYPE: Readonly<Record<string, GeneratedEventType>> =
   "MEDWGT": GeneratedEventType.MediatorWeightUpdated,
   "DEDBGT": GeneratedEventType.DeadlineExtensionBudget,
   "EXTPOL": GeneratedEventType.ExtensionPolicyUpdated,
+  "TRDFRZ": GeneratedEventType.TradeFrozen,
+  "TRDUNF": GeneratedEventType.TradeUnfrozen,
 };
 
 /** Full topic tuple each event is published under. */
@@ -122,6 +126,8 @@ export const EVENT_TOPICS: Readonly<Record<GeneratedEventType, readonly string[]
   [GeneratedEventType.MediatorWeightUpdated]: ["MEDWGT"],
   [GeneratedEventType.DeadlineExtensionBudget]: ["DEDBGT"],
   [GeneratedEventType.ExtensionPolicyUpdated]: ["EXTPOL"],
+  [GeneratedEventType.TradeFrozen]: ["TRDFRZ"],
+  [GeneratedEventType.TradeUnfrozen]: ["TRDUNF"],
 };
 
 /** Field names of each event, in declaration order. */
@@ -159,6 +165,8 @@ export const EVENT_FIELDS: Readonly<Record<GeneratedEventType, readonly string[]
   [GeneratedEventType.MediatorWeightUpdated]: ["mediator", "weight", "schema_version"],
   [GeneratedEventType.DeadlineExtensionBudget]: ["trade_id", "extensions_used", "extensions_remaining", "original_deadline", "extended_by_secs", "extension_secs_remaining", "schema_version"],
   [GeneratedEventType.ExtensionPolicyUpdated]: ["max_extensions", "max_total_extension_secs", "schema_version"],
+  [GeneratedEventType.TradeFrozen]: ["trade_id", "admin", "timestamp"],
+  [GeneratedEventType.TradeUnfrozen]: ["trade_id", "admin", "timestamp"],
 };
 
 /** Payload of the `amana/initialized` event. */
@@ -417,6 +425,20 @@ export interface ExtensionPolicyUpdatedPayload {
   schema_version: number;
 }
 
+/** Payload of the `TRDFRZ` event. */
+export interface TradeFrozenPayload {
+  trade_id: bigint;
+  admin: string;
+  timestamp: bigint;
+}
+
+/** Payload of the `TRDUNF` event. */
+export interface TradeUnfrozenPayload {
+  trade_id: bigint;
+  admin: string;
+  timestamp: bigint;
+}
+
 /** Payload type for a given event type. */
 export interface EventPayloadMap {
   [GeneratedEventType.Initialized]: InitializedPayload;
@@ -452,6 +474,8 @@ export interface EventPayloadMap {
   [GeneratedEventType.MediatorWeightUpdated]: MediatorWeightUpdatedPayload;
   [GeneratedEventType.DeadlineExtensionBudget]: DeadlineExtensionBudgetPayload;
   [GeneratedEventType.ExtensionPolicyUpdated]: ExtensionPolicyUpdatedPayload;
+  [GeneratedEventType.TradeFrozen]: TradeFrozenPayload;
+  [GeneratedEventType.TradeUnfrozen]: TradeUnfrozenPayload;
 }
 
 /** Events that move a trade's status, and where they move it to. */

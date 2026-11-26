@@ -38,6 +38,25 @@ describe("Fee computation — backend mirrors contract arithmetic", () => {
       assertFeeConservation(result);
     });
 
+    it("floors fractional 1% fees and handles the smallest amount and full-fee boundary", () => {
+      expect(computeReleaseFee(10_000n, 100).fee).toBe("100");
+
+      const fractional = computeReleaseFee(9_999n, 100);
+      expect(fractional.fee).toBe("99");
+      expect(fractional.feeDust).toBe("9900");
+      assertFeeConservation(fractional);
+
+      const smallest = computeReleaseFee(1n, 100);
+      expect(smallest.fee).toBe("0");
+      expect(smallest.sellerNet).toBe("1");
+      assertFeeConservation(smallest);
+
+      const fullFee = computeReleaseFee(1n, 10_000);
+      expect(fullFee.fee).toBe("1");
+      expect(fullFee.sellerNet).toBe("0");
+      assertFeeConservation(fullFee);
+    });
+
     it("handles large amounts without overflow", () => {
       const result = computeReleaseFee(999_999_999n, 100);
       assertFeeConservation(result);

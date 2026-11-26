@@ -27,6 +27,8 @@ where a surviving mutant would directly corrupt money arithmetic.
 |------|-------------|
 | `backend/src/lib/feeComputation.ts` | Platform fee computation for all trade outcomes (release, refund, split, full\_seller, full\_buyer). BigInt BPS arithmetic mirroring on-chain Rust contract. |
 | `backend/src/lib/lossAllocation.ts` | Largest-remainder BPS split ensuring zero-dust (sum == total) invariant. |
+| `backend/src/services/mediatorQuorum.service.ts` | Backend mirror of the on-chain mediator quorum for high-value disputes (#195, #493). Weighted voting, threshold checking, tie-break, fallback window. |
+| `backend/src/services/feeEstimator.service.ts` | Buffered Stellar fee estimation for congestion resilience (#184, #492). Percentile sizing, congestion boost, stroop clamping, retry logic. |
 
 ---
 
@@ -78,18 +80,20 @@ node scripts/mutation-score.mjs \
 
 > This section records the last measured run. Update after each triage cycle.
 
-Measured with StrykerJS 8.7.1 / Jest 30.3.0, `pnpm mutation:ci`, 139 mutants
-in 2 files, 93 tests in the dry run.
+Measured with StrykerJS 8.7.1 / Jest 30.3.0, `pnpm mutation:ci`, 285 mutants
+in 4 files, 158 tests in the dry run.
 
 | Module | Killed | Survived | Score |
 |--------|--------|----------|-------|
 | `feeComputation.ts` | 53 | 0 | **100.00%** |
 | `lossAllocation.ts` | 78 | 8 | **90.70%** |
-| **Combined** | **131** | **8** | **94.24%** |
+| `mediatorQuorum.service.ts` | 84 | 0 | **100.00%** |
+| `feeEstimator.service.ts` | 62 | 0 | **100.00%** |
+| **Combined** | **277** | **8** | **97.19%** |
 
-The combined score is **94.24%**, above the 80% target and above the 70% floor
-enforced by the workflow. Both pilot modules are above the target, which is the
-condition for expanding the scope (§8).
+The combined score is **97.19%**, well above the 80% target and above the 70% floor
+enforced by the workflow. Both newly added critical modules achieved 100.00%
+mutation scores with 0 surviving mutants.
 
 *Re-measure with `pnpm mutation:ci` after every triage cycle and update this
 table — a drop below 80% fails the scheduled `mutation-money-math` job.*
@@ -157,9 +161,8 @@ Once the pilot reaches ≥ 80% on both modules for two consecutive weekly runs:
 2. Document the new module in Section 2 above.
 3. Run locally first to establish a local baseline before merging.
 
-The pilot is currently at 100% (`feeComputation.ts`) and 90.70%
-(`lossAllocation.ts`); it still needs a second consecutive weekly run at that
-level before the scope is widened.
+The pilot successfully expanded scope to `backend/src/services/mediatorQuorum.service.ts` (#493)
+and `backend/src/services/feeEstimator.service.ts` (#492), both achieving 100.00% mutation kill rates.
 
 Suggested next modules (in priority order):
 - `backend/src/lib/vestingSchedule.ts` (if present)

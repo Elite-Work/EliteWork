@@ -27,8 +27,8 @@ npm run codegen:events:check    # verify without writing (what CI runs)
 `scripts/codegen-events.mjs` refuses to run if any of these hold:
 
 1. The schema declares an event the contract no longer emits, or misses one it
-   does — it parses `#[contractevent]` out of `contracts/amana_escrow/src/lib.rs`
-   and compares.
+   does — it parses `#[contractevent]` declarations from the
+   `contracts/amana_escrow/src/` source tree and compares.
 2. An event's topics or field list differ between the schema and the contract.
 3. `schemaVersion` disagrees with the contract's `EVENT_SCHEMA_VERSION`.
 4. Two events claim the same first topic — the decoder dispatches on it, so one
@@ -38,6 +38,13 @@ npm run codegen:events:check    # verify without writing (what CI runs)
 
 CI runs the same script with `--check` and then regenerates and fails on any
 uncommitted diff, so a schema edit that was never regenerated cannot merge.
+
+The Contracts Required Gate also runs
+[`scripts/check-contract-abi-drift.mjs`](../scripts/check-contract-abi-drift.mjs).
+It invokes the generator in check-only mode, validating the contract event
+definitions and generated Rust/TypeScript event clients against this schema.
+This check covers the event interface represented here; it is not a complete
+manifest of every callable Soroban contract function.
 
 ## Evolving a schema safely
 

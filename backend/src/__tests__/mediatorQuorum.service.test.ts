@@ -424,4 +424,28 @@ describe("MediatorQuorumService", () => {
       service.assertVoteAllowed(state([]), "m1", 7_000, "QmRationale"),
     ).not.toThrow();
   });
+
+  it("exposes service delegate methods correctly", () => {
+    expect(service.requiresQuorum(THRESHOLD)).toBe(true);
+    expect(service.requiresQuorum(THRESHOLD - 1n)).toBe(false);
+
+    const s = service.getStatus(state([vote("m1", 7_000, 4)]), NOW);
+    expect(s.quorumReached).toBe(true);
+    expect(s.weightToQuorum).toBe(0);
+
+    const res = service.getPendingResolution(state([vote("m1", 7_000, 3)]), NOW);
+    expect(res).toEqual({ sellerGetsBps: 7_000, weight: 3, via: "quorum" });
+  });
+
+  it("throws 409 with reason for invalid bps or missing rationale", () => {
+    expect(() =>
+      service.assertVoteAllowed(state([]), "m1", -1, "QmRationale"),
+    ).toThrow();
+    expect(() =>
+      service.assertVoteAllowed(state([]), "m1", 5000, "   "),
+    ).toThrow();
+    expect(() =>
+      service.assertVoteAllowed(state([], THRESHOLD - 1n), "m1", 5000, "QmRationale"),
+    ).toThrow();
+  });
 });

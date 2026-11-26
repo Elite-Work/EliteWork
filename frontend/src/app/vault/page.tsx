@@ -263,7 +263,7 @@ export default function VaultPage() {
 
         {/* Loading skeleton */}
         {loading && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4" aria-busy="true" aria-label="Loading vault data">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4" role="status" aria-busy="true" aria-label="Loading vault data">
             <LoadingState variant="card" rows={3} />
             <LoadingState variant="card" rows={3} />
             <LoadingState variant="card" rows={2} />
@@ -356,7 +356,7 @@ export default function VaultPage() {
                 />
               </div>
 
-              <div>
+              <div data-testid="vault-balance-panel">
                 <VaultValueCard
                   value={vaultValue}
                   currency="USD"
@@ -393,12 +393,13 @@ export default function VaultPage() {
                 />
               </div>
 
-              <div>
+              <div data-testid="vault-activity-feed">
                 {isEmpty ? (
                   <TradeActivityEmptyState variant="vault" />
                 ) : (
                   <AuditLogCard entries={auditEntries} isLiveSync={isAuthenticated} />
                 )}
+              </div>
               </div>
 
               <div className="md:col-span-2 lg:col-span-3 rounded-2xl border border-border-default bg-card p-5">

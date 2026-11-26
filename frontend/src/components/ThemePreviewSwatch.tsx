@@ -97,10 +97,10 @@ export function ThemePreviewSwatch({ theme }: { theme: PreviewTheme }) {
         data-testid="theme-preview-system"
         data-theme="system"
       >
-        <div className="w-1/2 overflow-hidden">
+        <div className="w-1/2 overflow-hidden" data-testid="theme-system-half-light">
           <MiniScreen palette={LIGHT} testId="theme-mini-screen-light" />
         </div>
-        <div className="w-1/2 overflow-hidden">
+        <div className="w-1/2 overflow-hidden" data-testid="theme-system-half-dark">
           <MiniScreen palette={DARK} testId="theme-mini-screen-dark" />
         </div>
       </div>

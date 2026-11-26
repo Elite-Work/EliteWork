@@ -51,8 +51,8 @@ export function WalletStateCallout({
       className={`flex flex-col gap-2 rounded-lg border border-border-raised bg-card p-4 ${className ?? ""}`}
       data-wallet-state={state}
     >
-      <p className="text-sm font-semibold text-text-primary">{view.title}</p>
-      {view.body && <p className="text-sm text-text-secondary">{view.body}</p>}
+      <p className="text-sm font-semibold text-text-primary" data-testid="wallet-state-title">{view.title}</p>
+      {view.body && <p className="text-sm text-text-secondary" data-testid="wallet-state-body">{view.body}</p>}
       {view.ctaLabel && view.action && (
         <div className="mt-1 flex items-center gap-3">
           <button

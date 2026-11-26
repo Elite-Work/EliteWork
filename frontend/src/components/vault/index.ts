@@ -7,3 +7,4 @@ export { NetworkBackboneCard } from "./NetworkBackboneCard";
 export { VaultFooter } from "./VaultFooter";
 export { VaultDashboard } from "./VaultDashboard";
 export { PaymentOverviewCard } from "./PaymentOverviewCard";
+export { VaultActivityFeed } from "./VaultActivityFeed";

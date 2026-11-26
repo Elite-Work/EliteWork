@@ -39,9 +39,8 @@ test.describe('Dashboard — authenticated', () => {
       .filter({ hasText: 'Total Volume' })
       .first();
 
-    if (await statsGrid.isVisible()) {
-      await expect(statsGrid).toHaveScreenshot('dashboard-stats-grid.png');
-    }
+    await expect(statsGrid).toBeVisible();
+    await expect(statsGrid).toHaveScreenshot('dashboard-stats-grid.png');
   });
 
   test('recent trades table matches snapshot', async ({ authenticatedPage: page }) => {
@@ -56,9 +55,8 @@ test.describe('Dashboard — authenticated', () => {
       .filter({ hasText: 'Recent Trades' })
       .first();
 
-    if (await tradesSection.isVisible()) {
-      await expect(tradesSection).toHaveScreenshot('dashboard-trades-section.png');
-    }
+    await expect(tradesSection).toBeVisible();
+    await expect(tradesSection).toHaveScreenshot('dashboard-trades-section.png');
   });
 
   test('full page layout matches snapshot', async ({ authenticatedPage: page }) => {

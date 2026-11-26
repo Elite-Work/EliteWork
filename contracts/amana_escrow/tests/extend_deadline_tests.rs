@@ -588,3 +588,75 @@ fn test_admin_cannot_exceed_lifetime_ceiling() {
     let over_ceiling = 365 * 24 * 60 * 60 + 1;
     h.c().set_extension_policy(&3u32, &over_ceiling);
 }
+
+// ---------------------------------------------------------------------------
+// #451  Boundary conditions — near-overflow timestamps and zero-extension
+// ---------------------------------------------------------------------------
+
+/// A new_deadline near u64::MAX exceeds the maximum total extension budget and
+/// must be refused.  Without this guard an adversary could anchor a deadline at
+/// u64::MAX, preventing expiration checks from ever firing.
+#[test]
+#[should_panic(expected = "New deadline exceeds the maximum total extension for this trade")]
+fn test_near_overflow_timestamp_is_rejected() {
+    let h = H::new();
+    h.init();
+
+    let trade_id = h.funded_trade_with_deadline(1_000_000, 3600);
+
+    // u64::MAX is astronomically larger than any allowed extension budget.
+    h.c().extend_deadline(&trade_id, &u64::MAX);
+}
+
+/// A new_deadline of u64::MAX - 1 must also be rejected for the same reason.
+#[test]
+#[should_panic(expected = "New deadline exceeds the maximum total extension for this trade")]
+fn test_near_overflow_timestamp_minus_one_is_rejected() {
+    let h = H::new();
+    h.init();
+
+    let trade_id = h.funded_trade_with_deadline(1_000_000, 3600);
+
+    h.c().extend_deadline(&trade_id, &(u64::MAX - 1));
+}
+
+/// A zero-extension (new_deadline == current deadline) must be rejected.
+/// Accepting it would burn the extension count without advancing the deadline,
+/// giving the buyer nothing while exhausting the allowance.
+#[test]
+#[should_panic(expected = "New deadline must be later than the current deadline")]
+fn test_zero_extension_amount_is_rejected() {
+    let h = H::new();
+    h.init();
+
+    let trade_id = h.funded_trade_with_deadline(1_000_000, 3600);
+    let current = h.c().get_trade(&trade_id).expires_at.unwrap();
+
+    // new_deadline == current deadline → no advancement
+    h.c().extend_deadline(&trade_id, &current);
+}
+
+/// A single-second extension (minimum valid advancement) must succeed as long
+/// as it stays within the lifetime budget.  This is the boundary on the other
+/// side — the smallest non-zero extension that is not a zero-extension.
+#[test]
+fn test_single_second_extension_succeeds() {
+    let h = H::new();
+    h.init();
+
+    let trade_id = h.funded_trade_with_deadline(1_000_000, 3600);
+    let current = h.c().get_trade(&trade_id).expires_at.unwrap();
+
+    // Advance by exactly 1 second.
+    h.c().extend_deadline(&trade_id, &(current + 1));
+
+    let trade = h.c().get_trade(&trade_id);
+    assert_eq!(
+        trade.expires_at,
+        Some(current + 1),
+        "single-second extension must move the deadline forward by exactly 1 s"
+    );
+    let status = h.c().get_extension_status(&trade_id);
+    assert_eq!(status.extended_by_secs, 1);
+    assert_eq!(status.extensions_used, 1);
+}

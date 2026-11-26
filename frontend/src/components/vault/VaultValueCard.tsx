@@ -53,7 +53,7 @@ export function VaultValueCard({
         </p>
 
         {isInsured && (
-          <div className="bg-emerald-muted rounded-lg p-4 mb-4">
+          <div className="bg-emerald-muted rounded-lg p-4 mb-4" data-testid="vault-insured-badge">
             <div className="flex items-center gap-2 mb-2">
               <Shield className="w-4 h-4 text-emerald" />
               <span className="text-sm font-semibold text-emerald">
@@ -68,6 +68,7 @@ export function VaultValueCard({
         )}
 
         <button
+          data-testid="vault-release-funds-btn"
           onClick={() => setShowDisclaimer(true)}
           className="mt-auto w-full flex items-center justify-center gap-2 bg-gold hover:bg-gold-hover text-text-inverse font-semibold py-3 px-6 rounded-xl transition-colors"
         >

@@ -223,6 +223,27 @@ export interface DisputeListResponse {
   };
 }
 
+export interface InAppNotificationResponse {
+  id: number;
+  title: string;
+  message: string;
+  type: string;
+  isRead: boolean;
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
+}
+
+export interface NotificationListResponse {
+  notifications: InAppNotificationResponse[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+  unreadCount: number;
+}
+
 export interface ReputationEvent {
   id: string;
   event: string;
